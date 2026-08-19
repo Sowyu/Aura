@@ -1,12 +1,6 @@
 import AppKit
+import SwiftData
 import SwiftUI
-
-extension Array where Element: Hashable {
-    func unique() -> [Element] {
-        var seen = Set<Element>()
-        return filter { seen.insert($0).inserted }
-    }
-}
 
 struct TabDropDelegate: DropDelegate {
     let item: Tab  // to
@@ -25,15 +19,10 @@ struct TabDropDelegate: DropDelegate {
                     // First try to find the tab in the target container
                     var from = self.item.container.tabs.first(where: { $0.id == uuid })
 
-                    // If not found, try to find it in all containers of the same type
-                    if from == nil {
-                        // Look through all tabs in all containers to find the dragged tab
-                        for container in self.item.container.tabs.compactMap(\.container).unique() {
-                            if let foundTab = container.tabs.first(where: { $0.id == uuid }) {
-                                from = foundTab
-                                break
-                            }
-                        }
+                    // If not found, look it up across all containers (drag from another space)
+                    if from == nil, let context = self.item.modelContext {
+                        let descriptor = FetchDescriptor<Tab>(predicate: #Predicate { $0.id == uuid })
+                        from = try? context.fetch(descriptor).first
                     }
 
                     guard let from else { return }

@@ -390,7 +390,8 @@ final class PasswordManagerService: ObservableObject {
 
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            return true
+            // Fail closed: if the device cannot authenticate, do not expose the vault.
+            return false
         }
 
         return await withCheckedContinuation { continuation in

@@ -132,7 +132,8 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         origin: URL?,
         decisionHandler: @escaping (BrowserPermissionDecision) -> Void
     ) {
-        decisionHandler(.grant)
+        // Let WebKit show the system permission prompt rather than granting silently.
+        decisionHandler(.prompt)
     }
 
     func browserPage(

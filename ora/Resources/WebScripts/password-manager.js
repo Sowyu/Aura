@@ -310,7 +310,6 @@
             return;
         }
 
-        const originalBackground = element.style.backgroundColor;
         element.focus();
 
         const prototype = element instanceof HTMLTextAreaElement
@@ -332,9 +331,19 @@
             inputType: "insertReplacementText"
         }));
         element.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+        // Only capture the original background when no highlight is pending,
+        // otherwise a second fill within 1.2s records the highlight color as
+        // "original" and the field stays highlighted forever.
+        if (element._oraHighlightTimer) {
+            window.clearTimeout(element._oraHighlightTimer);
+        } else {
+            element._oraOriginalBackground = element.style.backgroundColor;
+        }
         element.style.backgroundColor = highlightColor;
-        window.setTimeout(() => {
-            element.style.backgroundColor = originalBackground;
+        element._oraHighlightTimer = window.setTimeout(() => {
+            element.style.backgroundColor = element._oraOriginalBackground;
+            delete element._oraHighlightTimer;
+            delete element._oraOriginalBackground;
         }, 1200);
     }
 

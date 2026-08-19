@@ -30,7 +30,14 @@ final class BrowserEngineProfile {
         }
 
         dataStore.fetchDataRecords(ofTypes: mappedTypes) { records in
-            let targetRecords = records.filter { $0.displayName.contains(host) }
+            // Match the exact registrable domain or its subdomains, never arbitrary substrings.
+            let targetHost = host.lowercased()
+            let targetRecords = records.filter { record in
+                let recordDomain = record.displayName.lowercased()
+                return recordDomain == targetHost
+                    || recordDomain.hasSuffix("." + targetHost)
+                    || targetHost.hasSuffix("." + recordDomain)
+            }
             guard !targetRecords.isEmpty else {
                 completion?()
                 return

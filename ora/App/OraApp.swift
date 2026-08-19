@@ -15,10 +15,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let targetWindow = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible })
+        // Only browser windows host the quit-confirmation observer; targeting any other
+        // window (Settings, Passwords) would leave the terminateLater reply unanswered.
+        let browserWindows = NSApp.windows.filter { $0.isVisible && Self.isBrowserWindow($0) }
+        let targetWindow = browserWindows.first(where: \.isKeyWindow) ?? browserWindows.first
         guard let targetWindow else { return .terminateNow }
         NotificationCenter.default.post(name: .quitRequested, object: targetWindow)
         return .terminateLater
+    }
+
+    static func isBrowserWindow(_ window: NSWindow) -> Bool {
+        guard let identifier = window.identifier?.rawValue else { return false }
+        return identifier.hasPrefix("normal") || identifier.hasPrefix("private")
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

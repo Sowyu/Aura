@@ -5,6 +5,8 @@ struct GradientAnimatingBorder: ViewModifier {
     let trigger: Bool
     @State private var isAnimating = false
     @State private var showBorder = false
+    // Invalidates stale hide-timeouts when the animation is re-triggered.
+    @State private var animationGeneration = 0
 
     func body(content: Content) -> some View {
         content
@@ -55,11 +57,14 @@ struct GradientAnimatingBorder: ViewModifier {
                     }
                     .onAppear {
                         showBorder = true
+                        animationGeneration += 1
+                        let generation = animationGeneration
                         withAnimation(.linear(duration: 0.8).repeatCount(1, autoreverses: false)) {
                             isAnimating = true
                         }
                         // Hide border after animation completes
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                            guard generation == animationGeneration else { return }
                             withAnimation(.easeOut(duration: 0.3)) {
                                 showBorder = false
                             }
@@ -71,11 +76,14 @@ struct GradientAnimatingBorder: ViewModifier {
                 if newTrigger {
                     showBorder = true
                     isAnimating = false
+                    animationGeneration += 1
+                    let generation = animationGeneration
                     withAnimation(.linear(duration: 0.8).repeatCount(1, autoreverses: false)) {
                         isAnimating = true
                     }
                     // Hide border after animation completes
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        guard generation == animationGeneration else { return }
                         withAnimation(.easeOut(duration: 0.3)) {
                             showBorder = false
                         }

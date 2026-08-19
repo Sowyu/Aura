@@ -31,6 +31,7 @@ struct OraRoot: View {
     let historyContext: ModelContext
     let downloadContext: ModelContext
     @State private var window: NSWindow?
+    @State private var notificationObservers: [NSObjectProtocol] = []
 
     init(isPrivate: Bool = false) {
         _privacyMode = StateObject(wrappedValue: PrivacyMode(isPrivate: isPrivate))
@@ -75,6 +76,12 @@ struct OraRoot: View {
         )
     }
 
+    private func observe(_ name: Notification.Name, using block: @escaping (Notification) -> Void) {
+        notificationObservers.append(
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main, using: block)
+        )
+    }
+
     var body: some View {
         BrowserView()
             .background(WindowReader(window: $window))
@@ -108,6 +115,8 @@ struct OraRoot: View {
             .withTheme()
             .enableInjection()
             .onAppear {
+                // onAppear can re-fire; registering twice would double-run every handler.
+                guard notificationObservers.isEmpty else { return }
                 downloadManager.toastManager = toastManager
                 Task {
                     let containerIDs = await MainActor.run {
@@ -149,7 +158,7 @@ struct OraRoot: View {
                 }
 
                 // Cmd+Q quit confirmation
-                NotificationCenter.default.addObserver(forName: .quitRequested, object: nil, queue: .main) { note in
+                observe(.quitRequested) { note in
                     guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                     guard window != nil else {
                         NSApp.reply(toApplicationShouldTerminate: true)
@@ -171,7 +180,7 @@ struct OraRoot: View {
                         updateService.checkForUpdatesInBackground()
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .showLauncher, object: nil, queue: .main) { note in
+                observe(.showLauncher) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                         if tabManager.activeTab != nil {
@@ -179,67 +188,67 @@ struct OraRoot: View {
                         }
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .closeActiveTab, object: nil, queue: .main) { note in
+                observe(.closeActiveTab) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                         tabManager.closeActiveTab()
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .restoreLastTab, object: nil, queue: .main) { note in
+                observe(.restoreLastTab) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                         tabManager.restoreLastTab()
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .findInPage, object: nil, queue: .main) { note in
+                observe(.findInPage) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                         if let activeTab = tabManager.activeTab { appState.showFinderIn = activeTab.id }
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .toggleFullURL, object: nil, queue: .main) { note in
+                observe(.toggleFullURL) { note in
                     guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                     toolbarManager.showFullURL.toggle()
                 }
-                NotificationCenter.default.addObserver(forName: .toggleToolbar, object: nil, queue: .main) { note in
+                observe(.toggleToolbar) { note in
                     guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                     withAnimation(.easeInOut(duration: 0.2)) {
                         toolbarManager.isToolbarHidden.toggle()
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .reloadPage, object: nil, queue: .main) { note in
+                observe(.reloadPage) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                         tabManager.activeTab?.reload()
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .goBack, object: nil, queue: .main) { note in
+                observe(.goBack) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                         tabManager.activeTab?.goBack()
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .goForward, object: nil, queue: .main) { note in
+                observe(.goForward) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                         tabManager.activeTab?.goForward()
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .togglePinTab, object: nil, queue: .main) { note in
+                observe(.togglePinTab) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                         if let tab = tabManager.activeTab { tabManager.togglePinTab(tab) }
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .nextTab, object: nil, queue: .main) { note in
+                observe(.nextTab) { note in
                     guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                     appState.isFloatingTabSwitchVisible = true
                 }
-                NotificationCenter.default.addObserver(forName: .previousTab, object: nil, queue: .main) { note in
+                observe(.previousTab) { note in
                     guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                     appState.isFloatingTabSwitchVisible = true
                 }
-                NotificationCenter.default.addObserver(forName: .setAppearance, object: nil, queue: .main) { note in
+                observe(.setAppearance) { note in
                     guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                     if let raw = note.userInfo?["appearance"] as? String,
                        let mode = AppAppearance(rawValue: raw)
@@ -247,11 +256,11 @@ struct OraRoot: View {
                         AppearanceManager.shared.appearance = mode
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .checkForUpdates, object: nil, queue: .main) { note in
+                observe(.checkForUpdates) { note in
                     guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                     updateService.checkForUpdates()
                 }
-                NotificationCenter.default.addObserver(forName: .selectTabAtIndex, object: nil, queue: .main) { note in
+                observe(.selectTabAtIndex) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                         if let index = note.userInfo?["index"] as? Int {
@@ -259,7 +268,7 @@ struct OraRoot: View {
                         }
                     }
                 }
-                NotificationCenter.default.addObserver(forName: .openURL, object: nil, queue: .main) { note in
+                observe(.openURL) { note in
                     Task { @MainActor in
                         let targetWindow = window ?? NSApp.keyWindow
                         if let sender = note.object as? NSWindow {
@@ -278,8 +287,7 @@ struct OraRoot: View {
                     }
                 }
 
-                NotificationCenter.default
-                    .addObserver(forName: .spacePrivacySettingsChanged, object: nil, queue: .main) { note in
+                observe(.spacePrivacySettingsChanged) { note in
                         Task { @MainActor in
                             guard let containerId = note.userInfo?["containerId"] as? UUID else { return }
                             tabManager.refreshPrivacySettings(for: containerId)
@@ -287,8 +295,7 @@ struct OraRoot: View {
                     }
 
                 // Clear cache and reload
-                NotificationCenter.default
-                    .addObserver(forName: .clearCacheAndReload, object: nil, queue: .main) { note in
+                observe(.clearCacheAndReload) { note in
                         Task { @MainActor in
                             guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
                             if let activeTab = tabManager.activeTab {
@@ -309,8 +316,7 @@ struct OraRoot: View {
                     }
 
                 // Clear cookies and reload
-                NotificationCenter.default
-                    .addObserver(forName: .clearCookiesAndReload, object: nil, queue: .main) { note in
+                observe(.clearCookiesAndReload) { note in
                         Task { @MainActor in
                             guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
 
@@ -330,6 +336,13 @@ struct OraRoot: View {
                             }
                         }
                     }
+            }
+            .onDisappear {
+                notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+                notificationObservers.removeAll()
+            }
+            .onChange(of: window) { _, newWindow in
+                keyModifierListener.window = newWindow
             }
     }
 }

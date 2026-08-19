@@ -12,6 +12,7 @@ enum WindowFactory {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
+        window.identifier = NSUserInterfaceItemIdentifier("normal")
 
         let hostingController = NSHostingController(rootView: rootView)
         window.contentViewController = hostingController

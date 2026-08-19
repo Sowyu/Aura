@@ -67,7 +67,9 @@ if [[ ${#MISSING_CASKS[@]} -gt 0 ]]; then
 fi
 
 [[ -f "ora_public_key.pem" ]] || die "ora_public_key.pem not found."
-git diff --quiet --exit-code || die "Uncommitted changes. Commit or stash first."
+# Check both unstaged and staged changes — staged WIP would otherwise be
+# silently swept into the release commit.
+[[ -z "$(git status --porcelain --untracked-files=no)" ]] || die "Uncommitted changes. Commit or stash first."
 
 green "All checks passed."
 

@@ -31,7 +31,12 @@ class FindController: NSObject {
     // MARK: - Highlight Text
 
     func highlight(_ searchTerm: String) {
-        let escapedTerm = searchTerm.replacingOccurrences(of: "'", with: "\\'")
+        // JSON-encode the term so backslashes, quotes, and newlines can't break the script.
+        guard let termData = try? JSONSerialization.data(withJSONObject: searchTerm, options: .fragmentsAllowed),
+              let termLiteral = String(data: termData, encoding: .utf8)
+        else {
+            return
+        }
         let js = """
         (function() {
             // Inject CSS if missing
@@ -61,7 +66,7 @@ class FindController: NSObject {
             // Unmark existing highlights and apply new
             findController.markInstance.unmark({
                 done: function() {
-                    findController.markInstance.mark('\(escapedTerm)', {
+                    findController.markInstance.mark(\(termLiteral), {
                         className: "search-highlight",
                         separateWordSearch: false,
                         done: function() {

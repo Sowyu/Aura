@@ -34,19 +34,36 @@ import SwiftUI
 final class KeyModifierListener: ObservableObject {
     @Published var modifierFlags = NSEvent.ModifierFlags([])
 
+    /// The window this listener belongs to. When set, key-down events from
+    /// other windows are ignored (local monitors see every window's events).
+    weak var window: NSWindow?
+
+    private var monitors: [Any] = []
+
     init() {
-        NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] event in
             self?.modifierFlags = event.modifierFlags
             return event
+        }) {
+            monitors.append(monitor)
         }
 
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
             guard let self else { return event }
+            if let window = self.window, event.window !== window {
+                return event
+            }
             if self.handleGlobalKeyDown(event) {
                 return nil
             }
             return event
+        }) {
+            monitors.append(monitor)
         }
+    }
+
+    deinit {
+        monitors.forEach { NSEvent.removeMonitor($0) }
     }
 
     typealias KeyDownHandler = (NSEvent) -> Bool

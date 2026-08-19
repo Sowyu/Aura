@@ -98,3 +98,5 @@ codesign*
 # !build/dsa_pub.pem
 
 Vendor/CEF
+# Claude Code
+CLAUDE.md

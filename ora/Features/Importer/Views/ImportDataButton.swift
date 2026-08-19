@@ -38,7 +38,8 @@ struct ImportDataButton: View {
                                     container: container,
                                     historyManager: historyManager,
                                     downloadManager: downloadManager,
-                                    isPrivate: privacyMode.isPrivate
+                                    isPrivate: privacyMode.isPrivate,
+                                    activateAfterAdding: false
                                 )
 
                         tabManager
@@ -49,39 +50,28 @@ struct ImportDataButton: View {
                 }
             }
 
-            var seenContainers: Set<UUID> = []
-            for container in newContainers {
-                if seenContainers
-                    .contains(container.id)
-                {
-                    continue
-                }
-                seenContainers
-                    .insert(container.id)
-                for tab in result.cleanTabs {
-                    if result.favs
-                        .contains(
-                            tab.parentID
-                        )
-                    {
-                        if let url = URL(
-                            string: tab.urlString
-                        ) {
-                            let newTab =
-                                tabManager
-                                    .addTab(
-                                        title: tab.title,
-                                        url: url,
-                                        container: container,
-                                        historyManager: historyManager,
-                                        downloadManager: downloadManager,
-                                        isPrivate: privacyMode.isPrivate
-                                    )
+            // Favorites are imported once, into the first imported space —
+            // not duplicated into every space.
+            if let favoritesContainer = newContainers.first {
+                for tab in result.cleanTabs where result.favs.contains(tab.parentID) {
+                    if let url = URL(
+                        string: tab.urlString
+                    ) {
+                        let newTab =
                             tabManager
-                                .toggleFavTab(
-                                    newTab
+                                .addTab(
+                                    title: tab.title,
+                                    url: url,
+                                    container: favoritesContainer,
+                                    historyManager: historyManager,
+                                    downloadManager: downloadManager,
+                                    isPrivate: privacyMode.isPrivate,
+                                    activateAfterAdding: false
                                 )
-                        }
+                        tabManager
+                            .toggleFavTab(
+                                newTab
+                            )
                     }
                 }
             }

@@ -182,7 +182,16 @@ class TabManager: ObservableObject {
     func deleteContainer(_ container: TabContainer) {
         let containerId = container.id
         Task { @MainActor in
-            try PasswordManagerService.shared.deleteEntries(for: containerId)
+            do {
+                try PasswordManagerService.shared.deleteEntries(for: containerId)
+            } catch {
+                // A keychain failure must not abort the container deletion;
+                // surface it and keep going so the space is still removed.
+                ToastManager.shared.show(
+                    "Couldn't delete saved passwords for this space",
+                    icon: .system("exclamationmark.triangle")
+                )
+            }
 
             await PrivacyService.clearAllWebsiteData(for: containerId)
 
@@ -245,7 +254,8 @@ class TabManager: ObservableObject {
         favicon: URL? = nil,
         historyManager: HistoryManager? = nil,
         downloadManager: DownloadManager? = nil,
-        isPrivate: Bool
+        isPrivate: Bool,
+        activateAfterAdding: Bool = true
     ) -> Tab {
         let cleanHost: String? = {
             guard let host = url.host else { return nil }
@@ -266,25 +276,28 @@ class TabManager: ObservableObject {
         )
         modelContext.insert(newTab)
         container.tabs.append(newTab)
-        activeTab?.maybeIsActive  = false
-        activeTab = newTab
-        activeTab?.maybeIsActive  = true
         newTab.lastAccessedAt = Date()
         container.lastAccessedAt = Date()
 
-        // Initialize the WebView for the new active tab
-        newTab.restoreTransientState(
-            historyManager: historyManager ?? HistoryManager(
-                modelContainer: modelContainer,
-                modelContext: modelContext
-            ),
-            downloadManager: downloadManager ?? DownloadManager(
-                modelContainer: modelContainer,
-                modelContext: modelContext
-            ),
-            tabManager: self,
-            isPrivate: isPrivate
-        )
+        if activateAfterAdding {
+            activeTab?.maybeIsActive  = false
+            activeTab = newTab
+            activeTab?.maybeIsActive  = true
+
+            // Initialize the WebView for the new active tab
+            newTab.restoreTransientState(
+                historyManager: historyManager ?? HistoryManager(
+                    modelContainer: modelContainer,
+                    modelContext: modelContext
+                ),
+                downloadManager: downloadManager ?? DownloadManager(
+                    modelContainer: modelContainer,
+                    modelContext: modelContext
+                ),
+                tabManager: self,
+                isPrivate: isPrivate
+            )
+        }
 
         try? modelContext.save()
         return newTab

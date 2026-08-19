@@ -265,7 +265,7 @@ class SettingsStore: ObservableObject {
     }
 
     init() {
-        autoUpdateEnabled = defaults.bool(forKey: autoUpdateKey)
+        autoUpdateEnabled = defaults.object(forKey: autoUpdateKey) as? Bool ?? true
         blockThirdPartyTrackers = defaults.bool(forKey: trackingThirdPartyKey)
         blockFingerprinting = defaults.object(forKey: fingerprintingKey) as? Bool ?? true
         adBlocking = defaults.bool(forKey: adBlockingKey)

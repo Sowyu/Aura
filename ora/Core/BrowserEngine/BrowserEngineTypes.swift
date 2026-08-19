@@ -36,6 +36,7 @@ enum BrowserPermissionKind {
 enum BrowserPermissionDecision {
     case grant
     case deny
+    case prompt
 }
 
 struct BrowserNavigationAction {

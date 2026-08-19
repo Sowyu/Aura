@@ -2,23 +2,22 @@ import AppKit
 import Foundation
 
 extension NSWindow {
-    /// Private key for storing the previous frame in UserDefaults
-    private static let previousFrameKey = "window.previousFrame"
+    private static var previousFrameAssociationKey: UInt8 = 0
 
-    /// Stores the current frame as the previous frame before maximizing
+    /// Stores the current frame as the previous frame before maximizing.
+    /// Kept per-window (associated object) — a shared persisted value would make
+    /// one window restore to another window's frame.
     private var previousFrame: NSRect? {
         get {
-            let defaults = UserDefaults.standard
-            guard let rectString = defaults.string(forKey: Self.previousFrameKey) else { return nil }
-            return NSRectFromString(rectString)
+            (objc_getAssociatedObject(self, &Self.previousFrameAssociationKey) as? NSValue)?.rectValue
         }
         set {
-            let defaults = UserDefaults.standard
-            if let newValue {
-                defaults.set(NSStringFromRect(newValue), forKey: Self.previousFrameKey)
-            } else {
-                defaults.removeObject(forKey: Self.previousFrameKey)
-            }
+            objc_setAssociatedObject(
+                self,
+                &Self.previousFrameAssociationKey,
+                newValue.map { NSValue(rect: $0) },
+                .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            )
         }
     }
 
