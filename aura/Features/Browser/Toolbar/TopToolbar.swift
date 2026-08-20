@@ -209,18 +209,10 @@ struct TopToolbar: View {
         )
     }
 
-    // No homepage setting exists yet, so "home" is the default search engine's origin.
-    // ponytail: derived home URL, swap for a real setting when one exists
+    /// Home is `aura://home`, the same page every new tab opens on. Navigating there
+    /// tears the web view down and hands the tab back to `HomePageView`.
     private func goHome() {
-        let engine = SearchEngineService().getDefaultSearchEngine(for: tabManager.activeContainer?.id)
-        let origin: URL? = engine
-            .flatMap { URL(string: $0.searchURL) }
-            .flatMap { url in
-                guard let scheme = url.scheme, let host = url.host else { return nil }
-                return URL(string: "\(scheme)://\(host)")
-            }
-        guard let home = origin ?? URL(string: "https://www.google.com") else { return }
-        tabManager.activeTab?.loadURL(home.absoluteString)
+        tabManager.activeTab?.loadURL(URL.oraHome.absoluteString)
     }
 
     private func shareCurrentPage(tab: Tab, sourceView: NSView, sourceRect: NSRect) {

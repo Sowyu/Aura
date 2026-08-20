@@ -105,7 +105,7 @@ struct ContainerSwitcher: View {
             },
             .item("New Tab in Space", icon: "plus") {
                 tabManager.activateContainer(container)
-                NotificationCenter.default.post(name: .showLauncher, object: NSApp.keyWindow)
+                NotificationCenter.default.post(name: .newTab, object: NSApp.keyWindow)
             },
             .separator,
             // Deleting the last space would leave the sidebar with nothing to page through.

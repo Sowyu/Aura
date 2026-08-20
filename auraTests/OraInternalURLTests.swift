@@ -30,6 +30,26 @@ struct OraInternalURLTests {
         #expect(URL.oraSettings().absoluteString == "aura://settings")
     }
 
+    @Test("home is an internal page of its own")
+    func homeURLParsing() throws {
+        #expect(URL.oraHome.absoluteString == "aura://home")
+        #expect(URL.oraHome.isOraInternal)
+        #expect(URL.oraHome.isOraHome)
+        #expect(!URL.oraHome.isOraSettings)
+        #expect(!URL.oraSettings().isOraHome)
+
+        let legacy = try #require(URL(string: "ora://home"))
+        #expect(legacy.isOraHome)
+        #expect(legacy.canonicalOraInternal == URL.oraHome)
+
+        #expect(isValidURL("aura://home"))
+        #expect(constructURL(from: "aura://home") == URL.oraHome)
+        #expect(constructURL(from: "ora://home") == URL.oraHome)
+
+        let web = try #require(URL(string: "https://example.com/home"))
+        #expect(!web.isOraHome)
+    }
+
     @Test("legacy ora:// addresses still resolve and normalise to aura://")
     func legacySchemeIsAccepted() throws {
         let legacy = try #require(URL(string: "ora://settings/spaces"))

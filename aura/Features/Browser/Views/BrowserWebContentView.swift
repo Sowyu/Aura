@@ -31,7 +31,12 @@ struct BrowserWebContentView: View {
 
     @ViewBuilder
     private var webContent: some View {
-        if tab.url.isOraSettings {
+        if tab.url.isOraHome {
+            HomePageView(tab: tab)
+                .id(tab.id)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } else if tab.url.isOraSettings {
             SettingsContentView(
                 initialTab: tab.url.oraSettingsSection,
                 embedded: true

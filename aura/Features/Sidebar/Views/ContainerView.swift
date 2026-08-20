@@ -132,7 +132,11 @@ struct ContainerView: View {
     }
 
     private func addNewTab() {
-        appState.showLauncher = true
+        tabManager.openHomeTab(
+            historyManager: historyManager,
+            downloadManager: downloadManager,
+            isPrivate: privacyMode.isPrivate
+        )
     }
 
     private func addNewTab(in folder: Folder) {

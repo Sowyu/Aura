@@ -58,7 +58,7 @@ struct URLBarMenuButton: View {
     private func newItemsSection() -> [AuraMenuItem] {
         [
             .item("New Tab", icon: "plus", shortcut: KeyboardShortcuts.Tabs.new) {
-                NotificationCenter.default.post(name: .showLauncher, object: NSApp.keyWindow)
+                NotificationCenter.default.post(name: .newTab, object: NSApp.keyWindow)
             },
             .item("New Window", icon: "macwindow", shortcut: KeyboardShortcuts.Window.new) {
                 openWindow(id: "normal")

@@ -6,6 +6,8 @@ extension Notification.Name {
     static let copyAddressURL = Notification.Name("CopyAddressURL")
 
     static let showLauncher = Notification.Name("ShowLauncher")
+    /// Open a tab on `aura://home`. Every "New Tab" affordance posts this.
+    static let newTab = Notification.Name("NewTab")
     static let closeActiveTab = Notification.Name("CloseActiveTab")
     static let restoreLastTab = Notification.Name("RestoreLastTab")
     static let findInPage = Notification.Name("FindInPage")

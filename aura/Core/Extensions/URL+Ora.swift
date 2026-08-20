@@ -19,6 +19,11 @@ extension URL {
         isOraInternal && host?.lowercased() == "settings"
     }
 
+    /// `aura://home`: the new-tab page, rendered natively like settings.
+    var isOraHome: Bool {
+        isOraInternal && host?.lowercased() == "home"
+    }
+
     /// The settings section a `aura://settings/<section>` URL points at, if it names a known one.
     var oraSettingsSection: SettingsTab? {
         guard isOraSettings else { return nil }
@@ -34,6 +39,14 @@ extension URL {
         components.scheme = Self.oraScheme
         return components.url ?? self
     }
+
+    /// A scheme + host always resolves; the fallback only keeps the API non-optional.
+    static let oraHome: URL = {
+        var components = URLComponents()
+        components.scheme = oraScheme
+        components.host = "home"
+        return components.url ?? URL(fileURLWithPath: "/")
+    }()
 
     static func oraSettings(section: SettingsTab? = nil) -> URL {
         var components = URLComponents()

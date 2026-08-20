@@ -274,8 +274,7 @@ final class TabManager {
 
     func addTab(
         title: String = "Untitled",
-        // Will Always Work
-        url: URL = URL(string: "about:blank")!,
+        url: URL = .oraHome,
         container: TabContainer,
         favicon: URL? = nil,
         historyManager: HistoryManager? = nil,
@@ -289,7 +288,7 @@ final class TabManager {
         }()
         let newTab = Tab(
             url: url,
-            title: cleanHost ?? "New Tab",
+            title: url.isOraHome ? "New Tab" : (cleanHost ?? "New Tab"),
             favicon: favicon,
             container: container,
             type: .normal,
@@ -330,6 +329,24 @@ final class TabManager {
 
         try? modelContext.save()
         return newTab
+    }
+
+    /// Every "new tab" path lands here: a tab showing `aura://home`, which renders the
+    /// search field and shortcuts natively instead of a blank web view.
+    @discardableResult
+    func openHomeTab(
+        historyManager: HistoryManager? = nil,
+        downloadManager: DownloadManager? = nil,
+        isPrivate: Bool
+    ) -> Tab? {
+        guard let container = activeContainer else { return nil }
+        return addTab(
+            url: .oraHome,
+            container: container,
+            historyManager: historyManager,
+            downloadManager: downloadManager,
+            isPrivate: isPrivate
+        )
     }
 
     /// Focuses the active space's `aura://settings` tab, or opens one. Settings render

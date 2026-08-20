@@ -196,6 +196,16 @@ struct OraRoot: View {
                         }
                     }
                 }
+                observe(.newTab) { note in
+                    Task { @MainActor in
+                        guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
+                        tabManager.openHomeTab(
+                            historyManager: historyManager,
+                            downloadManager: downloadManager,
+                            isPrivate: privacyMode.isPrivate
+                        )
+                    }
+                }
                 observe(.closeActiveTab) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }

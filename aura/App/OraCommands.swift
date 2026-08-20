@@ -18,7 +18,7 @@ struct OraCommands: Commands {
                 .keyboardShortcut(KeyboardShortcuts.Window.newPrivate.keyboardShortcut)
 
             Button("New Tab") {
-                NotificationCenter.default.post(name: .showLauncher, object: NSApp.keyWindow)
+                NotificationCenter.default.post(name: .newTab, object: NSApp.keyWindow)
             }.keyboardShortcut(KeyboardShortcuts.Tabs.new.keyboardShortcut)
 
             Divider()

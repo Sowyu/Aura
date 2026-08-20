@@ -83,7 +83,7 @@ struct BrowserSplitView: View {
                 }
             } else {
                 BrowserContentContainer {
-                    HomeView()
+                    HomePageView()
                 }
             }
         }

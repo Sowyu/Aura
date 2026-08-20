@@ -99,7 +99,7 @@ struct SidebarView: View {
             AuraMenuItem.submenu("Compact Mode", icon: "sidebar.left", items: compactModeItems)
             AuraMenuItem.separator
             AuraMenuItem.item("New Tab", icon: "plus", shortcut: KeyboardShortcuts.Tabs.new) {
-                appState.showLauncher = true
+                NotificationCenter.default.post(name: .newTab, object: window)
             }
             AuraMenuItem.item("New Folder", icon: "folder.badge.plus") {
                 NotificationCenter.default.post(name: .newTabFolder, object: window)

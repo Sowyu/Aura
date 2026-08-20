@@ -32,7 +32,6 @@ class Tab: ObservableObject, Identifiable {
     var faviconLocalFile: URL?
     var backgroundColorHex: String = "#000000"
 
-    //    @Transient @Published var backgroundColor: Color = Color(.black)
     @Transient var isPlayingMedia: Bool = false
     @Transient var isLoading: Bool = false
     @Transient @Published var backgroundColor: Color = .black
@@ -321,8 +320,21 @@ class Tab: ObservableObject, Identifiable {
     }
 
     /// A tab showing an aura:// page has no web view, so navigating away from one has to
-    /// build it first; `restoreTransientState` loads `url` once the page exists.
+    /// build it first; `restoreTransientState` loads `url` once the page exists. Going the
+    /// other way tears the web view down instead, which drops WebKit's back list: back from
+    /// the first page opened out of aura://home cannot return to the home page.
     private func navigate(to target: URL) {
+        if target.isOraInternal {
+            destroyWebView()
+            url = target
+            urlString = target.absoluteString
+            if target.isOraHome {
+                title = "New Tab"
+                favicon = nil
+                faviconLocalFile = nil
+            }
+            return
+        }
         guard let page = browserPage else {
             url = target
             urlString = target.absoluteString
