@@ -38,12 +38,12 @@ class UpdateService: NSObject, ObservableObject {
         // Start the updater
         do {
             try updater.start()
-
+            self.canCheckForUpdates = true
         } catch {
             logger.error("❌ Failed to start updater - Error: \(error.localizedDescription)")
+            self.canCheckForUpdates = false
+            self.lastCheckResult = "Updater failed to start: \(error.localizedDescription)"
         }
-
-        self.canCheckForUpdates = true // Force enable for development
     }
 
     func checkForUpdates() {
@@ -74,7 +74,7 @@ class UpdateService: NSObject, ObservableObject {
     }
 
     func checkForUpdatesInBackground() {
-        guard let updater else { return }
+        guard let updater, canCheckForUpdates else { return }
         updater.checkForUpdatesInBackground()
     }
 }

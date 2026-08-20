@@ -2,6 +2,18 @@ import AppKit
 import Foundation
 @preconcurrency import WebKit
 
+private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var target: WKScriptMessageHandler?
+
+    init(target: WKScriptMessageHandler) {
+        self.target = target
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        target?.userContentController(userContentController, didReceive: message)
+    }
+}
+
 final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     weak var delegate: BrowserPageDelegate?
 
@@ -56,7 +68,9 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         super.init()
 
         for messageName in configuration.scriptMessageNames {
-            contentController.add(self, name: messageName)
+            // A weak proxy keeps the content controller from retaining the page,
+            // so a Tab released without an explicit teardown() can't leak the webview.
+            contentController.add(WeakScriptMessageHandler(target: self), name: messageName)
         }
         for script in configuration.userScripts {
             let userScript = WKUserScript(
@@ -369,30 +383,42 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
     ) {
         if navigationResponse.canShowMIMEType {
-            isDownloadNavigation = false
-            originalURL = nil
+            if navigationResponse.isForMainFrame {
+                isDownloadNavigation = false
+                originalURL = nil
+            }
             decisionHandler(.allow)
             return
         }
 
-        isDownloadNavigation = true
-        emitNavigationEvent(
-            phase: .finished,
-            url: originalURL,
-            title: webView.title,
-            progress: 0,
-            isLoading: false
-        )
+        // Only a main-frame download replaces the page; a subframe download
+        // must not suppress the main frame's navigation events.
+        if navigationResponse.isForMainFrame {
+            isDownloadNavigation = true
+            emitNavigationEvent(
+                phase: .finished,
+                url: originalURL,
+                title: webView.title,
+                progress: 0,
+                isLoading: false
+            )
+        }
         decisionHandler(.download)
     }
 
     @available(macOS 11.3, *)
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        defer {
+            // Always clear the flag, even without a response URL — otherwise the
+            // tab's navigation events stay suppressed forever.
+            if navigationResponse.isForMainFrame {
+                isDownloadNavigation = false
+                originalURL = nil
+            }
+        }
         guard let downloadURL = navigationResponse.response.url else { return }
         let task = BrowserDownloadTask(download: download, originalURL: downloadURL)
         delegate?.browserPage(self, didStartDownload: task)
-        isDownloadNavigation = false
-        originalURL = nil
     }
 
     func webView(
@@ -403,7 +429,11 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     ) {
         let pageURL = URL(string: "\(origin.protocol)://\(origin.host):\(origin.port)")
         delegate?.browserPage(self, requestPermission: .mediaCapture, origin: pageURL) { decision in
-            decisionHandler(decision == .grant ? .grant : .deny)
+            switch decision {
+            case .grant: decisionHandler(.grant)
+            case .deny: decisionHandler(.deny)
+            case .prompt: decisionHandler(.prompt)
+            }
         }
     }
 

@@ -1,7 +1,8 @@
 import Foundation
 
 func extractDomainOrIP(from text: String) -> String? {
-    guard let url = URL(string: text.hasPrefix("http") ? text : "https://\(text)") else {
+    let hasScheme = text.hasPrefix("http://") || text.hasPrefix("https://")
+    guard let url = URL(string: hasScheme ? text : "https://\(text)") else {
         return nil
     }
 

@@ -10,6 +10,10 @@ final class FaviconService: ObservableObject {
     private var sourceURLCache: [String: URL] = [:]
     private var isFetching: Set<String> = []
     private var pendingCompletions: [String: [(NSImage?) -> Void]] = [:]
+    // Negative cache: without it, every SwiftUI render of a domain with no
+    // resolvable favicon kicks off another full network fetch.
+    private var failedFetches: [String: Date] = [:]
+    private let failureRetryInterval: TimeInterval = 300
 
     func getFavicon(for searchURL: String) -> NSImage? {
         guard let domain = extractDomain(from: searchURL) else { return nil }
@@ -95,6 +99,11 @@ final class FaviconService: ObservableObject {
             return
         }
 
+        if let failedAt = failedFetches[domain], Date().timeIntervalSince(failedAt) < failureRetryInterval {
+            completion?(nil)
+            return
+        }
+
         if let completion {
             pendingCompletions[domain, default: []].append(completion)
         }
@@ -123,7 +132,10 @@ final class FaviconService: ObservableObject {
             if let sourceURL {
                 sourceURLCache[domain] = sourceURL
             }
+            failedFetches.removeValue(forKey: domain)
             objectWillChange.send()
+        } else {
+            failedFetches[domain] = Date()
         }
 
         isFetching.remove(domain)

@@ -253,6 +253,8 @@ struct BrowserPageView: NSViewRepresentable {
         }
 
         private func isEventInContentView(_ event: NSEvent, contentView: NSView) -> Bool {
+            // Local monitors see events from every window; only handle our own.
+            guard let window = contentView.window, event.window === window else { return false }
             let locationInWindow = event.locationInWindow
             let locationInContentView = contentView.convert(locationInWindow, from: nil)
             return contentView.bounds.contains(locationInContentView)

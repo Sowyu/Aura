@@ -78,7 +78,7 @@ final class MediaController: ObservableObject {
 
         switch event.type {
         case "state":
-            let idx = ensureSession()
+            var idx = ensureSession()
             let playing = (event.state == "playing")
             sessions[idx].isPlaying = playing
             // Update tab's isPlayingMedia property
@@ -87,6 +87,8 @@ final class MediaController: ObservableObject {
             // Update recency when it starts playing
             if playing { sessions[idx].lastActive = Date()
                 moveToFront(index: idx)
+                // moveToFront reorders sessions; the session now sits at index 0.
+                idx = 0
             }
             if let wasPlayed = event.wasPlayed { sessions[idx].wasPlayed = wasPlayed }
 //        case "ready":

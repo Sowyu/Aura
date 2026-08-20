@@ -11,6 +11,10 @@ class DownloadManager: ObservableObject {
     let modelContainer: ModelContainer
     let modelContext: ModelContext
     private var activeDownloadTasks: [UUID: BrowserDownloadTask] = [:]
+    // Keeps tasks alive between didStartDownload and cleanup: WKDownload.delegate
+    // is weak, so without this the task deallocates before the destination
+    // callback and the download never starts.
+    private var pendingTasks: [UUID: BrowserDownloadTask] = [:]
     private var taskDownloads: [UUID: Download] = [:]
     private var taskDestinationURLs: [UUID: URL] = [:]
     private var progressTimers: [UUID: Timer] = [:]
@@ -131,8 +135,12 @@ class DownloadManager: ObservableObject {
     }
 
     func handleDownload(_ task: BrowserDownloadTask) {
-        task.onDestinationRequest = { [weak self] response, suggestedFilename, completion in
-            guard let self else {
+        // These closures are stored on the task itself; capturing it strongly
+        // would make the task retain itself and leak every download.
+        let taskID = task.id
+        pendingTasks[taskID] = task
+        task.onDestinationRequest = { [weak self, weak task] response, suggestedFilename, completion in
+            guard let self, let task else {
                 completion(nil)
                 return
             }
@@ -155,7 +163,7 @@ class DownloadManager: ObservableObject {
         }
 
         task.onRedirect = { [weak self] newURL in
-            guard let self, let download = self.taskDownloads[task.id] else { return }
+            guard let self, let download = self.taskDownloads[taskID] else { return }
             download.originalURL = newURL
             download.originalURLString = newURL.absoluteString
             try? self.modelContext.save()
@@ -163,20 +171,20 @@ class DownloadManager: ObservableObject {
 
         task.onFinish = { [weak self] in
             guard let self,
-                  let download = self.taskDownloads[task.id],
-                  let destinationURL = self.taskDestinationURLs[task.id]
+                  let download = self.taskDownloads[taskID],
+                  let destinationURL = self.taskDestinationURLs[taskID]
             else {
                 return
             }
 
             self.completeDownload(download, destinationURL: destinationURL)
-            self.cleanupTask(task.id)
+            self.cleanupTask(taskID)
         }
 
         task.onFail = { [weak self] error in
-            guard let self, let download = self.taskDownloads[task.id] else { return }
+            guard let self, let download = self.taskDownloads[taskID] else { return }
             self.failDownload(download, error: error.localizedDescription)
-            self.cleanupTask(task.id)
+            self.cleanupTask(taskID)
         }
     }
 
@@ -291,5 +299,6 @@ class DownloadManager: ObservableObject {
         progressTimers.removeValue(forKey: taskID)
         taskDownloads.removeValue(forKey: taskID)
         taskDestinationURLs.removeValue(forKey: taskID)
+        pendingTasks.removeValue(forKey: taskID)
     }
 }

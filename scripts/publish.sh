@@ -120,6 +120,19 @@ if [[ -n "$STASH_AFTER" && "$STASH_AFTER" != "$STASH_BEFORE" ]]; then
     STASH_CREATED=true
 fi
 
+# Under `set -e`, any failure below (fetch, checkout, push) would otherwise
+# strand the repo on gh-pages with the stash never popped.
+restore_worktree() {
+    if [[ "$(git branch --show-current)" != "$CURRENT_BRANCH" ]]; then
+        git checkout "$CURRENT_BRANCH" || true
+    fi
+    if [[ "$STASH_CREATED" == true ]]; then
+        git stash pop 2>/dev/null || true
+        STASH_CREATED=false
+    fi
+}
+trap restore_worktree EXIT
+
 if git ls-remote --heads origin gh-pages | grep -q gh-pages; then
     git fetch origin gh-pages
     git checkout gh-pages
@@ -137,9 +150,7 @@ git add -f appcast.xml
 git diff --staged --quiet || git commit -m "chore(appcast): deploy v$VERSION"
 git push origin gh-pages
 
-git checkout "$CURRENT_BRANCH"
-if [[ "$STASH_CREATED" == true ]]; then
-    git stash pop 2>/dev/null || true
-fi
+restore_worktree
+trap - EXIT
 
 green "Published! Appcast: https://the-ora.github.io/browser/appcast.xml"

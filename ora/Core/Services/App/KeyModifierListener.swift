@@ -34,19 +34,42 @@ import SwiftUI
 final class KeyModifierListener: ObservableObject {
     @Published var modifierFlags = NSEvent.ModifierFlags([])
 
+    /// The window this listener belongs to. When set, key-down events from
+    /// other windows are ignored (local monitors see every window's events).
+    /// Once a window has been assigned, its deallocation must fail closed —
+    /// otherwise a listener leaked from a closed window consumes every
+    /// surviving window's key events.
+    weak var window: NSWindow? {
+        didSet { windowWasSet = true }
+    }
+
+    private var windowWasSet = false
+    private var monitors: [Any] = []
+
     init() {
-        NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] event in
             self?.modifierFlags = event.modifierFlags
             return event
+        }) {
+            monitors.append(monitor)
         }
 
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
             guard let self else { return event }
+            if self.windowWasSet, event.window !== self.window {
+                return event
+            }
             if self.handleGlobalKeyDown(event) {
                 return nil
             }
             return event
+        }) {
+            monitors.append(monitor)
         }
+    }
+
+    deinit {
+        monitors.forEach { NSEvent.removeMonitor($0) }
     }
 
     typealias KeyDownHandler = (NSEvent) -> Bool
@@ -55,6 +78,10 @@ final class KeyModifierListener: ObservableObject {
 
     func registerKeyDownHandler(_ handler: @escaping KeyDownHandler) {
         keyDownHandlers.append(handler)
+    }
+
+    func removeAllKeyDownHandlers() {
+        keyDownHandlers.removeAll()
     }
 
     private func handleGlobalKeyDown(_ event: NSEvent) -> Bool {
