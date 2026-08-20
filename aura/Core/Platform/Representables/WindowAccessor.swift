@@ -13,7 +13,7 @@ struct WindowAccessor: NSViewRepresentable {
     @Environment(ToolbarManager.self) private var toolbarManager
 
     /// Matches `TopToolbar`'s row height and leading inset.
-    private static let toolbarHeight: CGFloat = 44
+    private static let toolbarHeight: CGFloat = TopToolbar.rowHeight
     private static let trafficLightLeading: CGFloat = 12
     private static let trafficLightSpacing: CGFloat = 20
 
@@ -129,7 +129,7 @@ struct WindowAccessor: NSViewRepresentable {
         guard let containerHeight = buttons.first?.1.superview?.bounds.height else { return }
         // The titlebar container's top edge lines up with the top of the toolbar
         // row, and AppKit coordinates run upward from its bottom. The container is
-        // usually shorter than 44pt, so the origin goes negative; that is correct,
+        // usually shorter than TopToolbar.rowHeightpt, so the origin goes negative; that is correct,
         // and NSView does not clip its subviews by default.
         let rowCenterY = containerHeight - Self.toolbarHeight / 2
         for (index, entry) in buttons.enumerated() {

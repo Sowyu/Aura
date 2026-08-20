@@ -7,7 +7,7 @@ import SwiftUI
 struct TopToolbar: View {
     /// Leading room reserved for the native window buttons.
     static let trafficLightGap: CGFloat = 78
-    static let rowHeight: CGFloat = 44
+    static let rowHeight: CGFloat = 46
     /// Height of the tallest control in the row, the address pill.
     private static let contentHeight: CGFloat = 30
     /// Empty space the row leaves above and below its controls. Views placed under
