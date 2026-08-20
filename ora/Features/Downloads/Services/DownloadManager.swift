@@ -11,6 +11,10 @@ class DownloadManager: ObservableObject {
     let modelContainer: ModelContainer
     let modelContext: ModelContext
     private var activeDownloadTasks: [UUID: BrowserDownloadTask] = [:]
+    // Keeps tasks alive between didStartDownload and cleanup: WKDownload.delegate
+    // is weak, so without this the task deallocates before the destination
+    // callback and the download never starts.
+    private var pendingTasks: [UUID: BrowserDownloadTask] = [:]
     private var taskDownloads: [UUID: Download] = [:]
     private var taskDestinationURLs: [UUID: URL] = [:]
     private var progressTimers: [UUID: Timer] = [:]
@@ -134,6 +138,7 @@ class DownloadManager: ObservableObject {
         // These closures are stored on the task itself; capturing it strongly
         // would make the task retain itself and leak every download.
         let taskID = task.id
+        pendingTasks[taskID] = task
         task.onDestinationRequest = { [weak self, weak task] response, suggestedFilename, completion in
             guard let self, let task else {
                 completion(nil)
@@ -294,5 +299,6 @@ class DownloadManager: ObservableObject {
         progressTimers.removeValue(forKey: taskID)
         taskDownloads.removeValue(forKey: taskID)
         taskDestinationURLs.removeValue(forKey: taskID)
+        pendingTasks.removeValue(forKey: taskID)
     }
 }

@@ -36,8 +36,14 @@ final class KeyModifierListener: ObservableObject {
 
     /// The window this listener belongs to. When set, key-down events from
     /// other windows are ignored (local monitors see every window's events).
-    weak var window: NSWindow?
+    /// Once a window has been assigned, its deallocation must fail closed —
+    /// otherwise a listener leaked from a closed window consumes every
+    /// surviving window's key events.
+    weak var window: NSWindow? {
+        didSet { windowWasSet = true }
+    }
 
+    private var windowWasSet = false
     private var monitors: [Any] = []
 
     init() {
@@ -50,7 +56,7 @@ final class KeyModifierListener: ObservableObject {
 
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
             guard let self else { return event }
-            if let window = self.window, event.window !== window {
+            if self.windowWasSet, event.window !== self.window {
                 return event
             }
             if self.handleGlobalKeyDown(event) {
@@ -72,6 +78,10 @@ final class KeyModifierListener: ObservableObject {
 
     func registerKeyDownHandler(_ handler: @escaping KeyDownHandler) {
         keyDownHandlers.append(handler)
+    }
+
+    func removeAllKeyDownHandlers() {
+        keyDownHandlers.removeAll()
     }
 
     private func handleGlobalKeyDown(_ event: NSEvent) -> Bool {

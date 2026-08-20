@@ -75,6 +75,16 @@ struct ImportDataButton: View {
                     }
                 }
             }
+
+            // Imported tabs are added without activation; select one so the
+            // window isn't left with an empty content area.
+            if let firstContainer = newContainers.first {
+                if let firstTab = firstContainer.tabs.first {
+                    tabManager.activateTab(firstTab)
+                } else {
+                    tabManager.activateContainer(firstContainer)
+                }
+            }
         }
     }
 

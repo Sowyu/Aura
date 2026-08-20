@@ -159,11 +159,10 @@ struct OraRoot: View {
 
                 // Cmd+Q quit confirmation
                 observe(.quitRequested) { note in
-                    guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
-                    guard window != nil else {
-                        NSApp.reply(toApplicationShouldTerminate: true)
-                        return
-                    }
+                    // Exact window match only: falling back to keyWindow lets a second
+                    // OraRoot whose `window` isn't set yet claim the notification and
+                    // reply(true) while the real target is still showing the dialog.
+                    guard let window, note.object as? NSWindow === window else { return }
                     dialogManager.confirm(
                         title: "Quit Ora?",
                         message: "Are you sure you want to quit?",
@@ -203,7 +202,9 @@ struct OraRoot: View {
                 observe(.findInPage) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
-                        if let activeTab = tabManager.activeTab { appState.showFinderIn = activeTab.id }
+                        if let activeTab = tabManager.activeTab {
+                            appState.showFinderIn = activeTab.id
+                        }
                     }
                 }
                 observe(.toggleFullURL) { note in
@@ -237,7 +238,9 @@ struct OraRoot: View {
                 observe(.togglePinTab) { note in
                     Task { @MainActor in
                         guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
-                        if let tab = tabManager.activeTab { tabManager.togglePinTab(tab) }
+                        if let tab = tabManager.activeTab {
+                            tabManager.togglePinTab(tab)
+                        }
                     }
                 }
                 observe(.nextTab) { note in
@@ -288,58 +291,61 @@ struct OraRoot: View {
                 }
 
                 observe(.spacePrivacySettingsChanged) { note in
-                        Task { @MainActor in
-                            guard let containerId = note.userInfo?["containerId"] as? UUID else { return }
-                            tabManager.refreshPrivacySettings(for: containerId)
-                        }
+                    Task { @MainActor in
+                        guard let containerId = note.userInfo?["containerId"] as? UUID else { return }
+                        tabManager.refreshPrivacySettings(for: containerId)
                     }
+                }
 
                 // Clear cache and reload
                 observe(.clearCacheAndReload) { note in
-                        Task { @MainActor in
-                            guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
-                            if let activeTab = tabManager.activeTab {
-                                let host = activeTab.url.host ?? ""
-                                let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-                                PrivacyService
-                                    .clearCacheForHost(
-                                        for: domain,
-                                        container: activeTab.container
-                                    ) { [weak toastManager] in
-                                        DispatchQueue.main.async {
-                                            activeTab.reload()
-                                            toastManager?.show("Cache cleared for \(domain)", icon: .system("trash"))
-                                        }
+                    Task { @MainActor in
+                        guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
+                        if let activeTab = tabManager.activeTab {
+                            let host = activeTab.url.host ?? ""
+                            let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+                            PrivacyService
+                                .clearCacheForHost(
+                                    for: domain,
+                                    container: activeTab.container
+                                ) { [weak toastManager] in
+                                    DispatchQueue.main.async {
+                                        activeTab.reload()
+                                        toastManager?.show("Cache cleared for \(domain)", icon: .system("trash"))
                                     }
-                            }
+                                }
                         }
                     }
+                }
 
                 // Clear cookies and reload
                 observe(.clearCookiesAndReload) { note in
-                        Task { @MainActor in
-                            guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
+                    Task { @MainActor in
+                        guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
 
-                            if let activeTab = tabManager.activeTab {
-                                let host = activeTab.url.host ?? ""
-                                let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-                                PrivacyService
-                                    .clearCookiesForHost(
-                                        for: host,
-                                        container: activeTab.container
-                                    ) { [weak toastManager] in
-                                        DispatchQueue.main.async {
-                                            activeTab.reload()
-                                            toastManager?.show("Cookies cleared for \(domain)", icon: .system("trash"))
-                                        }
+                        if let activeTab = tabManager.activeTab {
+                            let host = activeTab.url.host ?? ""
+                            let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+                            PrivacyService
+                                .clearCookiesForHost(
+                                    for: host,
+                                    container: activeTab.container
+                                ) { [weak toastManager] in
+                                    DispatchQueue.main.async {
+                                        activeTab.reload()
+                                        toastManager?.show("Cookies cleared for \(domain)", icon: .system("trash"))
                                     }
-                            }
+                                }
                         }
                     }
+                }
             }
             .onDisappear {
                 notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
                 notificationObservers.removeAll()
+                // The handlers capture this view (and its state objects); leaving them
+                // registered keeps the listener's closures alive after the window closes.
+                keyModifierListener.removeAllKeyDownHandlers()
             }
             .onChange(of: window) { _, newWindow in
                 keyModifierListener.window = newWindow
