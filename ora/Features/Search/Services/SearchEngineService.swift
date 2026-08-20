@@ -36,8 +36,16 @@ class SearchEngineService: ObservableObject {
     private var theme: Theme?
     @ObservedObject private var settingsStore = SettingsStore.shared
 
+    /// Built-ins depend on `theme`, so they can't be a global constant, but rebuilding
+    /// 16 structs on every lookup shows up in the launcher's per-keystroke path.
+    private var cachedBuiltInSearchEngines: [SearchEngine]?
+    private var cachedSearchEngines: (custom: [CustomSearchEngine], engines: [SearchEngine])?
+
     func setTheme(_ theme: Theme) {
+        guard self.theme != theme else { return }
         self.theme = theme
+        cachedBuiltInSearchEngines = nil
+        cachedSearchEngines = nil
     }
 
     var settings: SettingsStore {
@@ -60,7 +68,11 @@ class SearchEngineService: ObservableObject {
     }
 
     var builtInSearchEngines: [SearchEngine] {
-        [
+        if let cachedBuiltInSearchEngines {
+            return cachedBuiltInSearchEngines
+        }
+
+        let engines: [SearchEngine] = [
             SearchEngine(
                 name: "YouTube",
                 color: Color(hex: "#FC0D1B"),
@@ -196,12 +208,20 @@ class SearchEngineService: ObservableObject {
                 isAIChat: true
             )
         ]
+
+        cachedBuiltInSearchEngines = engines
+        return engines
     }
 
     var searchEngines: [SearchEngine] {
+        let custom = settingsStore.customSearchEngines
+        if let cachedSearchEngines, cachedSearchEngines.custom == custom {
+            return cachedSearchEngines.engines
+        }
+
         var engines = builtInSearchEngines
 
-        let customEngines = settingsStore.customSearchEngines.map { custom in
+        engines.append(contentsOf: custom.map { custom in
             SearchEngine(
                 name: custom.name,
                 color: custom.faviconBackgroundColor ?? .blue,
@@ -210,9 +230,9 @@ class SearchEngineService: ObservableObject {
                 searchURL: custom.searchURL,
                 isAIChat: custom.isAIChat
             )
-        }
+        })
 
-        engines.append(contentsOf: customEngines)
+        cachedSearchEngines = (custom, engines)
         return engines
     }
 

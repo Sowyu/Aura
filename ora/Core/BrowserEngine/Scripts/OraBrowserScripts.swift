@@ -2,6 +2,12 @@ import Foundation
 
 enum OraBrowserScripts {
     static func userScripts() -> [BrowserUserScript] {
+        allUserScripts
+    }
+
+    /// The sources never vary per web view, so build them once instead of re-reading
+    /// password-manager.js off disk for every tab.
+    private static let allUserScripts: [BrowserUserScript] = {
         var scripts = [
             BrowserUserScript(
                 name: "ora-bridge",
@@ -29,7 +35,7 @@ enum OraBrowserScripts {
         }
 
         return scripts
-    }
+    }()
 
     private static func loadResourceScript(named name: String) -> String? {
         guard let scriptURL = Bundle.main.url(forResource: name, withExtension: "js"),
@@ -59,7 +65,10 @@ enum OraBrowserScripts {
         };
     })();
     """
+}
 
+/// The page-side script lives in its own extension so the enum body stays readable.
+private extension OraBrowserScripts {
     private static let navigationAndMediaScript = """
     (function () {
         let lastHref = location.href;
@@ -89,8 +98,14 @@ enum OraBrowserScripts {
         window.addEventListener('popstate', () => notifyChange(true));
         notifyChange(true);
 
+        let lastHover = null;
+
         function postHover(url) {
-            post('linkHover', url || "");
+            const href = url || "";
+            // mouseover fires for every element under the cursor; only the changes matter.
+            if (href === lastHover) return;
+            lastHover = href;
+            post('linkHover', href);
         }
 
         function onMouseOver(event) {
@@ -201,12 +216,30 @@ enum OraBrowserScripts {
             watchRemoval(element, () => post({ type: 'removed' }));
         }
 
+        let hadMedia = false;
+        let scanPending = false;
+
         function scan() {
-            document.querySelectorAll('video, audio').forEach(attach);
+            const elements = document.querySelectorAll('video, audio');
+            // A media-less page that was already media-less has nothing to report, and
+            // the observer fires on every DOM batch. One message still goes out when
+            // media disappears so the native side can clear its session.
+            if (elements.length === 0 && !hadMedia) return;
+            hadMedia = elements.length > 0;
+            elements.forEach(attach);
             caps();
         }
 
-        const observer = new MutationObserver(scan);
+        function scheduleScan() {
+            if (scanPending) return;
+            scanPending = true;
+            setTimeout(() => {
+                scanPending = false;
+                scan();
+            }, 250);
+        }
+
+        const observer = new MutationObserver(scheduleScan);
         observer.observe(document.documentElement, { childList: true, subtree: true });
         scan();
 

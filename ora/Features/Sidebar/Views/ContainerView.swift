@@ -92,20 +92,20 @@ struct ContainerView: View {
 
     private var favoriteTabs: [Tab] {
         return container.tabs
-            .sorted(by: { $0.order > $1.order })
             .filter { $0.type == .fav }
+            .sorted(by: { $0.order > $1.order })
     }
 
     private var pinnedTabs: [Tab] {
         return container.tabs
-            .sorted(by: { $0.order > $1.order })
             .filter { $0.type == .pinned }
+            .sorted(by: { $0.order > $1.order })
     }
 
     private var normalTabs: [Tab] {
         return container.tabs
-            .sorted(by: { $0.order > $1.order })
             .filter { $0.type == .normal }
+            .sorted(by: { $0.order > $1.order })
     }
 
     private func addNewTab() {

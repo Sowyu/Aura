@@ -55,7 +55,10 @@ final class MediaController: ObservableObject {
     // MARK: - Receive events from JS bridge
 
     func receive(event: MediaEventPayload, from tab: Tab) {
-        tabRefs[tab.id] = WeakTab(tab)
+        // Media events arrive constantly; only box a new WeakTab when the old one is gone.
+        if tabRefs[tab.id]?.value !== tab {
+            tabRefs[tab.id] = WeakTab(tab)
+        }
         let id = tab.id
 
         func ensureSession() -> Int {
@@ -124,7 +127,11 @@ final class MediaController: ObservableObject {
             break
         }
 
-        isVisible = !sessions.isEmpty
+        // Assigning unconditionally republishes on every media event.
+        let shouldBeVisible = !sessions.isEmpty
+        if isVisible != shouldBeVisible {
+            isVisible = shouldBeVisible
+        }
     }
 
     // MARK: - Controls (per session, default to primary)

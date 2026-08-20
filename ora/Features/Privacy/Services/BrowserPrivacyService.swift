@@ -440,8 +440,11 @@ final class BrowserPrivacyService {
         ]
     }
 
+    /// The balanced profile is constant, so serialise it once instead of per web view.
+    private static let balancedFingerprintingScriptSource = FingerprintingProtectionProfile.balanced.scriptSource()
+
     static func fingerprintingProtectionScriptSource() -> String {
-        FingerprintingProtectionProfile.balanced.scriptSource()
+        balancedFingerprintingScriptSource
     }
 
     private func enabledRuleLists(for spaceID: UUID, privacySettings: SpacePrivacySettings) -> [String] {

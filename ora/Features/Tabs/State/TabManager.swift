@@ -55,8 +55,6 @@ class TabManager: ObservableObject {
     /// Note: Could be made injectable via init parameter if preferred
     let tabSearchingService: TabSearchingProviding
 
-    @Query(sort: \TabContainer.lastAccessedAt, order: .reverse) var containers: [TabContainer]
-
     private var cleanupTimer: Timer?
     private var recentlyClosedTabs: [ClosedTabSnapshot] = []
     private let maxRecentlyClosedTabs = 5
@@ -526,12 +524,12 @@ class TabManager: ObservableObject {
     }
 
     /// Clean up old tabs that haven't been accessed recently to preserve memory
-    func cleanupOldTabs() {
+    func cleanupOldTabs(in containers: [TabContainer]? = nil) {
         let timeout = SettingsStore.shared.tabAliveTimeout
         // Skip cleanup if set to "Never" (365 days)
         guard timeout < 365 * 24 * 60 * 60 else { return }
 
-        let allContainers = fetchContainers()
+        let allContainers = containers ?? fetchContainers()
         for container in allContainers {
             for tab in container.tabs {
                 if !tab.isAlive, tab.isWebViewReady, tab.id != activeTab?.id, !tab.isPlayingMedia, tab.type == .normal {
@@ -542,9 +540,9 @@ class TabManager: ObservableObject {
     }
 
     /// Completely remove old normal tabs that haven't been accessed for a long time
-    func removeOldTabs() {
+    func removeOldTabs(in containers: [TabContainer]? = nil) {
         let cutoffDate = Date().addingTimeInterval(-SettingsStore.shared.tabRemovalTimeout)
-        let allContainers = fetchContainers()
+        let allContainers = containers ?? fetchContainers()
 
         for container in allContainers {
             for tab in container.tabs {
@@ -561,9 +559,9 @@ class TabManager: ObservableObject {
     }
 
     /// Remove tabs in containers that have a per-space autoClearTabsAfter setting
-    func autoClearContainerTabs() {
+    func autoClearContainerTabs(in containers: [TabContainer]? = nil) {
         let settings = SettingsStore.shared
-        let allContainers = fetchContainers()
+        let allContainers = containers ?? fetchContainers()
 
         for container in allContainers {
             let policy = settings.autoClearTabsAfter(for: container.id)
@@ -583,13 +581,19 @@ class TabManager: ObservableObject {
         }
     }
 
+    /// Run all three tab-expiry passes off a single container fetch.
+    private func runTabMaintenance() {
+        let containers = fetchContainers()
+        cleanupOldTabs(in: containers)
+        removeOldTabs(in: containers)
+        autoClearContainerTabs(in: containers)
+    }
+
     /// Start the automatic cleanup timer
     private func startCleanupTimer() {
         cleanupTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
-                self?.cleanupOldTabs()
-                self?.removeOldTabs()
-                self?.autoClearContainerTabs()
+                self?.runTabMaintenance()
             }
         }
     }

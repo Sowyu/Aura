@@ -16,8 +16,6 @@ struct SidebarView: View {
     @EnvironmentObject var toolbarManager: ToolbarManager
 
     @Query var containers: [TabContainer]
-    @Query(filter: nil, sort: [.init(\History.lastAccessedAt, order: .reverse)])
-    var histories: [History]
 
     private let columns = Array(repeating: GridItem(spacing: 10), count: 3)
 

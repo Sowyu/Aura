@@ -76,12 +76,6 @@ struct OraRoot: View {
         )
     }
 
-    private func observe(_ name: Notification.Name, using block: @escaping (Notification) -> Void) {
-        notificationObservers.append(
-            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main, using: block)
-        )
-    }
-
     var body: some View {
         BrowserView()
             .background(WindowReader(window: $window))
@@ -117,6 +111,18 @@ struct OraRoot: View {
             .onAppear {
                 // onAppear can re-fire; registering twice would double-run every handler.
                 guard notificationObservers.isEmpty else { return }
+
+                // Collected locally and stored once: appending to the @State array
+                // directly re-invalidates the whole view on each of the 21 registrations.
+                var observers: [NSObjectProtocol] = []
+                func observe(_ name: Notification.Name, using block: @escaping (Notification) -> Void) {
+                    observers.append(
+                        NotificationCenter.default.addObserver(
+                            forName: name, object: nil, queue: .main, using: block
+                        )
+                    )
+                }
+
                 downloadManager.toastManager = toastManager
                 Task {
                     let containerIDs = await MainActor.run {
@@ -353,6 +359,8 @@ struct OraRoot: View {
                         }
                     }
                 }
+
+                notificationObservers = observers
             }
             .onDisappear {
                 notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }

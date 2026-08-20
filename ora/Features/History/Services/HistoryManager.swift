@@ -57,22 +57,22 @@ class HistoryManager: ObservableObject {
 
     func search(_ text: String, activeContainerId: UUID) -> [History] {
         let trimmedText = text.trimmingCharacters(in: .whitespaces)
-        let descriptor = FetchDescriptor<History>(
-            predicate: #Predicate { $0.container?.id == activeContainerId },
+        // Matching in the predicate keeps the whole history table out of memory; the
+        // launcher only ever shows a handful of rows, so a bounded fetch is enough.
+        let inContainer = #Predicate<History> { $0.container?.id == activeContainerId }
+        let matchesText = #Predicate<History> {
+            $0.container?.id == activeContainerId &&
+                ($0.urlString.localizedStandardContains(trimmedText) ||
+                    $0.title.localizedStandardContains(trimmedText))
+        }
+        var descriptor = FetchDescriptor<History>(
+            predicate: trimmedText.isEmpty ? inContainer : matchesText,
             sortBy: [SortDescriptor(\.lastAccessedAt, order: .reverse)]
         )
+        descriptor.fetchLimit = 200
 
         do {
-            let histories = try modelContext.fetch(descriptor)
-
-            guard !trimmedText.isEmpty else {
-                return histories
-            }
-
-            return histories.filter { history in
-                history.urlString.localizedStandardContains(trimmedText) ||
-                    history.title.localizedStandardContains(trimmedText)
-            }
+            return try modelContext.fetch(descriptor)
         } catch {
             logger.error("Error fetching history: \(String(describing: error), privacy: .public)")
             return []

@@ -45,6 +45,11 @@ class Tab: ObservableObject, Identifiable {
     @Transient @Published var loadingProgress: Double = 10.0
     @Transient var colorUpdated = false
     @Transient var maybeIsActive = false
+    /// 40 ticks at 0.25 s gives the page 10 s to settle. Without a cap the retry chain
+    /// reschedules forever on a page whose dominant colour never resolves.
+    static let maxSnapshotRetries = 40
+    @Transient private(set) var snapshotRetriesLeft = 0
+    @Transient private var snapshotTimer: Timer?
     @Transient @Published var hasNavigationError: Bool = false
     @Transient @Published var navigationError: Error?
     @Transient @Published var failedURL: URL?
@@ -113,6 +118,9 @@ class Tab: ObservableObject, Identifiable {
 
         let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
         guard let faviconURL = FaviconService.shared.faviconURL(for: domain) else { return }
+        // In-page navigations re-report the same URL constantly; re-running the download
+        // rewrites the same PNG to disk every time. A new domain still refreshes.
+        guard self.favicon != faviconURL else { return }
         self.favicon = faviconURL
 
         let fileName = "\(self.id.uuidString).png"
@@ -165,14 +173,24 @@ class Tab: ObservableObject, Identifiable {
         }
     }
 
+    /// Starts a fresh round of header-colour retries. Called once per navigation start.
     func maintainSnapShots() {
-        if !self.colorUpdated || self.browserPage?.isLoading == true, self.maybeIsActive {
-            self.updateHeaderColor()
+        snapshotRetriesLeft = Self.maxSnapshotRetries
+        runSnapshotMaintenance()
+    }
 
-            Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { [weak self] _ in
-                guard let tab = self else { return }
-                tab.maintainSnapShots()
-            }
+    private func runSnapshotMaintenance() {
+        snapshotTimer?.invalidate()
+        snapshotTimer = nil
+
+        guard self.maybeIsActive, !self.colorUpdated || self.browserPage?.isLoading == true else { return }
+        guard snapshotRetriesLeft > 0 else { return }
+        snapshotRetriesLeft -= 1
+
+        self.updateHeaderColor()
+
+        snapshotTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { [weak self] _ in
+            self?.runSnapshotMaintenance()
         }
     }
 
