@@ -52,7 +52,7 @@ enum SettingsTab: String, Hashable, CaseIterable {
 struct SettingsWindowRoot: View {
     var body: some View {
         SettingsContentView(initialTab: nil)
-            .environmentObject(ToastManager.shared)
+            .environment(ToastManager.shared)
     }
 }
 

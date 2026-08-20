@@ -12,17 +12,17 @@ final class PrivacyMode: ObservableObject {
 }
 
 struct OraRoot: View {
-    @StateObject private var appState = AppState()
+    @State private var appState = AppState()
     @StateObject private var keyModifierListener = KeyModifierListener()
     @StateObject private var updateService = UpdateService()
-    @StateObject private var mediaController: MediaController
-    @StateObject private var tabManager: TabManager
-    @StateObject private var historyManager: HistoryManager
-    @StateObject private var downloadManager: DownloadManager
+    @State private var mediaController: MediaController
+    @State private var tabManager: TabManager
+    @State private var historyManager: HistoryManager
+    @State private var downloadManager: DownloadManager
     @StateObject private var privacyMode: PrivacyMode
-    @StateObject private var sidebarManager = SidebarManager()
-    @StateObject private var toolbarManager = ToolbarManager()
-    @StateObject private var dialogManager = DialogManager()
+    @State private var sidebarManager = SidebarManager()
+    @State private var toolbarManager = ToolbarManager()
+    @State private var dialogManager = DialogManager()
     private let toastManager = ToastManager.shared
 
     @ObserveInjection var inject
@@ -33,6 +33,10 @@ struct OraRoot: View {
     @State private var window: NSWindow?
     @State private var notificationObservers: [NSObjectProtocol] = []
 
+    /// `State(wrappedValue:)` evaluates eagerly where `StateObject` took an autoclosure,
+    /// so every `OraRoot.init` builds a manager set even if SwiftUI keeps only the first.
+    /// Measured: SwiftUI calls this exactly once per window, and `TabManager.init` writes
+    /// to the store (it creates the first space), so a second call would matter.
     init(isPrivate: Bool = false) {
         _privacyMode = StateObject(wrappedValue: PrivacyMode(isPrivate: isPrivate))
 
@@ -49,18 +53,17 @@ struct OraRoot: View {
         self.tabContext = modelContext
         self.downloadContext = modelContext
         self.historyContext = modelContext
-        let historyManagerObj = StateObject(
+        _historyManager = State(
             wrappedValue: HistoryManager(
                 modelContainer: container,
                 modelContext: modelContext
             )
         )
-        _historyManager = historyManagerObj
 
         let media = MediaController()
-        _mediaController = StateObject(wrappedValue: media)
+        _mediaController = State(wrappedValue: media)
 
-        _tabManager = StateObject(
+        _tabManager = State(
             wrappedValue: TabManager(
                 modelContainer: container,
                 modelContext: modelContext,
@@ -68,7 +71,7 @@ struct OraRoot: View {
             )
         )
 
-        _downloadManager = StateObject(
+        _downloadManager = State(
             wrappedValue: DownloadManager(
                 modelContainer: container,
                 modelContext: modelContext
@@ -88,20 +91,20 @@ struct OraRoot: View {
                 )
             )
             .environment(\.window, window)
-            .environmentObject(appState)
-            .environmentObject(tabManager)
-            .environmentObject(historyManager)
-            .environmentObject(mediaController)
+            .environment(appState)
+            .environment(tabManager)
+            .environment(historyManager)
+            .environment(mediaController)
             .environmentObject(keyModifierListener)
             .environmentObject(CustomKeyboardShortcutManager.shared)
             .environmentObject(AppearanceManager.shared)
-            .environmentObject(downloadManager)
+            .environment(downloadManager)
             .environmentObject(updateService)
             .environmentObject(privacyMode)
-            .environmentObject(sidebarManager)
-            .environmentObject(toolbarManager)
-            .environmentObject(dialogManager)
-            .environmentObject(toastManager)
+            .environment(sidebarManager)
+            .environment(toolbarManager)
+            .environment(dialogManager)
+            .environment(toastManager)
             .dialogs(manager: dialogManager)
             .modelContext(tabContext)
             .modelContext(historyContext)

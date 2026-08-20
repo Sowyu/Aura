@@ -1,11 +1,13 @@
 import SwiftUI
 
-final class DialogManager: ObservableObject {
+@Observable
+@MainActor
+final class DialogManager {
     /// ⌘Q parks the terminate reply and puts a confirmation on screen. `AppDelegate`
     /// sets this so a second ⌘Q quits outright; it clears when the stack empties.
-    static var isQuitConfirmationVisible = false
+    @ObservationIgnored nonisolated(unsafe) static var isQuitConfirmationVisible = false
 
-    @Published var dialogs: [Dialog] = []
+    var dialogs: [Dialog] = []
 
     @discardableResult
     func show(@ViewBuilder content: @escaping (String) -> some View) -> String {

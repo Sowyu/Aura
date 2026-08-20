@@ -44,20 +44,21 @@ enum ExtensionInstallError: LocalizedError {
 /// v1 scope: extensions run in normal windows only (never private), and every
 /// permission an extension requests is granted at install time. Toolbar
 /// actions, popups, and the tabs API bridge are follow-up work.
+@Observable
 @MainActor
-final class ExtensionManager: ObservableObject {
+final class ExtensionManager {
     static let shared = ExtensionManager()
 
-    @Published private(set) var installedExtensions: [InstalledExtension] = []
+    private(set) var installedExtensions: [InstalledExtension] = []
 
     /// Bumped whenever WebKit updates an action (icon, badge, enabled state) so
     /// the toolbar redraws. The values themselves are pulled on demand.
-    @Published private(set) var actionRevision = 0
+    private(set) var actionRevision = 0
 
     /// Last toolbar button each extension's popup was anchored to, keyed by
     /// extension id. Weak: the button dies with its window.
-    private var actionAnchors: [String: WeakAnchor] = [:]
-    private var hasWindowObservers = false
+    @ObservationIgnored private var actionAnchors: [String: WeakAnchor] = [:]
+    @ObservationIgnored private var hasWindowObservers = false
 
     static var isSupported: Bool {
         guard #available(macOS 15.4, *) else { return false }
@@ -66,10 +67,10 @@ final class ExtensionManager: ObservableObject {
 
     private static let disabledIDsKey = "extensions.disabledIDs"
 
-    private var hasStarted = false
+    @ObservationIgnored private var hasStarted = false
     /// AnyObject storage because WKWebExtensionController's type is 15.4+;
     /// typed access goes through the `engine` accessor below.
-    private var engineStorage: AnyObject?
+    @ObservationIgnored private var engineStorage: AnyObject?
 
     @available(macOS 15.4, *)
     private var engine: ExtensionEngine {

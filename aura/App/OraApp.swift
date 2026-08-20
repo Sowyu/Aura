@@ -73,13 +73,15 @@ func deleteSwiftDataStore(_ loc: String) {
     try? fileManager.removeItem(at: walURL)
 }
 
-class AppState: ObservableObject {
-    @Published var showLauncher: Bool = false
-    @Published var launcherSearchText: String = ""
-    @Published var showFinderIn: UUID?
-    @Published var isFloatingTabSwitchVisible: Bool = false
-    @Published var isFullscreen: Bool = false
-    @Published var isURLBarEditing: Bool = false
+@Observable
+@MainActor
+final class AppState {
+    var showLauncher: Bool = false
+    var launcherSearchText: String = ""
+    var showFinderIn: UUID?
+    var isFloatingTabSwitchVisible: Bool = false
+    var isFullscreen: Bool = false
+    var isURLBarEditing: Bool = false
 }
 
 @main

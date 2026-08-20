@@ -1,12 +1,14 @@
 import SwiftUI
 
-final class ToastManager: ObservableObject {
+@Observable
+@MainActor
+final class ToastManager {
     static let shared = ToastManager()
 
-    @Published var toasts: [Toast] = []
+    var toasts: [Toast] = []
 
-    private var dismissTimers: [String: DispatchWorkItem] = [:]
-    private var isHovered: Bool = false
+    @ObservationIgnored private var dismissTimers: [String: DispatchWorkItem] = [:]
+    @ObservationIgnored private var isHovered: Bool = false
 
     var position: ToastPosition = .bottomCenter
     var defaultDuration: TimeInterval = 4.0

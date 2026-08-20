@@ -3,11 +3,11 @@ import SwiftUI
 
 struct SidebarURLDisplay: View {
     @Environment(\.theme) private var theme
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var sidebarManager: SidebarManager
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var toolbarManager: ToolbarManager
-    @EnvironmentObject var toastManager: ToastManager
+    @Environment(AppState.self) private var appState
+    @Environment(SidebarManager.self) private var sidebarManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(ToolbarManager.self) private var toolbarManager
+    @Environment(ToastManager.self) private var toastManager
 
     @State private var isHoveringCopy = false
     @State private var isHovering = false

@@ -136,9 +136,10 @@ struct CustomSearchEngine: Codable, Identifiable, Hashable {
     }
 }
 
-class SettingsStore: ObservableObject {
+@Observable
+class SettingsStore {
     static let shared = SettingsStore()
-    private let defaults = UserDefaults.standard
+    @ObservationIgnored private let defaults = UserDefaults.standard
 
     // MARK: - Global keys
 
@@ -157,6 +158,7 @@ class SettingsStore: ObservableObject {
     private let tabAliveTimeoutKey = "settings.tabAliveTimeout"
     private let tabRemovalTimeoutKey = "settings.tabRemovalTimeout"
     private let maxRecentTabsKey = "settings.maxRecentTabs"
+    private let maxLiveTabsKey = "tabs.maxLive"
     private let autoPiPEnabledKey = "settings.autoPiPEnabled"
     private let passwordsEnabledKey = "settings.passwords.enabled"
     private let passwordManagerProviderKey = "settings.passwords.provider"
@@ -183,98 +185,105 @@ class SettingsStore: ObservableObject {
         "settings.container.\(containerId.uuidString).privacy"
     }
 
-    @Published var autoUpdateEnabled: Bool {
+    var autoUpdateEnabled: Bool {
         didSet { defaults.set(autoUpdateEnabled, forKey: autoUpdateKey) }
     }
 
-    @Published var blockThirdPartyTrackers: Bool {
+    var blockThirdPartyTrackers: Bool {
         didSet { defaults.set(blockThirdPartyTrackers, forKey: trackingThirdPartyKey) }
     }
 
-    @Published var blockFingerprinting: Bool {
+    var blockFingerprinting: Bool {
         didSet { defaults.set(blockFingerprinting, forKey: fingerprintingKey) }
     }
 
-    @Published var adBlocking: Bool {
+    var adBlocking: Bool {
         didSet { defaults.set(adBlocking, forKey: adBlockingKey) }
     }
 
-    @Published var cookiesPolicy: CookiesPolicy {
+    var cookiesPolicy: CookiesPolicy {
         didSet { defaults.set(cookiesPolicy.rawValue, forKey: cookiesPolicyKey) }
     }
 
     /// Global default for page JavaScript. Per-site rules in `SiteJavaScriptRule` override it.
-    @Published var blockJavaScriptByDefault: Bool {
+    var blockJavaScriptByDefault: Bool {
         didSet { defaults.set(blockJavaScriptByDefault, forKey: blockJavaScriptByDefaultKey) }
     }
 
     /// Applies the filter rules WebKit's content blocking format cannot express
     /// (scriptlets, procedural selectors, CSS injection). Per-site overrides live in
     /// `AdvancedBlockingService`.
-    @Published var advancedBlockingEnabled: Bool {
+    var advancedBlockingEnabled: Bool {
         didSet {
             defaults.set(advancedBlockingEnabled, forKey: advancedBlockingEnabledKey)
             NotificationCenter.default.post(name: AdvancedBlockingService.didChangeNotification, object: nil)
         }
     }
 
-    @Published var sitePermissions: [String: SitePermissionSettings] {
+    var sitePermissions: [String: SitePermissionSettings] {
         didSet { saveCodable(sitePermissions, forKey: sitePermissionsKey) }
     }
 
-    @Published private(set) var adBlockFilterLists: [FilterListRecord] {
+    private(set) var adBlockFilterLists: [FilterListRecord] {
         didSet { saveCodable(adBlockFilterLists, forKey: adBlockFilterListsKey) }
     }
 
-    @Published var customSearchEngines: [CustomSearchEngine] {
+    var customSearchEngines: [CustomSearchEngine] {
         didSet { saveCodable(customSearchEngines, forKey: customSearchEnginesKey) }
     }
 
-    @Published var globalDefaultSearchEngine: String? {
+    var globalDefaultSearchEngine: String? {
         didSet { defaults.set(globalDefaultSearchEngine, forKey: globalDefaultSearchEngineKey) }
     }
 
-    @Published var customKeyboardShortcuts: [String: KeyChord] {
+    var customKeyboardShortcuts: [String: KeyChord] {
         didSet { saveCodable(customKeyboardShortcuts, forKey: customKeyboardShortcutsKey) }
     }
 
-    @Published var tabAliveTimeout: TimeInterval {
+    var tabAliveTimeout: TimeInterval {
         didSet { defaults.set(tabAliveTimeout, forKey: tabAliveTimeoutKey) }
     }
 
-    @Published var tabRemovalTimeout: TimeInterval {
+    var tabRemovalTimeout: TimeInterval {
         didSet { defaults.set(tabRemovalTimeout, forKey: tabRemovalTimeoutKey) }
     }
 
-    @Published var maxRecentTabs: Int {
+    var maxRecentTabs: Int {
         didSet { defaults.set(maxRecentTabs, forKey: maxRecentTabsKey) }
     }
 
-    @Published var autoPiPEnabled: Bool {
+    /// Ceiling on live `WKWebView`s, independent of `tabAliveTimeout`. A tab can be
+    /// well inside the timeout and still be evicted when 40 others are ahead of it.
+    /// 0 turns the cap off and leaves eviction to the timeout alone.
+    var maxLiveTabs: Int {
+        didSet { defaults.set(maxLiveTabs, forKey: maxLiveTabsKey) }
+    }
+
+    var autoPiPEnabled: Bool {
         didSet { defaults.set(autoPiPEnabled, forKey: autoPiPEnabledKey) }
     }
 
-    @Published var passwordsEnabled: Bool {
+    var passwordsEnabled: Bool {
         didSet { defaults.set(passwordsEnabled, forKey: passwordsEnabledKey) }
     }
 
-    @Published var passwordManagerProvider: PasswordManagerProviderKind {
+    var passwordManagerProvider: PasswordManagerProviderKind {
         didSet { defaults.set(passwordManagerProvider.rawValue, forKey: passwordManagerProviderKey) }
     }
 
-    @Published var passwordAutofillEnabled: Bool {
+    var passwordAutofillEnabled: Bool {
         didSet { defaults.set(passwordAutofillEnabled, forKey: passwordAutofillEnabledKey) }
     }
 
-    @Published var passwordAutofillSubmitEnabled: Bool {
+    var passwordAutofillSubmitEnabled: Bool {
         didSet { defaults.set(passwordAutofillSubmitEnabled, forKey: passwordAutofillSubmitEnabledKey) }
     }
 
-    @Published var passwordSavePromptsEnabled: Bool {
+    var passwordSavePromptsEnabled: Bool {
         didSet { defaults.set(passwordSavePromptsEnabled, forKey: passwordSavePromptsEnabledKey) }
     }
 
-    @Published private(set) var suppressedPasswordSavePromptHosts: Set<String> {
+    private(set) var suppressedPasswordSavePromptHosts: Set<String> {
         didSet { defaults.set(
             Array(suppressedPasswordSavePromptHosts).sorted(),
             forKey: suppressedPasswordSavePromptHostsKey
@@ -340,6 +349,7 @@ class SettingsStore: ObservableObject {
 
         let maxRecentTabsValue = defaults.integer(forKey: maxRecentTabsKey)
         maxRecentTabs = maxRecentTabsValue == 0 ? 5 : maxRecentTabsValue
+        maxLiveTabs = defaults.object(forKey: maxLiveTabsKey) as? Int ?? 12
 
         autoPiPEnabled = defaults.object(forKey: autoPiPEnabledKey) as? Bool ?? true
         passwordsEnabled = defaults.object(forKey: passwordsEnabledKey) as? Bool ?? true
@@ -359,25 +369,34 @@ class SettingsStore: ObservableObject {
 
     // MARK: - Per-container helpers
 
+    /// Per-container settings live only in `UserDefaults`, so no stored property
+    /// changes when one is written. Observation has no `objectWillChange`, so the
+    /// getters read this counter and the setters bump it: same invalidation, same
+    /// granularity as the hand-rolled sends it replaces.
+    private var containerSettingsRevision = 0
+
     func defaultSearchEngineId(for containerId: UUID) -> String? {
-        defaults.string(forKey: keyForDefaultSearch(for: containerId))
+        _ = containerSettingsRevision
+        return defaults.string(forKey: keyForDefaultSearch(for: containerId))
     }
 
     func setDefaultSearchEngineId(_ id: String?, for containerId: UUID) {
         defaults.set(id, forKey: keyForDefaultSearch(for: containerId))
-        objectWillChange.send()
+        containerSettingsRevision &+= 1
     }
 
     func defaultAIEngineId(for containerId: UUID) -> String? {
-        defaults.string(forKey: keyForDefaultAI(for: containerId))
+        _ = containerSettingsRevision
+        return defaults.string(forKey: keyForDefaultAI(for: containerId))
     }
 
     func setDefaultAIEngineId(_ id: String?, for containerId: UUID) {
         defaults.set(id, forKey: keyForDefaultAI(for: containerId))
-        objectWillChange.send()
+        containerSettingsRevision &+= 1
     }
 
     func autoClearTabsAfter(for containerId: UUID) -> AutoClearTabsAfter {
+        _ = containerSettingsRevision
         if let raw = defaults.string(forKey: keyForAutoClear(for: containerId)),
            let value = AutoClearTabsAfter(rawValue: raw)
         {
@@ -388,17 +407,18 @@ class SettingsStore: ObservableObject {
 
     func setAutoClearTabsAfter(_ value: AutoClearTabsAfter, for containerId: UUID) {
         defaults.set(value.rawValue, forKey: keyForAutoClear(for: containerId))
-        objectWillChange.send()
+        containerSettingsRevision &+= 1
     }
 
     func privacySettings(for containerId: UUID) -> SpacePrivacySettings {
-        Self.loadCodable(SpacePrivacySettings.self, key: keyForPrivacySettings(for: containerId))
+        _ = containerSettingsRevision
+        return Self.loadCodable(SpacePrivacySettings.self, key: keyForPrivacySettings(for: containerId))
             ?? legacyPrivacySettings
     }
 
     func setPrivacySettings(_ value: SpacePrivacySettings, for containerId: UUID) {
         saveCodable(value, forKey: keyForPrivacySettings(for: containerId))
-        objectWillChange.send()
+        containerSettingsRevision &+= 1
     }
 
     func notifySpacePrivacySettingsChanged(for containerId: UUID) {
@@ -414,7 +434,7 @@ class SettingsStore: ObservableObject {
         defaults.removeObject(forKey: keyForDefaultAI(for: containerId))
         defaults.removeObject(forKey: keyForAutoClear(for: containerId))
         defaults.removeObject(forKey: keyForPrivacySettings(for: containerId))
-        objectWillChange.send()
+        containerSettingsRevision &+= 1
     }
 
     // MARK: - Permissions

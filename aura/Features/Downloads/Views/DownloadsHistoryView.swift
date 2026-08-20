@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct DownloadsHistoryView: View {
-    @EnvironmentObject var downloadManager: DownloadManager
-    @EnvironmentObject var sidebarManager: SidebarManager
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var toolbarManager: ToolbarManager
+    @Environment(DownloadManager.self) private var downloadManager
+    @Environment(SidebarManager.self) private var sidebarManager
+    @Environment(AppState.self) private var appState
+    @Environment(ToolbarManager.self) private var toolbarManager
     @Environment(\.theme) private var theme
 
     @State private var searchText = ""

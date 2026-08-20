@@ -4,7 +4,7 @@ import SwiftUI
 struct PasswordsSettingsView: View {
     @Query(sort: \TabContainer.lastAccessedAt, order: .reverse) var containers: [TabContainer]
 
-    @StateObject private var settings = SettingsStore.shared
+    @Bindable private var settings = SettingsStore.shared
     @StateObject private var passwordManager = PasswordManagerService.shared
     private let providers = PasswordManagerProviderRegistry.shared
 

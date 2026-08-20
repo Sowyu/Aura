@@ -4,7 +4,7 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @EnvironmentObject var appearanceManager: AppearanceManager
     @EnvironmentObject var updateService: UpdateService
-    @StateObject private var settings = SettingsStore.shared
+    @Bindable private var settings = SettingsStore.shared
     @StateObject private var defaultBrowserManager = DefaultBrowserManager.shared
     @ObservedObject private var javaScriptPolicy = JavaScriptPolicyService.shared
 

@@ -3,14 +3,14 @@ import SwiftUI
 
 struct NewContainerButton: View {
     @Environment(\.theme) private var theme
-    @EnvironmentObject var dialogManager: DialogManager
-    @EnvironmentObject var tabManager: TabManager
+    @Environment(DialogManager.self) private var dialogManager
+    @Environment(TabManager.self) private var tabManager
 
     var body: some View {
         Button(action: {
             dialogManager.show { id in
                 NewContainerDialog(dismiss: { dialogManager.dismiss(id: id) })
-                    .environmentObject(tabManager)
+                    .environment(tabManager)
             }
         }) {
             HStack {
@@ -34,7 +34,7 @@ private struct NewContainerDialog: View {
     @State private var isIconPickerOpen = false
 
     @Environment(\.theme) private var theme
-    @EnvironmentObject var tabManager: TabManager
+    @Environment(TabManager.self) private var tabManager
 
     var body: some View {
         // Outer frame

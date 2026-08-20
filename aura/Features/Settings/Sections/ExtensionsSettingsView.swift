@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct ExtensionsSettingsView: View {
-    @StateObject private var extensionManager = ExtensionManager.shared
+    private let extensionManager = ExtensionManager.shared
     @State private var installError: String?
 
     var body: some View {

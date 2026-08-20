@@ -29,27 +29,55 @@ extension Notification.Name {
     static let toggleCompactMode = Notification.Name("ToggleCompactMode")
 }
 
+@Observable
 @MainActor
-class SidebarManager: ObservableObject {
-    @AppStorage("ui.sidebar.hidden") var isSidebarHidden: Bool = false
-    @AppStorage("ui.sidebar.position") var sidebarPosition: SidebarPosition = .primary
-    @AppStorage("ui.compact.enabled") var isCompactEnabled: Bool = false
-    @AppStorage("ui.compact.hides") var compactHides: CompactModeHides = .both
+final class SidebarManager {
+    @ObservationIgnored private let defaults = UserDefaults.standard
 
-    @Published var primaryFraction = FractionHolder.usingUserDefaults(0.2, key: "ui.sidebar.fraction.primary")
-    @Published var secondaryFraction = FractionHolder.usingUserDefaults(0.2, key: "ui.sidebar.fraction.secondary")
-    @Published var hiddenSidebar = SideHolder.usingUserDefaults(key: "ui.sidebar.visibility")
+    /// The same defaults keys the old `@AppStorage` wrappers used, so the stored
+    /// preferences survive the move off `@AppStorage`. `OraCommands` reads these
+    /// keys directly for its menu check marks.
+    private static let sidebarHiddenKey = "ui.sidebar.hidden"
+    private static let sidebarPositionKey = "ui.sidebar.position"
+    private static let compactEnabledKey = "ui.compact.enabled"
+    private static let compactHidesKey = "ui.compact.hides"
+
+    var isSidebarHidden: Bool {
+        didSet { defaults.set(isSidebarHidden, forKey: Self.sidebarHiddenKey) }
+    }
+
+    var sidebarPosition: SidebarPosition {
+        didSet { defaults.set(sidebarPosition.rawValue, forKey: Self.sidebarPositionKey) }
+    }
+
+    var isCompactEnabled: Bool {
+        didSet { defaults.set(isCompactEnabled, forKey: Self.compactEnabledKey) }
+    }
+
+    var compactHides: CompactModeHides {
+        didSet { defaults.set(compactHides.rawValue, forKey: Self.compactHidesKey) }
+    }
+
+    var primaryFraction = FractionHolder.usingUserDefaults(0.2, key: "ui.sidebar.fraction.primary")
+    var secondaryFraction = FractionHolder.usingUserDefaults(0.2, key: "ui.sidebar.fraction.secondary")
+    var hiddenSidebar = SideHolder.usingUserDefaults(key: "ui.sidebar.visibility")
+
+    init() {
+        isSidebarHidden = defaults.object(forKey: Self.sidebarHiddenKey) as? Bool ?? false
+        sidebarPosition = defaults.string(forKey: Self.sidebarPositionKey)
+            .flatMap(SidebarPosition.init(rawValue:)) ?? .primary
+        isCompactEnabled = defaults.object(forKey: Self.compactEnabledKey) as? Bool ?? false
+        compactHides = defaults.string(forKey: Self.compactHidesKey)
+            .flatMap(CompactModeHides.init(rawValue:)) ?? .both
+    }
 
     var currentFraction: FractionHolder {
         sidebarPosition == .primary ? primaryFraction : secondaryFraction
     }
 
-    /// `@AppStorage` on a class writes the default but publishes nothing, so every
-    /// mutation of it has to nudge observers by hand.
     func updateSidebarHidden() {
         let hidden = hiddenSidebar.side == .primary || hiddenSidebar.side == .secondary
         guard isSidebarHidden != hidden else { return }
-        objectWillChange.send()
         isSidebarHidden = hidden
     }
 
@@ -63,7 +91,6 @@ class SidebarManager: ObservableObject {
 
     func toggleSidebarPosition() {
         let isCurrentSidebarHidden = hiddenSidebar.side == (sidebarPosition == .primary ? .primary : .secondary)
-        objectWillChange.send()
         sidebarPosition = sidebarPosition == .primary ? .secondary : .primary
         if isCurrentSidebarHidden {
             hiddenSidebar.side = sidebarPosition == .primary ? .primary : .secondary
@@ -75,7 +102,6 @@ class SidebarManager: ObservableObject {
     /// Compact mode keeps no visibility state of its own: it drives the existing
     /// hidden-sidebar and hidden-toolbar flags, which already hover-reveal.
     func setCompactEnabled(_ enabled: Bool, toolbar: ToolbarManager) {
-        objectWillChange.send()
         isCompactEnabled = enabled
         applyCompactMode(toolbar: toolbar)
     }
@@ -83,7 +109,6 @@ class SidebarManager: ObservableObject {
     /// Picking what compact mode takes away also turns it on: the submenu is the
     /// only place these options appear, so a silent no-op reads as a broken menu.
     func setCompactHides(_ hides: CompactModeHides, toolbar: ToolbarManager) {
-        objectWillChange.send()
         compactHides = hides
         isCompactEnabled = true
         applyCompactMode(toolbar: toolbar)

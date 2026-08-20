@@ -2,9 +2,9 @@ import SwiftUI
 
 struct BrowserWebContentView: View {
     @Environment(\.theme) var theme
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var toolbarManager: ToolbarManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(AppState.self) private var appState
+    @Environment(ToolbarManager.self) private var toolbarManager
     let tab: Tab
 
     var body: some View {

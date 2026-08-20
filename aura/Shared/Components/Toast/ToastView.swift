@@ -77,7 +77,7 @@ private extension AnyTransition {
 // MARK: - Toast Container (Sonner-style stacking)
 
 private struct ToastsContainerView: View {
-    @ObservedObject var manager: ToastManager
+    let manager: ToastManager
     @State private var isExpanded: Bool = false
 
     private let maxVisible = 3

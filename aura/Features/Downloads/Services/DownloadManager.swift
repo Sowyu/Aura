@@ -2,23 +2,24 @@ import Foundation
 import SwiftData
 import SwiftUI
 
+@Observable
 @MainActor
-class DownloadManager: ObservableObject {
-    @Published var activeDownloads: [Download] = []
-    @Published var recentDownloads: [Download] = []
-    @Published var isShowingDownloadsHistory = false
+final class DownloadManager {
+    var activeDownloads: [Download] = []
+    var recentDownloads: [Download] = []
+    var isShowingDownloadsHistory = false
 
     let modelContainer: ModelContainer
     let modelContext: ModelContext
-    private var activeDownloadTasks: [UUID: BrowserDownloadTask] = [:]
+    @ObservationIgnored private var activeDownloadTasks: [UUID: BrowserDownloadTask] = [:]
     // Keeps tasks alive between didStartDownload and cleanup: WKDownload.delegate
     // is weak, so without this the task deallocates before the destination
     // callback and the download never starts.
-    private var pendingTasks: [UUID: BrowserDownloadTask] = [:]
-    private var taskDownloads: [UUID: Download] = [:]
-    private var taskDestinationURLs: [UUID: URL] = [:]
-    private var progressTimers: [UUID: Timer] = [:]
-    weak var toastManager: ToastManager?
+    @ObservationIgnored private var pendingTasks: [UUID: BrowserDownloadTask] = [:]
+    @ObservationIgnored private var taskDownloads: [UUID: Download] = [:]
+    @ObservationIgnored private var taskDestinationURLs: [UUID: URL] = [:]
+    @ObservationIgnored private var progressTimers: [UUID: Timer] = [:]
+    @ObservationIgnored weak var toastManager: ToastManager?
 
     init(
         modelContainer: ModelContainer,
@@ -27,6 +28,16 @@ class DownloadManager: ObservableObject {
         self.modelContainer = modelContainer
         self.modelContext = modelContext
         loadRecentDownloads()
+    }
+
+    /// `@Observable` has no `objectWillChange`. The rows hold their `Download` as a
+    /// plain `let`, so a download mutated in place only redraws when the arrays the
+    /// list reads are touched. This is the like-for-like replacement.
+    private func touchDownloadLists() {
+        let active = activeDownloads
+        let recent = recentDownloads
+        activeDownloads = active
+        recentDownloads = recent
     }
 
     private func loadRecentDownloads() {
@@ -72,7 +83,7 @@ class DownloadManager: ObservableObject {
 
         // Ensure SwiftUI picks up the change when called from WKDownload callbacks
         DispatchQueue.main.async {
-            self.objectWillChange.send()
+            self.touchDownloadLists()
         }
 
         toastManager?.show("Downloading \(suggestedFilename)", type: .info, icon: .system("arrow.down.circle"))
@@ -87,7 +98,7 @@ class DownloadManager: ObservableObject {
 
         // Trigger UI updates
         DispatchQueue.main.async {
-            self.objectWillChange.send()
+            self.touchDownloadLists()
             download.objectWillChange.send()
         }
     }

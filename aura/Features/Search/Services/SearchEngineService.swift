@@ -34,7 +34,7 @@ struct SuggestResponse: Decodable {
 
 class SearchEngineService: ObservableObject {
     private var theme: Theme?
-    @ObservedObject private var settingsStore = SettingsStore.shared
+    private let settingsStore = SettingsStore.shared
 
     /// Built-ins depend on `theme`, so they can't be a global constant, but rebuilding
     /// 16 structs on every lookup shows up in the launcher's per-keystroke path.

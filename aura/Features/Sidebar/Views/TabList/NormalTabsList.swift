@@ -1,4 +1,3 @@
-import SwiftData
 import SwiftUI
 
 struct NormalTabsList: View {
@@ -19,8 +18,10 @@ struct NormalTabsList: View {
         ) -> Void
     let onAddNewTab: () -> Void
     let onNewTabInFolder: (Folder) -> Void
-    @Query var containers: [TabContainer]
-    @EnvironmentObject var tabManager: TabManager
+    /// Passed down rather than fetched here: a second SwiftData query in this view
+    /// re-ran, and rebuilt every row, on any change to any space.
+    let containers: [TabContainer]
+    @Environment(TabManager.self) private var tabManager
     @State private var previousTabIds: [UUID] = []
     @State private var dropTargetFolderID: UUID?
 
@@ -49,7 +50,9 @@ struct NormalTabsList: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        // Lazy: switching tabs re-reads `tabManager.activeTab` here, so a plain stack
+        // rebuilt every row in the space on every switch.
+        LazyVStack(spacing: 8) {
             NewTabButton(addNewTab: onAddNewTab)
             ForEach(rows) { row in
                 switch row {

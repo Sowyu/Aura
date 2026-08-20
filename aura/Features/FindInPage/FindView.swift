@@ -12,8 +12,8 @@ struct FindView: View {
     @State private var matchCount = 0
     @State private var currentMatch = 0
     @FocusState private var isTextFieldFocused: Bool
-    @EnvironmentObject private var appState: AppState
-    @EnvironmentObject var toolbarManager: ToolbarManager
+    @Environment(AppState.self) private var appState
+    @Environment(ToolbarManager.self) private var toolbarManager
     @Environment(\.theme) var theme
     @Environment(\.colorScheme) var colorScheme
     private let controller: FindController

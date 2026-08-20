@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DownloadsWidget: View {
-    @EnvironmentObject var downloadManager: DownloadManager
+    @Environment(DownloadManager.self) private var downloadManager
     @Environment(\.theme) private var theme
 
     /// Aggregate progress across all active downloads (0...1)

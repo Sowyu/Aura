@@ -4,8 +4,9 @@ import SwiftData
 
 private let logger = Logger(subsystem: "com.orabrowser.ora", category: "HistoryManager")
 
+@Observable
 @MainActor
-class HistoryManager: ObservableObject {
+final class HistoryManager {
     let modelContainer: ModelContainer
     let modelContext: ModelContext
 

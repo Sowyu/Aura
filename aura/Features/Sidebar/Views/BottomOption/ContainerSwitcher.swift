@@ -6,8 +6,8 @@ struct ContainerSwitcher: View {
     let onContainerSelected: (TabContainer) -> Void
 
     @Environment(\.theme) private var theme
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var dialogManager: DialogManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(DialogManager.self) private var dialogManager
     @Query var containers: [TabContainer]
 
     @State private var hoveredContainer: UUID?
@@ -100,7 +100,7 @@ struct ContainerSwitcher: View {
                         container: container,
                         dismiss: { dialogManager.dismiss(id: id) }
                     )
-                    .environmentObject(tabManager)
+                    .environment(tabManager)
                 }
             },
             .item("New Tab in Space", icon: "plus") {

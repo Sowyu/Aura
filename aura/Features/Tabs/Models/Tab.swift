@@ -44,6 +44,11 @@ class Tab: ObservableObject, Identifiable {
     @Transient @Published var isWebViewReady: Bool = false
     @Transient @Published var loadingProgress: Double = 10.0
     @Transient var colorUpdated = false
+    /// Where the page was scrolled to when it was hibernated, and the URL it belonged
+    /// to. Transient on purpose: a scroll offset is not worth a store write, and a cold
+    /// launch has no web view to restore it into anyway.
+    @Transient var hibernatedScrollOffset: CGPoint?
+    @Transient var hibernatedScrollURL: URL?
     @Transient var maybeIsActive = false
     /// Retries exist only for the case where the snapshot cannot be taken at all: a tab
     /// that is not laid out yet. A painted page is done after the first one.

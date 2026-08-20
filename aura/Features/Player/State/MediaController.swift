@@ -1,8 +1,9 @@
 import Foundation
 import SwiftUI
 
+@Observable
 @MainActor
-final class MediaController: ObservableObject {
+final class MediaController {
     struct Session: Identifiable, Equatable {
         var id: UUID {
             tabID
@@ -21,8 +22,8 @@ final class MediaController: ObservableObject {
     }
 
     // Published list of sessions ordered by recency (most recent first)
-    @Published private(set) var sessions: [Session] = []
-    @Published var isVisible: Bool = false
+    private(set) var sessions: [Session] = []
+    var isVisible: Bool = false
 
     /// Weak references to tabs by id so we can run JS in the right webview
     private final class WeakTab { weak var value: Tab?
@@ -31,8 +32,8 @@ final class MediaController: ObservableObject {
         }
     }
 
-    private var tabRefs: [UUID: WeakTab] = [:]
-    private var titleSyncTimer: Timer?
+    @ObservationIgnored private var tabRefs: [UUID: WeakTab] = [:]
+    @ObservationIgnored private var titleSyncTimer: Timer?
 
     init() {
         startPeriodicTitleSync()

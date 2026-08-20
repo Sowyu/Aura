@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 struct DownloadHistoryRow: View {
     let download: Download
-    @EnvironmentObject var downloadManager: DownloadManager
+    @Environment(DownloadManager.self) private var downloadManager
     @Environment(\.theme) private var theme
     @State private var isHovered = false
     @State private var menuAnchor: NSView?

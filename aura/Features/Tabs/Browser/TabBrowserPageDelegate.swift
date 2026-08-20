@@ -97,6 +97,9 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
                 tab.updateHistory()
                 tab.updateHeaderColor()
             }
+            // A tab coming back from hibernation reloads from the top; put it back
+            // where the user left it.
+            tab.restoreScrollOffsetIfNeeded()
 
             let workItem = DispatchWorkItem { [weak tab] in
                 tab?.loadingProgress = 0

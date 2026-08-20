@@ -5,7 +5,7 @@ struct EditContainerModal: View {
     let dismiss: () -> Void
 
     @Environment(\.theme) private var theme
-    @EnvironmentObject var tabManager: TabManager
+    @Environment(TabManager.self) private var tabManager
 
     @State private var name: String = ""
     @State private var emoji: String = ""

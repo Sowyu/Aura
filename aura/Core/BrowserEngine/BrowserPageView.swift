@@ -118,8 +118,8 @@ final class BrowserPageHostView: NSView {
 
 struct BrowserPageView: NSViewRepresentable {
     let page: BrowserPage
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var historyManager: HistoryManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(HistoryManager.self) private var historyManager
     @EnvironmentObject var privacyMode: PrivacyMode
 
     func makeCoordinator() -> Coordinator {

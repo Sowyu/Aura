@@ -12,12 +12,12 @@ struct URLBarField: View {
     /// pill fill, so callers must pass an undimmed colour.
     let textColor: Color
 
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var toolbarManager: ToolbarManager
-    @EnvironmentObject var toastManager: ToastManager
-    @EnvironmentObject var historyManager: HistoryManager
-    @EnvironmentObject var downloadManager: DownloadManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(AppState.self) private var appState
+    @Environment(ToolbarManager.self) private var toolbarManager
+    @Environment(ToastManager.self) private var toastManager
+    @Environment(HistoryManager.self) private var historyManager
+    @Environment(DownloadManager.self) private var downloadManager
     @EnvironmentObject var privacyMode: PrivacyMode
 
     @Environment(\.theme) private var theme

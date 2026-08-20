@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DownloadsListView: View {
-    @EnvironmentObject var downloadManager: DownloadManager
+    @Environment(DownloadManager.self) private var downloadManager
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -74,7 +74,7 @@ struct DownloadsListView: View {
 
 struct DownloadListItem: View {
     let download: Download
-    @EnvironmentObject var downloadManager: DownloadManager
+    @Environment(DownloadManager.self) private var downloadManager
     @Environment(\.theme) private var theme
 
     var body: some View {

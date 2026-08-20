@@ -7,13 +7,13 @@ struct ContainerView: View {
     let containers: [TabContainer]
 
     @Environment(\.window) private var window
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var historyManager: HistoryManager
-    @EnvironmentObject var downloadManager: DownloadManager
-    @EnvironmentObject var toolbarManager: ToolbarManager
-    @EnvironmentObject var tabManager: TabManager
+    @Environment(AppState.self) private var appState
+    @Environment(HistoryManager.self) private var historyManager
+    @Environment(DownloadManager.self) private var downloadManager
+    @Environment(ToolbarManager.self) private var toolbarManager
+    @Environment(TabManager.self) private var tabManager
     @EnvironmentObject var privacyMode: PrivacyMode
-    @EnvironmentObject var toastManager: ToastManager
+    @Environment(ToastManager.self) private var toastManager
 
     @State var isDragging = false
     @State private var draggedItem: UUID?
@@ -90,7 +90,8 @@ struct ContainerView: View {
                         onDuplicate: duplicateTab,
                         onMoveToContainer: moveTab,
                         onAddNewTab: addNewTab,
-                        onNewTabInFolder: addNewTab(in:)
+                        onNewTabInFolder: addNewTab(in:),
+                        containers: containers
                     )
                 }
                 .animation(.easeOut(duration: 0.12), value: draggedItem == nil)

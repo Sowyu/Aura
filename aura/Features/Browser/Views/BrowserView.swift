@@ -4,13 +4,13 @@ import SwiftUI
 
 struct BrowserView: View {
     @Environment(\.theme) var theme
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var downloadManager: DownloadManager
-    @EnvironmentObject private var historyManager: HistoryManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(AppState.self) private var appState
+    @Environment(DownloadManager.self) private var downloadManager
+    @Environment(HistoryManager.self) private var historyManager
     @EnvironmentObject private var privacyMode: PrivacyMode
-    @EnvironmentObject private var sidebarManager: SidebarManager
-    @EnvironmentObject private var toolbarManager: ToolbarManager
+    @Environment(SidebarManager.self) private var sidebarManager
+    @Environment(ToolbarManager.self) private var toolbarManager
 
     @ObserveInjection var inject
 
@@ -174,8 +174,8 @@ struct BrowserView: View {
 /// and lets it go once the pointer leaves both the strip and the toolbar itself.
 private struct FloatingTopToolbar: View {
     @Environment(\.theme) private var theme
-    @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var toolbarManager: ToolbarManager
+    @Environment(AppState.self) private var appState
+    @Environment(ToolbarManager.self) private var toolbarManager
 
     /// Lives on the manager rather than in local state so `WindowAccessor` can bring
     /// the native traffic lights back with the row.

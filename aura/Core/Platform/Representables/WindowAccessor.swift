@@ -10,7 +10,7 @@ struct WindowAccessor: NSViewRepresentable {
 
     /// Compact mode hides the row but hover-reveals it; the buttons ride along so the
     /// revealed row is identical to the pinned one.
-    @EnvironmentObject private var toolbarManager: ToolbarManager
+    @Environment(ToolbarManager.self) private var toolbarManager
 
     /// Matches `TopToolbar`'s row height and leading inset.
     private static let toolbarHeight: CGFloat = 44

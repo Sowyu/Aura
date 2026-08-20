@@ -12,7 +12,7 @@ struct FolderItem: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.theme) private var theme
-    @EnvironmentObject var tabManager: TabManager
+    @Environment(TabManager.self) private var tabManager
 
     @State private var isHovering = false
     @State private var draftName = ""

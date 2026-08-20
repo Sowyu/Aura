@@ -4,7 +4,7 @@ struct FloatingSidebarOverlay: View {
     static let minFraction: CGFloat = 0.16
     static let maxFraction: CGFloat = 0.30
 
-    @EnvironmentObject private var sidebarManager: SidebarManager
+    @Environment(SidebarManager.self) private var sidebarManager
 
     @Binding var showFloatingSidebar: Bool
     @Binding var isMouseOverSidebar: Bool

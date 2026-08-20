@@ -2,8 +2,8 @@ import SwiftUI
 
 struct GlobalMediaPlayer: View {
     @Environment(\.theme) var theme
-    @EnvironmentObject var media: MediaController
-    @EnvironmentObject var tabManager: TabManager
+    @Environment(MediaController.self) private var media
+    @Environment(TabManager.self) private var tabManager
 
     @State private var isHovered: Bool = false
 
@@ -27,8 +27,8 @@ struct GlobalMediaPlayer: View {
                     session: session,
                     isPrimary: session.tabID == sessionsToShow.first?.tabID
                 )
-                .environmentObject(media)
-                .environmentObject(tabManager)
+                .environment(media)
+                .environment(tabManager)
             }
         }
         .onHover { isHovered = $0 }
@@ -38,8 +38,8 @@ struct GlobalMediaPlayer: View {
 
 private struct MediaPlayerCard: View {
     @Environment(\.theme) var theme
-    @EnvironmentObject var media: MediaController
-    @EnvironmentObject var tabManager: TabManager
+    @Environment(MediaController.self) private var media
+    @Environment(TabManager.self) private var tabManager
 
     let session: MediaController.Session
     let isPrimary: Bool

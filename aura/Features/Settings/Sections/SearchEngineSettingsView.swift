@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct SearchEngineSettingsView: View {
-    @StateObject private var settings = SettingsStore.shared
+    private let settings = SettingsStore.shared
     @StateObject private var searchEngineService = SearchEngineService()
 
     @State private var showingAddForm = false

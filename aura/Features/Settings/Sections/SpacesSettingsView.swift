@@ -11,14 +11,14 @@ struct SpacesSettingsView: View {
 
     @Query var containers: [TabContainer]
 
-    @StateObject private var settings = SettingsStore.shared
+    private let settings = SettingsStore.shared
     @ObservedObject private var siteRules = SiteSpaceRuleService.shared
     @State private var searchService = SearchEngineService()
     @State private var selectedContainerId: UUID?
     @State private var completedClearActions: Set<ClearDataAction> = []
     @State private var newCustomFilterListURL = ""
     @Environment(\.modelContext) private var modelContext
-    @EnvironmentObject private var toastManager: ToastManager
+    @Environment(ToastManager.self) private var toastManager
 
     private var selectedContainer: TabContainer? {
         containers.first { $0.id == selectedContainerId } ?? containers.first

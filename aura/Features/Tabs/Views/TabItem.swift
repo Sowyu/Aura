@@ -96,9 +96,9 @@ struct TabItem: View {
     let onDuplicate: () -> Void
     let onMoveToContainer: (TabContainer) -> Void
     @Environment(\.colorScheme) private var colorScheme
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var historyManager: HistoryManager
-    @EnvironmentObject var downloadManager: DownloadManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(HistoryManager.self) private var historyManager
+    @Environment(DownloadManager.self) private var downloadManager
     @EnvironmentObject var privacyMode: PrivacyMode
     let availableContainers: [TabContainer]
 

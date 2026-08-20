@@ -1,12 +1,15 @@
 import SwiftUI
 
 struct ImportDataButton: View {
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var historyManager: HistoryManager
-    @EnvironmentObject var downloadManager: DownloadManager
+    @Environment(TabManager.self) private var tabManager: TabManager?
+    /// Optional: this button is also mounted in the menu bar via `OraCommands`,
+    /// which sits outside any window's environment.
+    @Environment(HistoryManager.self) private var historyManager: HistoryManager?
+    @Environment(DownloadManager.self) private var downloadManager: DownloadManager?
     @EnvironmentObject var privacyMode: PrivacyMode
 
     func importArc() {
+        guard let tabManager, let historyManager, let downloadManager else { return }
         if let root = getRoot() {
             let result = inspectItems(root)
             var newContainers: [TabContainer] = []

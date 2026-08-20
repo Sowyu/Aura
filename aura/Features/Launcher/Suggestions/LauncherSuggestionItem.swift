@@ -7,7 +7,7 @@ struct LauncherSuggestionItem: View {
     @State private var isHovered = false
     @Environment(\.theme) private var theme
     @Environment(\.launcherMouseHasMoved) private var mouseHasMoved
-    @EnvironmentObject var appState: AppState
+    @Environment(AppState.self) private var appState
 
     private var isAIChat: Bool {
         suggestion.type == .aiChat

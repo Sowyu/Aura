@@ -9,9 +9,9 @@ import SwiftUI
 /// `SidebarView` owns that condition, so this view never renders a placeholder.
 struct SidebarHeader: View {
     @Environment(\.theme) private var theme
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var sidebarManager: SidebarManager
+    @Environment(AppState.self) private var appState
+    @Environment(TabManager.self) private var tabManager
+    @Environment(SidebarManager.self) private var sidebarManager
 
     private var sidebarIcon: String {
         sidebarManager.sidebarPosition == .secondary ? "sidebar.right" : "sidebar.left"

@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 
 struct LauncherView: View {
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var historyManager: HistoryManager
-    @EnvironmentObject var downloadManager: DownloadManager
+    @Environment(AppState.self) private var appState
+    @Environment(TabManager.self) private var tabManager
+    @Environment(HistoryManager.self) private var historyManager
+    @Environment(DownloadManager.self) private var downloadManager
     @EnvironmentObject var privacyMode: PrivacyMode
     @Environment(\.theme) private var theme
 

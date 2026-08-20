@@ -35,13 +35,14 @@ private struct ClosedTabSnapshot {
     }
 }
 
+@Observable
 @MainActor
 // swiftlint:disable:next type_body_length
-class TabManager: ObservableObject {
-    @Published var activeContainer: TabContainer?
-    @Published var activeTab: Tab?
+final class TabManager {
+    var activeContainer: TabContainer?
+    var activeTab: Tab?
     /// Sidebar folder currently showing its inline rename field, if any.
-    @Published var renamingFolderID: UUID?
+    var renamingFolderID: UUID?
     let modelContainer: ModelContainer
     let modelContext: ModelContext
     let mediaController: MediaController
@@ -57,8 +58,12 @@ class TabManager: ObservableObject {
     /// Note: Could be made injectable via init parameter if preferred
     let tabSearchingService: TabSearchingProviding
 
-    private var cleanupTimer: Timer?
-    private var recentlyClosedTabs: [ClosedTabSnapshot] = []
+    @ObservationIgnored private var cleanupTimer: Timer?
+    /// Tabs with an unsaved-input probe in flight. A second maintenance pass must not
+    /// ask the same page again while the first answer is still on its way back.
+    /// Internal only because `TabManager+Hibernation` needs it.
+    @ObservationIgnored var hibernating: Set<UUID> = []
+    @ObservationIgnored private var recentlyClosedTabs: [ClosedTabSnapshot] = []
     private let maxRecentlyClosedTabs = 5
 
     init(
@@ -551,72 +556,6 @@ class TabManager: ObservableObject {
         }
         tab.updateHeaderColor()
         try? modelContext.save()
-    }
-
-    /// Clean up old tabs that haven't been accessed recently to preserve memory
-    func cleanupOldTabs(in containers: [TabContainer]? = nil) {
-        let timeout = SettingsStore.shared.tabAliveTimeout
-        // Skip cleanup if set to "Never" (365 days)
-        guard timeout < 365 * 24 * 60 * 60 else { return }
-
-        let allContainers = containers ?? fetchContainers()
-        for container in allContainers {
-            for tab in container.tabs {
-                if !tab.isAlive, tab.isWebViewReady, tab.id != activeTab?.id, !tab.isPlayingMedia, tab.type == .normal {
-                    tab.destroyWebView()
-                }
-            }
-        }
-    }
-
-    /// Completely remove old normal tabs that haven't been accessed for a long time
-    func removeOldTabs(in containers: [TabContainer]? = nil) {
-        let cutoffDate = Date().addingTimeInterval(-SettingsStore.shared.tabRemovalTimeout)
-        let allContainers = containers ?? fetchContainers()
-
-        for container in allContainers {
-            for tab in container.tabs {
-                if let lastAccessed = tab.lastAccessedAt,
-                   lastAccessed < cutoffDate,
-                   tab.id != activeTab?.id,
-                   !tab.isPlayingMedia,
-                   tab.type == .normal
-                {
-                    closeTab(tab: tab, shouldTrackForRestore: false)
-                }
-            }
-        }
-    }
-
-    /// Remove tabs in containers that have a per-space autoClearTabsAfter setting
-    func autoClearContainerTabs(in containers: [TabContainer]? = nil) {
-        let settings = SettingsStore.shared
-        let allContainers = containers ?? fetchContainers()
-
-        for container in allContainers {
-            let policy = settings.autoClearTabsAfter(for: container.id)
-            guard let timeout = policy.seconds else { continue }
-
-            let cutoffDate = Date().addingTimeInterval(-timeout)
-            for tab in container.tabs {
-                if let lastAccessed = tab.lastAccessedAt,
-                   lastAccessed < cutoffDate,
-                   tab.id != activeTab?.id,
-                   !tab.isPlayingMedia,
-                   tab.type == .normal
-                {
-                    closeTab(tab: tab)
-                }
-            }
-        }
-    }
-
-    /// Run all three tab-expiry passes off a single container fetch.
-    private func runTabMaintenance() {
-        let containers = fetchContainers()
-        cleanupOldTabs(in: containers)
-        removeOldTabs(in: containers)
-        autoClearContainerTabs(in: containers)
     }
 
     /// Start the automatic cleanup timer

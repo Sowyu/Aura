@@ -9,9 +9,9 @@ struct URLBarMenuButton: View {
     var size: CGFloat = 30
     let onShare: (NSView, NSRect) -> Void
 
-    @EnvironmentObject private var tabManager: TabManager
-    @EnvironmentObject private var historyManager: HistoryManager
-    @EnvironmentObject private var downloadManager: DownloadManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(HistoryManager.self) private var historyManager
+    @Environment(DownloadManager.self) private var downloadManager
     @EnvironmentObject private var privacyMode: PrivacyMode
 
     @Environment(\.openWindow) private var openWindow

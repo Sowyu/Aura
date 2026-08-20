@@ -6,14 +6,14 @@ import SwiftUI
 struct SidebarView: View {
     @Environment(\.theme) private var theme
     @Environment(\.window) var window: NSWindow?
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var historyManager: HistoryManager
-    @EnvironmentObject var downloadManager: DownloadManager
-    @EnvironmentObject var appState: AppState
+    @Environment(TabManager.self) private var tabManager
+    @Environment(HistoryManager.self) private var historyManager
+    @Environment(DownloadManager.self) private var downloadManager
+    @Environment(AppState.self) private var appState
     @EnvironmentObject var privacyMode: PrivacyMode
-    @EnvironmentObject var media: MediaController
-    @EnvironmentObject var sidebarManager: SidebarManager
-    @EnvironmentObject var toolbarManager: ToolbarManager
+    @Environment(MediaController.self) private var media
+    @Environment(SidebarManager.self) private var sidebarManager
+    @Environment(ToolbarManager.self) private var toolbarManager
 
     @Query var containers: [TabContainer]
 
@@ -251,17 +251,17 @@ struct SidebarView: View {
                     containers: containers
                 )
                 .padding(.horizontal, 10)
-                .environmentObject(tabManager)
-                .environmentObject(historyManager)
-                .environmentObject(downloadManager)
-                .environmentObject(appState)
+                .environment(tabManager)
+                .environment(historyManager)
+                .environment(downloadManager)
+                .environment(appState)
                 .environmentObject(privacyMode)
-                .environmentObject(toolbarManager)
+                .environment(toolbarManager)
             }
 
             if shouldShowMediaWidget {
                 GlobalMediaPlayer()
-                    .environmentObject(media)
+                    .environment(media)
                     .padding(.horizontal, 10)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }

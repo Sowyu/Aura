@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(\.theme) var theme
-    @EnvironmentObject private var sidebarManager: SidebarManager
+    @Environment(SidebarManager.self) private var sidebarManager
 
     var body: some View {
         ZStack(alignment: .top) {

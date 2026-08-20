@@ -11,10 +11,10 @@ var browserContentTopInset: CGFloat {
 }
 
 struct BrowserContentContainer<Content: View>: View {
-    @EnvironmentObject var tabManager: TabManager
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var sidebarManager: SidebarManager
-    @EnvironmentObject var toolbarManager: ToolbarManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(AppState.self) private var appState
+    @Environment(SidebarManager.self) private var sidebarManager
+    @Environment(ToolbarManager.self) private var toolbarManager
 
     let content: () -> Content
 

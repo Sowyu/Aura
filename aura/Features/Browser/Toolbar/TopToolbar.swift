@@ -22,11 +22,11 @@ struct TopToolbar: View {
     private static let fieldMaxWidth: CGFloat = 760
 
     @Environment(\.theme) private var theme
-    @EnvironmentObject private var tabManager: TabManager
-    @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var sidebarManager: SidebarManager
-    @EnvironmentObject private var historyManager: HistoryManager
-    @EnvironmentObject private var downloadManager: DownloadManager
+    @Environment(TabManager.self) private var tabManager
+    @Environment(AppState.self) private var appState
+    @Environment(SidebarManager.self) private var sidebarManager
+    @Environment(HistoryManager.self) private var historyManager
+    @Environment(DownloadManager.self) private var downloadManager
     @EnvironmentObject private var privacyMode: PrivacyMode
 
     @Query(sort: [SortDescriptor(\History.lastAccessedAt, order: .reverse)])
@@ -239,7 +239,7 @@ struct TopToolbar: View {
 struct ExtensionToolbarIcons: View {
     let foregroundColor: Color
 
-    @StateObject private var extensionManager = ExtensionManager.shared
+    private let extensionManager = ExtensionManager.shared
 
     private var enabledExtensions: [InstalledExtension] {
         guard ExtensionManager.isSupported else { return [] }
@@ -261,8 +261,7 @@ private struct ExtensionIconButton: View {
     let item: InstalledExtension
     let foregroundColor: Color
 
-    /// Observed so a `browser.action.setIcon`/`setBadgeText` call redraws the button.
-    @ObservedObject private var extensionManager = ExtensionManager.shared
+    private let extensionManager = ExtensionManager.shared
     @State private var anchor: NSView?
 
     private static let iconSize = CGSize(width: 16, height: 16)
@@ -282,9 +281,22 @@ private struct ExtensionIconButton: View {
         .accessibilityLabel(Text(item.displayName))
     }
 
+    /// Reading `actionRevision` is what subscribes the button to
+    /// `browser.action.setIcon`/`setBadgeText`: the icon and badge themselves are
+    /// pulled from WebKit on demand and are not observable on their own.
+    private func liveActionIcon() -> NSImage? {
+        _ = extensionManager.actionRevision
+        return extensionManager.actionIcon(for: item.id, size: Self.iconSize)
+    }
+
+    private func liveBadgeText() -> String? {
+        _ = extensionManager.actionRevision
+        return extensionManager.actionBadgeText(for: item.id)
+    }
+
     @ViewBuilder private var icon: some View {
         // The live action icon wins; the manifest icon is the fallback.
-        if let image = extensionManager.actionIcon(for: item.id, size: Self.iconSize) ?? item.icon {
+        if let image = liveActionIcon() ?? item.icon {
             Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)
@@ -297,7 +309,7 @@ private struct ExtensionIconButton: View {
     }
 
     @ViewBuilder private var badge: some View {
-        if let text = extensionManager.actionBadgeText(for: item.id) {
+        if let text = liveBadgeText() {
             Text(text)
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundColor(.white)
