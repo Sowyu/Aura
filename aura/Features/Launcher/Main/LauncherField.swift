@@ -18,12 +18,15 @@ struct LauncherField: View {
     var isFocused: FocusState<Bool>.Binding?
     var isEditing: Bool?
     var onTextChange: (String) -> Void
+    /// The floating launcher draws one panel around field and suggestions, so its field
+    /// has no chrome of its own; the home page shows the field alone and keeps it.
+    var showsChrome = true
 
     @Environment(\.theme) private var theme
 
     /// Row height, fill and corner are the whole point of this type: change them here and
     /// both call sites move together.
-    static let height: CGFloat = 48
+    static let height: CGFloat = 52
     static let cornerRadius: CGFloat = 13
     static let hairline: CGFloat = 0.08
 
@@ -38,21 +41,20 @@ struct LauncherField: View {
                 )
             } else {
                 Image(systemName: isValidURL(text) ? "globe" : "magnifyingglass")
-                    .font(.system(size: 15))
-                    .foregroundStyle(theme.foreground.opacity(0.55))
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(theme.foreground.opacity(0.5))
                     .frame(width: 18, height: 18)
             }
 
             field
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, minHeight: Self.height, alignment: .leading)
-        .background(theme.launcherMainBackground)
+        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height, alignment: .leading)
+        .background(showsChrome ? theme.launcherMainBackground : .clear)
         .clipShape(ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .overlay(
             ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                .stroke((match?.color ?? theme.foreground).opacity(Self.hairline), lineWidth: 1)
+                .stroke((match?.color ?? theme.foreground).opacity(showsChrome ? Self.hairline : 0), lineWidth: 1)
                 .padding(0.25)
         )
     }
@@ -69,7 +71,7 @@ struct LauncherField: View {
     private var textField: some View {
         LauncherTextField(
             text: $text,
-            font: NSFont.systemFont(ofSize: 15, weight: .regular),
+            font: NSFont.systemFont(ofSize: 16, weight: .regular),
             onTab: onTab,
             onSubmit: onSubmit,
             onDelete: onDelete,
