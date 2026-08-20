@@ -4,6 +4,7 @@ struct DownloadsHistoryView: View {
     @EnvironmentObject var downloadManager: DownloadManager
     @EnvironmentObject var sidebarManager: SidebarManager
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var toolbarManager: ToolbarManager
     @Environment(\.theme) private var theme
 
     @State private var searchText = ""
@@ -32,7 +33,8 @@ struct DownloadsHistoryView: View {
     private var header: some View {
         HStack(spacing: 0) {
             // Match SidebarHeader traffic light spacing when sidebar is primary
-            if sidebarManager.sidebarPosition != .secondary {
+            // (the top toolbar draws them itself when it is visible).
+            if sidebarManager.sidebarPosition != .secondary, toolbarManager.isToolbarHidden {
                 WindowControls(isFullscreen: appState.isFullscreen)
                     .frame(height: 30)
             }

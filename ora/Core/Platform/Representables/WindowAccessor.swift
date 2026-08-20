@@ -4,6 +4,15 @@ import SwiftUI
 struct WindowAccessor: NSViewRepresentable {
     @Binding var isFullscreen: Bool
 
+    /// Mirrors `ToolbarManager.isToolbarHidden` so the native window buttons can
+    /// move into the top toolbar row when it is visible.
+    @AppStorage("ui.toolbar.hidden") private var isToolbarHidden: Bool = false
+
+    /// Matches `TopToolbar`'s row height and leading inset.
+    private static let toolbarHeight: CGFloat = 44
+    private static let trafficLightLeading: CGFloat = 12
+    private static let trafficLightSpacing: CGFloat = 20
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
@@ -16,16 +25,25 @@ struct WindowAccessor: NSViewRepresentable {
             self.parent = parent
         }
 
+        /// Origins AppKit gave the window buttons before we moved them.
+        var defaultOrigins: [NSWindow.ButtonType: NSPoint] = [:]
+
         @objc func willEnterFullScreenNotification(_ notification: Notification) {
             guard let window = notification.object as? NSWindow else { return }
             parent.isFullscreen = true
-            parent.updateTrafficLights(for: window)
+            parent.updateTrafficLights(for: window, coordinator: self)
         }
 
         @objc func willExitFullScreenNotification(_ notification: Notification) {
             guard let window = notification.object as? NSWindow else { return }
             parent.isFullscreen = false
-            parent.updateTrafficLights(for: window)
+            parent.updateTrafficLights(for: window, coordinator: self)
+        }
+
+        @objc func windowDidResize(_ notification: Notification) {
+            guard let window = notification.object as? NSWindow else { return }
+            // AppKit re-lays out the buttons on resize, so re-apply our origins.
+            parent.updateTrafficLights(for: window, coordinator: self)
         }
     }
 
@@ -52,8 +70,15 @@ struct WindowAccessor: NSViewRepresentable {
                 using: coordinator.willExitFullScreenNotification
             )
 
-            coordinator.observers = [enterObserver, exitObserver]
-            updateTrafficLights(for: window)
+            let resizeObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didResizeNotification,
+                object: window,
+                queue: nil,
+                using: coordinator.windowDidResize
+            )
+
+            coordinator.observers = [enterObserver, exitObserver, resizeObserver]
+            updateTrafficLights(for: window, coordinator: coordinator)
         }
 
         return view
@@ -61,7 +86,7 @@ struct WindowAccessor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let window = nsView.window else { return }
-        updateTrafficLights(for: window)
+        updateTrafficLights(for: window, coordinator: context.coordinator)
     }
 
     func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
@@ -70,14 +95,39 @@ struct WindowAccessor: NSViewRepresentable {
         }
     }
 
-    private func updateTrafficLights(for window: NSWindow) {
-        for type in [
-            NSWindow.ButtonType.closeButton,
-            .miniaturizeButton,
-            .zoomButton
-        ] {
-            guard let button = window.standardWindowButton(type) else { continue }
-            button.animator().isHidden = !isFullscreen
+    private func updateTrafficLights(for window: NSWindow, coordinator: Coordinator) {
+        let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        let buttons = types.compactMap { type in window.standardWindowButton(type).map { (type, $0) } }
+
+        // The toolbar hosts the real window buttons; without it the sidebar/URL bar
+        // draws its own controls and the native ones stay hidden.
+        let showInToolbar = !isToolbarHidden && !isFullscreen
+
+        for (_, button) in buttons {
+            button.animator().isHidden = !(isFullscreen || showInToolbar)
+        }
+
+        for (type, button) in buttons where coordinator.defaultOrigins[type] == nil {
+            coordinator.defaultOrigins[type] = button.frame.origin
+        }
+
+        guard showInToolbar else {
+            for (type, button) in buttons {
+                if let origin = coordinator.defaultOrigins[type] {
+                    button.setFrameOrigin(origin)
+                }
+            }
+            return
+        }
+
+        guard let containerHeight = buttons.first?.1.superview?.bounds.height else { return }
+        for (index, entry) in buttons.enumerated() {
+            let size = entry.1.frame.size
+            // Titlebar coordinates run from the bottom of the (short) titlebar view,
+            // so clamp instead of pushing the button outside its superview.
+            let originY = max(0, containerHeight - Self.toolbarHeight / 2 - size.height / 2)
+            let originX = Self.trafficLightLeading + CGFloat(index) * Self.trafficLightSpacing
+            entry.1.setFrameOrigin(NSPoint(x: originX, y: originY))
         }
     }
 }

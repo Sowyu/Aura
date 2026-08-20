@@ -48,5 +48,6 @@ struct DownloadsWidget: View {
             .frame(width: 32, height: 32)
         }
         .buttonStyle(.interactive(cornerRadius: 8, tint: theme.invertedSolidWindowBackgroundColor))
+        .help("Downloads")
     }
 }

@@ -9,23 +9,6 @@ struct BrowserWebContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !toolbarManager.isToolbarHidden {
-                URLBar(
-                    onSidebarToggle: {
-                        NotificationCenter.default.post(
-                            name: .toggleSidebar, object: nil
-                        )
-                    }
-                )
-                .zIndex(1)
-                .transition(
-                    .asymmetric(
-                        insertion: .push(from: .top),
-                        removal: .push(from: .bottom)
-                    )
-                )
-            }
-
             ZStack {
                 webContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

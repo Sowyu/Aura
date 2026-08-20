@@ -17,6 +17,15 @@ struct SidebarHeader: View {
     }
 
     var body: some View {
+        if toolbarManager.isToolbarHidden {
+            header
+        } else {
+            // The top toolbar owns the traffic lights and nav buttons.
+            Color.clear.frame(height: 8)
+        }
+    }
+
+    private var header: some View {
         HStack(spacing: 0) {
             if sidebarManager.sidebarPosition != .secondary, !appState.isFullscreen {
                 WindowControls(isFullscreen: appState.isFullscreen)

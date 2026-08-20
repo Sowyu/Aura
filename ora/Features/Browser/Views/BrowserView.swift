@@ -64,21 +64,28 @@ struct BrowserView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            BrowserSplitView()
-                .ignoresSafeArea(.all)
-                .background(theme.subtleWindowBackgroundColor)
-                .background(
-                    BlurEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
-                        .ignoresSafeArea(.all)
-                )
-                .overlay {
-                    if appState.showLauncher, tabManager.activeTab != nil {
-                        LauncherView()
-                    }
-                    if appState.isFloatingTabSwitchVisible {
-                        FloatingTabSwitcher()
-                    }
+            VStack(spacing: 0) {
+                if !toolbarManager.isToolbarHidden {
+                    TopToolbar()
+                        .zIndex(1)
                 }
+                BrowserSplitView()
+            }
+            .animation(.easeOut(duration: 0.15), value: toolbarManager.isToolbarHidden)
+            .ignoresSafeArea(.all)
+            .background(theme.subtleWindowBackgroundColor)
+            .background(
+                BlurEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
+                    .ignoresSafeArea(.all)
+            )
+            .overlay {
+                if appState.showLauncher, tabManager.activeTab != nil {
+                    LauncherView()
+                }
+                if appState.isFloatingTabSwitchVisible {
+                    FloatingTabSwitcher()
+                }
+            }
 
             if sidebarManager.isSidebarHidden {
                 FloatingSidebarOverlay(
