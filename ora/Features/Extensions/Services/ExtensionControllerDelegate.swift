@@ -128,6 +128,9 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         // Clicking outside dismisses, and NSPopover dismissal calls closePopup(),
         // which unloads the popup web view. Nothing else to tear down.
         popover.behavior = .transient
+        // Right-click > Inspect Element inside a popup. Extensions that need APIs WebKit
+        // lacks (uBlock Origin: webRequestBlocking) show up as errors there, not as UI.
+        action.popupWebView?.isInspectable = true
         // AppKit's y axis points up, so the toolbar button's minY edge is below it.
         popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
         completionHandler(nil)

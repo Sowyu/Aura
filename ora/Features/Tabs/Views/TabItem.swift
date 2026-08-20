@@ -249,7 +249,7 @@ struct ActionButton: View {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(color)
-                .frame(width: 20, height: 20)
+                .frame(width: 16, height: 16)
         }
         .buttonStyle(InteractiveButtonStyle(cornerRadius: 5, hoverOpacity: 0.18, pressOpacity: 0.3, tint: color))
     }
