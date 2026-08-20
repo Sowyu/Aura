@@ -11,6 +11,11 @@ struct LauncherView: View {
 
     @StateObject private var viewModel = LauncherViewModel()
 
+    /// Mid-window until suggestions show, then up, if the setting allows.
+    private var isRaised: Bool {
+        SettingsStore.shared.launcherRisesForSuggestions && !viewModel.suggestions.isEmpty
+    }
+
     @State private var input = ""
     @State private var isVisible = false
     @FocusState private var isTextFieldFocused: Bool
@@ -79,7 +84,8 @@ struct LauncherView: View {
 
                 panel
                     .frame(width: LauncherPlacement.width(forWindowWidth: geo.size.width))
-                    .position(LauncherPlacement.position(in: window))
+                    .position(LauncherPlacement.position(in: window, raised: isRaised))
+                    .animation(.easeOut(duration: 0.15), value: isRaised)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

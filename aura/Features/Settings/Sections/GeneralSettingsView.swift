@@ -84,6 +84,8 @@ struct GeneralSettingsView: View {
                 Toggle("Auto Picture-in-Picture on tab switch", isOn: $settings.autoPiPEnabled)
             }
 
+            launcherCard
+
             javaScriptCard
 
             SettingsCard(header: "Updates") {
@@ -121,6 +123,18 @@ struct GeneralSettingsView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var launcherCard: some View {
+        SettingsCard(
+            header: "Launcher",
+            description: "Cmd+T opens the launcher in the middle of the window."
+        ) {
+            Toggle("Move up when suggestions appear", isOn: Binding(
+                get: { SettingsStore.shared.launcherRisesForSuggestions },
+                set: { SettingsStore.shared.launcherRisesForSuggestions = $0 }
+            ))
         }
     }
 

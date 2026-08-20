@@ -19,7 +19,8 @@ struct LauncherPlacementTests {
     func verticalFraction() {
         let window = CGRect(x: 0, y: 0, width: 800, height: 400)
 
-        #expect(LauncherPlacement.position(in: window).y == 140)
+        #expect(LauncherPlacement.position(in: window).y == 200)
+        #expect(LauncherPlacement.position(in: window, raised: true).y == 112)
     }
 
     @Test("An empty window produces a finite point")

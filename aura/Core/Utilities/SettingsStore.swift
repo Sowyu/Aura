@@ -149,6 +149,7 @@ class SettingsStore {
     private let adBlockingKey = "settings.tracking.adBlocking"
     private let cookiesPolicyKey = "settings.cookies.policy"
     private let blockJavaScriptByDefaultKey = "privacy.javascript.blockedByDefault"
+    private let launcherRisesForSuggestionsKey = "launcher.risesForSuggestions"
     private let advancedBlockingEnabledKey = "privacy.advancedBlocking.enabled"
     private let adBlockFilterListsKey = "settings.adBlock.filterLists"
     private let sitePermissionsKey = "settings.permissions.sitePermissions"
@@ -203,6 +204,11 @@ class SettingsStore {
 
     var cookiesPolicy: CookiesPolicy {
         didSet { defaults.set(cookiesPolicy.rawValue, forKey: cookiesPolicyKey) }
+    }
+
+    /// The floating launcher sits mid-window and slides up when suggestions appear.
+    var launcherRisesForSuggestions: Bool {
+        didSet { defaults.set(launcherRisesForSuggestions, forKey: launcherRisesForSuggestionsKey) }
     }
 
     /// Global default for page JavaScript. Per-site rules in `SiteJavaScriptRule` override it.
@@ -304,6 +310,7 @@ class SettingsStore {
         }
 
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
+        launcherRisesForSuggestions = defaults.object(forKey: launcherRisesForSuggestionsKey) as? Bool ?? true
         advancedBlockingEnabled = defaults.object(forKey: advancedBlockingEnabledKey) as? Bool ?? true
 
         sitePermissions =
