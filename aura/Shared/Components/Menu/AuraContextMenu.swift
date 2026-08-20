@@ -5,37 +5,56 @@ import SwiftUI
 ///
 /// SwiftUI has no gesture that hands back the AppKit event, and `.contextMenu` would bring
 /// the native menu straight back, so the event is taken by a transparent AppKit overlay.
-/// `hitTest` lets everything except right-clicks and ctrl-clicks fall through, which keeps
-/// the row's own tap, drag and hover behaviour intact.
+/// The overlay never hit-tests; a single event monitor routes right-clicks to it.
 struct RightClickCatcher: NSViewRepresentable {
     /// Called with the click location in AppKit window coordinates, plus that window.
     let onRightClick: (CGPoint, NSWindow?) -> Void
 
+    /// Never hit-tests, so it cannot interfere with clicks, drags, hover or synthetic input
+    /// (remote-control tools). Right-clicks arrive via one app-wide event monitor that picks
+    /// the smallest registered catcher under the pointer, so nested rows beat containers.
     final class CatcherView: NSView {
         var onRightClick: ((CGPoint, NSWindow?) -> Void)?
 
-        override func hitTest(_ point: NSPoint) -> NSView? {
-            guard let event = NSApp.currentEvent else { return nil }
-            switch event.type {
-            case .rightMouseDown, .rightMouseUp, .rightMouseDragged:
-                return super.hitTest(point)
-            case .leftMouseDown where event.modifierFlags.contains(.control):
-                return super.hitTest(point)
-            default:
-                return nil
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil { Registry.shared.remove(self) } else { Registry.shared.add(self) }
+        }
+
+        func contains(windowPoint: CGPoint) -> Bool {
+            guard window != nil, !isHiddenOrHasHiddenAncestor else { return false }
+            return bounds.contains(convert(windowPoint, from: nil))
+        }
+    }
+
+    @MainActor
+    final class Registry {
+        static let shared = Registry()
+        private var views = NSHashTable<CatcherView>.weakObjects()
+        private var monitor: Any?
+
+        func add(_ view: CatcherView) {
+            views.add(view)
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { event in
+                MainActor.assumeIsolated { Registry.shared.handle(event) }
             }
         }
 
-        override func rightMouseDown(with event: NSEvent) {
-            onRightClick?(event.locationInWindow, window)
-        }
+        func remove(_ view: CatcherView) { views.remove(view) }
 
-        override func mouseDown(with event: NSEvent) {
-            guard event.modifierFlags.contains(.control) else {
-                super.mouseDown(with: event)
-                return
-            }
-            onRightClick?(event.locationInWindow, window)
+        private func handle(_ event: NSEvent) -> NSEvent? {
+            let isContextClick = event.type == .rightMouseDown
+                || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
+            guard isContextClick, let window = event.window else { return event }
+            let point = event.locationInWindow
+            let candidates = views.allObjects.filter { $0.window === window && $0.contains(windowPoint: point) }
+            guard let target = candidates.min(by: { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height })
+            else { return event }
+            target.onRightClick?(point, window)
+            return nil
         }
     }
 
