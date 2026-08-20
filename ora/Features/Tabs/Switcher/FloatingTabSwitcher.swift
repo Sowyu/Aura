@@ -141,7 +141,7 @@ struct FloatingTabSwitcher: View {
                 focusedTab = tab.id
             }
         }
-        .tapFlash(scale: 0.97) {
+        .onTapGesture {
             activateTab(tab)
         }
     }

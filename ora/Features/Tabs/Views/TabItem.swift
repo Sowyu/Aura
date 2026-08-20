@@ -139,7 +139,7 @@ struct TabItem: View {
                 : nil
         )
         .contentShape(ConditionallyConcentricRectangle(cornerRadius: 10))
-        .tapFlash {
+        .onTapGesture {
             onTap()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
                 if !tab.isWebViewReady {
@@ -155,7 +155,6 @@ struct TabItem: View {
         }
         .onHover { isHovering = $0 }
         .contextMenu { contextMenuItems }
-        .animation(.easeOut(duration: 0.1), value: isHovering)
         .animation(.spring(response: 0.18, dampingFraction: 0.85), value: isDragging)
         .geometryGroup()
     }

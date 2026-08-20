@@ -72,7 +72,7 @@ struct DownloadHistoryRow: View {
                 isHovered = hovering
             }
         }
-        .tapFlash(scale: 0.98) {
+        .onTapGesture {
             if download.status == .completed {
                 downloadManager.openFile(download)
             }

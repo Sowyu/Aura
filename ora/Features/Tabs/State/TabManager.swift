@@ -276,11 +276,14 @@ class TabManager: ObservableObject {
         container.tabs.append(newTab)
         newTab.lastAccessedAt = Date()
         container.lastAccessedAt = Date()
+        ExtensionManager.shared.tabDidOpen(newTab)
 
         if activateAfterAdding {
+            let previousTab = activeTab
             activeTab?.maybeIsActive  = false
             activeTab = newTab
             activeTab?.maybeIsActive  = true
+            ExtensionManager.shared.tabDidActivate(newTab, previous: previousTab)
 
             // Initialize the WebView for the new active tab
             newTab.restoreTransientState(
@@ -363,6 +366,7 @@ class TabManager: ObservableObject {
                 )
                 modelContext.insert(newTab)
                 container.tabs.append(newTab)
+                ExtensionManager.shared.tabDidOpen(newTab)
 
                 if focusAfterOpening {
                     activateTab(newTab)
@@ -399,6 +403,7 @@ class TabManager: ObservableObject {
     }
 
     func closeTab(tab: Tab, shouldTrackForRestore: Bool = true) {
+        ExtensionManager.shared.tabDidClose(tab)
         // If the closed tab was active, select another tab
         if self.activeTab?.id == tab.id {
             if let nextTab = tab.container.tabs
@@ -497,9 +502,11 @@ class TabManager: ObservableObject {
         togglePiP(tab, activeTab)
 
         // Activate the tab
+        let previousTab = activeTab
         activeTab?.maybeIsActive = false
         activeTab = tab
         activeTab?.maybeIsActive = true
+        ExtensionManager.shared.tabDidActivate(tab, previous: previousTab)
         tab.lastAccessedAt = Date()
         activeContainer = tab.container
         tab.container.lastAccessedAt = Date()

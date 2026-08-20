@@ -201,9 +201,13 @@ struct SidebarView: View {
                 trailing: 0
             )
         )
-        .onTapGesture(count: 2) {
-            toggleMaximizeWindow()
-        }
+        // Double-click lives on the background layer only. As an ancestor gesture it
+        // would hold every tab and button click until the double-click interval expired.
+        .background(
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { toggleMaximizeWindow() }
+        )
     }
 
     private func onContainerSelected(container: TabContainer) {

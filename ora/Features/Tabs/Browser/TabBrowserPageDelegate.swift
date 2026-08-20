@@ -100,6 +100,10 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
             progressResetWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: workItem)
         }
+
+        MainActor.assumeIsolated {
+            ExtensionManager.shared.tabNavigationDidChange(tab)
+        }
     }
 
     func browserPage(_ page: BrowserPage, didFailNavigationWith error: Error, failingURL: URL?) {

@@ -61,8 +61,10 @@ struct SettingsContentView: View {
 
     /// Section to preselect, e.g. from a `ora://settings/<section>` tab URL.
     let initialTab: SettingsTab?
-    /// A tab has no window toolbar to host the navigation title.
-    var showsNavigationTitle: Bool = true
+    /// Rendered inside a browser tab (`ora://settings`) instead of the standalone settings window.
+    /// A tab has no window toolbar, and `NavigationSplitView` would impose its own minimum width
+    /// and floating sidebar toggle on the surrounding browser layout.
+    var embedded: Bool = false
 
     @AppStorage(Self.selectedTabDefaultsKey) private var selectionRawValue: String = SettingsTab.general.rawValue
 
@@ -78,21 +80,11 @@ struct SettingsContentView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(SettingsTab.allCases, id: \.self, selection: selection) { tab in
-                Label(tab.title, systemImage: tab.symbol)
-                    .tag(tab)
-            }
-            .navigationSplitViewColumnWidth(200)
-            .padding(.top, 8)
-        } detail: {
-            // In a tab the title modifiers would rename the browser window, so skip them.
-            if showsNavigationTitle {
-                detailPane
-                    .navigationTitle(selectedTab.title)
-                    .navigationSubtitle(selectedTab.subtitle)
+        Group {
+            if embedded {
+                embeddedLayout
             } else {
-                detailPane
+                windowLayout
             }
         }
         .onChange(of: initialTab, initial: true) { _, newValue in
@@ -101,6 +93,63 @@ struct SettingsContentView: View {
         }
     }
 
+    private var windowLayout: some View {
+        NavigationSplitView {
+            sidebarList
+                .navigationSplitViewColumnWidth(200)
+                .padding(.top, 8)
+        } detail: {
+            detailPane
+                .navigationTitle(selectedTab.title)
+                .navigationSubtitle(selectedTab.subtitle)
+        }
+    }
+
+    /// No `NavigationSplitView`: it reports a large minimum width and adds its own titlebar
+    /// inset plus a floating sidebar toggle, which overflowed the browser's split pane.
+    private var embeddedLayout: some View {
+        HStack(spacing: 0) {
+            sidebarList
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+                .frame(width: 220)
+                .padding(.top, 8)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 0) {
+                pageHeader
+                detailPane
+            }
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var sidebarList: some View {
+        List(SettingsTab.allCases, id: \.self, selection: selection) { tab in
+            Label(tab.title, systemImage: tab.symbol)
+                .tag(tab)
+        }
+    }
+
+    /// Stands in for the window mode navigation title, which a tab cannot show.
+    private var pageHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(selectedTab.title)
+                .font(.title2.bold())
+            Text(selectedTab.subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Horizontal inset matches `SettingsSection`, so the header lines up with the cards below.
+        .padding(.horizontal, 16)
+        .padding(.top, 24)
+        .padding(.bottom, 8)
+    }
+
+    // Section views bring their own `ScrollView` (see `SettingsSection`), so none is added here.
     private var detailPane: some View {
         detailView
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

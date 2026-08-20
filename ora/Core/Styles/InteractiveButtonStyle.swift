@@ -48,32 +48,3 @@ extension ButtonStyle where Self == InteractiveButtonStyle {
         InteractiveButtonStyle(cornerRadius: cornerRadius, tint: tint)
     }
 }
-
-/// Click feedback for rows that cannot be a `Button`: drag sources and context-menu
-/// hosts, where a `DragGesture(minimumDistance: 0)` would swallow the row's own
-/// `.onDrag`. Flashes a scale dip instead of tracking a real press.
-struct TapFlash: ViewModifier {
-    let scale: CGFloat
-    let action: () -> Void
-
-    @State private var isPressed = false
-
-    private static let duration: TimeInterval = 0.09
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(isPressed ? scale : 1)
-            .animation(.easeOut(duration: Self.duration), value: isPressed)
-            .onTapGesture {
-                isPressed = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.duration) { isPressed = false }
-                action()
-            }
-    }
-}
-
-extension View {
-    func tapFlash(scale: CGFloat = 0.97, perform action: @escaping () -> Void) -> some View {
-        modifier(TapFlash(scale: scale, action: action))
-    }
-}

@@ -29,6 +29,8 @@ struct ExtensionsSettingsView: View {
                         Button("Install Extension…") {
                             promptForExtensionFolder()
                         }
+                        .controlSize(.regular)
+                        .fixedSize()
                     }
 
                     if let installError {
@@ -106,6 +108,8 @@ private struct FirefoxAddonSearchCard: View {
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { runSearch() }
                     Button("Search") { runSearch() }
+                        .controlSize(.regular)
+                        .fixedSize()
                         .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || isSearching)
                 }
 
@@ -222,6 +226,8 @@ private struct FirefoxAddonResultRow: View {
                     .controlSize(.small)
             } else {
                 Button("Install", action: install)
+                    .controlSize(.regular)
+                    .fixedSize()
             }
         }
         .padding(.vertical, 6)

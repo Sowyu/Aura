@@ -35,7 +35,7 @@ struct EmojiPickerView: View {
                             .cornerRadius(8)
                             .animation(.easeOut(duration: 0.1), value: hoveredEmoji)
                             .onHover { hoveredEmoji = $0 ? item.emoji : nil }
-                            .tapFlash(scale: 0.9) { onSelect(item.emoji) }
+                            .onTapGesture { onSelect(item.emoji) }
                     }
                 }
             }

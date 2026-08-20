@@ -220,27 +220,64 @@ private struct ExtensionIconButton: View {
     let item: InstalledExtension
     let foregroundColor: Color
 
+    /// Observed so a `browser.action.setIcon`/`setBadgeText` call redraws the button.
+    @ObservedObject private var extensionManager = ExtensionManager.shared
+    @State private var anchor: NSView?
+
+    private static let iconSize = CGSize(width: 16, height: 16)
+
     var body: some View {
         Button {
-            // swiftlint:disable:next todo
-            // TODO: extension action popup (needs WKWebExtensionControllerDelegate)
+            guard let anchor else { return }
+            extensionManager.performAction(extensionID: item.id, anchor: anchor)
         } label: {
-            Group {
-                if let icon = item.icon {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: 16, height: 16)
-                } else {
-                    Image(systemName: "puzzlepiece.extension")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(foregroundColor)
-                }
-            }
-            .frame(width: 28, height: 28)
+            icon
+                .frame(width: 28, height: 28)
+                .overlay(alignment: .topTrailing) { badge }
         }
         .buttonStyle(.interactive(cornerRadius: 6, tint: foregroundColor))
+        .background(ExtensionActionAnchor { anchor = $0 })
         .help(item.displayName)
         .accessibilityLabel(Text(item.displayName))
     }
+
+    @ViewBuilder private var icon: some View {
+        // The live action icon wins; the manifest icon is the fallback.
+        if let image = extensionManager.actionIcon(for: item.id, size: Self.iconSize) ?? item.icon {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: Self.iconSize.width, height: Self.iconSize.height)
+        } else {
+            Image(systemName: "puzzlepiece.extension")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(foregroundColor)
+        }
+    }
+
+    @ViewBuilder private var badge: some View {
+        if let text = extensionManager.actionBadgeText(for: item.id) {
+            Text(text)
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 3)
+                .padding(.vertical, 0.5)
+                .background(Capsule().fill(Color.accentColor))
+                .fixedSize()
+                .offset(x: 4, y: -2)
+        }
+    }
+}
+
+/// A zero-content `NSView` sitting behind the button, used as the popover anchor.
+private struct ExtensionActionAnchor: NSViewRepresentable {
+    let onViewCreated: (NSView) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { onViewCreated(view) }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }

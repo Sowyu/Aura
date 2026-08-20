@@ -68,12 +68,15 @@ struct URLBarMenuButton: View {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
+        // Pinned now: while the menu tracks, the menu's own window is key, so a
+        // handler that resolves its target from `NSApp.keyWindow` finds nothing.
+        let hostWindow = sourceView.window
         let sections = [
             newItemsSection(target),
-            librarySection(target),
+            librarySection(target, hostWindow: hostWindow),
             pageSection(target, sourceView: sourceView),
             zoomSection(target),
-            appSection(target)
+            appSection(target, hostWindow: hostWindow)
         ]
         for section in sections {
             if !menu.items.isEmpty {
@@ -106,7 +109,7 @@ struct URLBarMenuButton: View {
         ]
     }
 
-    private func librarySection(_ target: MenuActionTarget) -> [NSMenuItem] {
+    private func librarySection(_ target: MenuActionTarget, hostWindow: NSWindow?) -> [NSMenuItem] {
         [
             historyItem(target: target),
             target.item("Downloads", symbol: "arrow.down.circle") {
@@ -118,7 +121,7 @@ struct URLBarMenuButton: View {
             target.item("Extensions", symbol: "puzzlepiece.extension") {
                 NotificationCenter.default.post(
                     name: .openSettingsTab,
-                    object: nil,
+                    object: hostWindow,
                     userInfo: ["tab": SettingsTab.extensions.rawValue]
                 )
             }
@@ -179,10 +182,10 @@ struct URLBarMenuButton: View {
         ]
     }
 
-    private func appSection(_ target: MenuActionTarget) -> [NSMenuItem] {
+    private func appSection(_ target: MenuActionTarget, hostWindow: NSWindow?) -> [NSMenuItem] {
         [
             target.item("Settings", symbol: "gearshape", shortcut: KeyboardShortcuts.App.preferences) {
-                NotificationCenter.default.post(name: .openSettingsTab, object: nil)
+                NotificationCenter.default.post(name: .openSettingsTab, object: hostWindow)
             },
             target.item("Help", symbol: "questionmark.circle") {
                 if let url = URL(string: "https://github.com/Sowyu/Aura") {

@@ -15,6 +15,15 @@ struct InstalledExtension: Identifiable, Equatable {
     var loadError: String?
 }
 
+/// Weak handle on a toolbar button so a closed window's view can be released.
+private final class WeakAnchor {
+    weak var value: NSView?
+
+    init(_ value: NSView) {
+        self.value = value
+    }
+}
+
 enum ExtensionInstallError: LocalizedError {
     case missingManifest
     case alreadyInstalled(String)
@@ -41,6 +50,15 @@ final class ExtensionManager: ObservableObject {
 
     @Published private(set) var installedExtensions: [InstalledExtension] = []
 
+    /// Bumped whenever WebKit updates an action (icon, badge, enabled state) so
+    /// the toolbar redraws. The values themselves are pulled on demand.
+    @Published private(set) var actionRevision = 0
+
+    /// Last toolbar button each extension's popup was anchored to, keyed by
+    /// extension id. Weak: the button dies with its window.
+    private var actionAnchors: [String: WeakAnchor] = [:]
+    private var hasWindowObservers = false
+
     static var isSupported: Bool {
         guard #available(macOS 15.4, *) else { return false }
         return true
@@ -61,6 +79,13 @@ final class ExtensionManager: ObservableObject {
         let engine = ExtensionEngine()
         engineStorage = engine
         return engine
+    }
+
+    /// The engine only if something already built it. Lifecycle hooks use this so
+    /// a profile with no extensions never spins up a `WKWebExtensionController`.
+    @available(macOS 15.4, *)
+    private var loadedEngine: ExtensionEngine? {
+        engineStorage as? ExtensionEngine
     }
 
     var extensionsDirectory: URL {
@@ -99,6 +124,120 @@ final class ExtensionManager: ObservableObject {
             forKeys: [.isDirectoryKey]
         ).isDirectory) == true {
             registerExtension(at: directory)
+        }
+    }
+
+    // MARK: - Toolbar actions
+
+    /// Clicking an extension's toolbar icon. WebKit decides what happens next:
+    /// a popup goes through `presentActionPopup`, otherwise the extension's
+    /// `action.onClicked` event fires.
+    func performAction(extensionID: String, anchor: NSView) {
+        guard #available(macOS 15.4, *) else { return }
+        actionAnchors[extensionID] = WeakAnchor(anchor)
+        engine.context(for: extensionID)?.performAction(for: currentTabAdapter())
+    }
+
+    /// The action's current icon, which follows `browser.action.setIcon` and
+    /// falls back to the manifest icon. Nil until the extension has loaded.
+    func actionIcon(for extensionID: String, size: CGSize) -> NSImage? {
+        guard #available(macOS 15.4, *), let context = loadedEngine?.context(for: extensionID) else { return nil }
+        return context.action(for: currentTabAdapter())?.icon(for: size)
+    }
+
+    func actionBadgeText(for extensionID: String) -> String? {
+        guard #available(macOS 15.4, *), let context = loadedEngine?.context(for: extensionID) else { return nil }
+        let text = context.action(for: currentTabAdapter())?.badgeText
+        return (text?.isEmpty ?? true) ? nil : text
+    }
+
+    func actionDidUpdate() {
+        actionRevision &+= 1
+    }
+
+    func popupAnchor(for extensionID: String) -> NSView? {
+        if let view = actionAnchors[extensionID]?.value, view.window != nil {
+            return view
+        }
+        // `browser.action.openPopup()` can fire without a click; centre it.
+        return NSApp.keyWindow?.contentView
+    }
+
+    @available(macOS 15.4, *)
+    private func currentTabAdapter() -> ExtensionTabAdapter? {
+        guard let tab = ExtensionWindowAdapter.focusedAdapter()?.tabManager?.activeTab, !tab.isPrivate else {
+            return nil
+        }
+        return ExtensionTabAdapter.adapter(for: tab)
+    }
+
+    // MARK: - Window and tab lifecycle
+
+    /// Called once per non-private browser window as it appears.
+    func windowDidOpen(_ window: NSWindow, tabManager: TabManager) {
+        guard #available(macOS 15.4, *) else { return }
+        startWindowObservers()
+        let adapter = ExtensionWindowAdapter.adapter(for: window, tabManager: tabManager)
+        loadedEngine?.controller.didOpenWindow(adapter)
+        if window.isKeyWindow {
+            loadedEngine?.controller.didFocusWindow(adapter)
+        }
+    }
+
+    func tabDidOpen(_ tab: Tab) {
+        guard #available(macOS 15.4, *), !tab.isPrivate, let engine = loadedEngine else { return }
+        engine.controller.didOpenTab(ExtensionTabAdapter.adapter(for: tab))
+    }
+
+    func tabDidClose(_ tab: Tab) {
+        guard #available(macOS 15.4, *), !tab.isPrivate,
+              let adapter = ExtensionTabAdapter.discardAdapter(for: tab)
+        else { return }
+        loadedEngine?.controller.didCloseTab(adapter, windowIsClosing: false)
+    }
+
+    func tabDidActivate(_ tab: Tab, previous: Tab?) {
+        guard #available(macOS 15.4, *), !tab.isPrivate, let engine = loadedEngine else { return }
+        let adapter = ExtensionTabAdapter.adapter(for: tab)
+        let previousAdapter = previous.flatMap { $0.id == tab.id ? nil : ExtensionTabAdapter.adapter(for: $0) }
+        engine.controller.didActivateTab(adapter, previousActiveTab: previousAdapter)
+        engine.controller.didSelectTabs([adapter])
+    }
+
+    /// One hook for url/title/loading, called from the single place navigation
+    /// updates land (`TabBrowserPageDelegate`).
+    func tabNavigationDidChange(_ tab: Tab) {
+        guard #available(macOS 15.4, *), !tab.isPrivate, let engine = loadedEngine else { return }
+        engine.controller.didChangeTabProperties(
+            [.loading, .title, .URL],
+            for: ExtensionTabAdapter.adapter(for: tab)
+        )
+    }
+
+    /// Registered once, application-wide: per-window observers would fire N times
+    /// for the same window because every `OraRoot` listens on `object: nil`.
+    @available(macOS 15.4, *)
+    private func startWindowObservers() {
+        guard !hasWindowObservers else { return }
+        hasWindowObservers = true
+        let center = NotificationCenter.default
+
+        center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
+            MainActor.assumeIsolated {
+                guard let window = note.object as? NSWindow,
+                      let adapter = ExtensionWindowAdapter.adapter(for: window)
+                else { return }
+                ExtensionManager.shared.loadedEngine?.controller.didFocusWindow(adapter)
+            }
+        }
+
+        center.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { note in
+            MainActor.assumeIsolated {
+                guard let window = note.object as? NSWindow,
+                      let adapter = ExtensionWindowAdapter.discardAdapter(for: window)
+                else { return }
+                ExtensionManager.shared.loadedEngine?.controller.didCloseWindow(adapter)
+            }
         }
     }
 
@@ -248,9 +387,18 @@ final class ExtensionManager: ObservableObject {
 /// non-private page and the loaded contexts.
 @available(macOS 15.4, *)
 @MainActor
-final class ExtensionEngine {
+final class ExtensionEngine: NSObject {
     let controller = WKWebExtensionController(configuration: .default())
     private var contexts: [String: WKWebExtensionContext] = [:]
+
+    override init() {
+        super.init()
+        controller.delegate = self
+    }
+
+    func context(for id: String) -> WKWebExtensionContext? {
+        contexts[id]
+    }
 
     func load(directory: URL, id: String) async throws -> WKWebExtension {
         if let existing = contexts[id] {

@@ -298,7 +298,13 @@ struct OraRoot: View {
 
                 observe(.openSettingsTab) { note in
                     Task { @MainActor in
-                        guard NSApp.keyWindow === window ?? NSApp.keyWindow else { return }
+                        // A sender window pins the target: posts from a tracking
+                        // NSMenu can't rely on `NSApp.keyWindow` being the browser.
+                        if let sender = note.object as? NSWindow {
+                            guard sender === window ?? NSApp.keyWindow else { return }
+                        } else {
+                            guard NSApp.keyWindow === window ?? NSApp.keyWindow else { return }
+                        }
                         let section = (note.userInfo?["tab"] as? String)
                             .flatMap(SettingsTab.init(rawValue:))
                         tabManager.openSettingsTab(
@@ -371,6 +377,9 @@ struct OraRoot: View {
             }
             .onChange(of: window) { _, newWindow in
                 keyModifierListener.window = newWindow
+                if let newWindow, !privacyMode.isPrivate {
+                    ExtensionManager.shared.windowDidOpen(newWindow, tabManager: tabManager)
+                }
             }
     }
 }

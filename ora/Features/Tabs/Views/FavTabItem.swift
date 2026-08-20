@@ -96,7 +96,7 @@ struct FavTabItem: View {
                 )
                 : nil
         )
-        .tapFlash {
+        .onTapGesture {
             onTap()
             if !tab.isWebViewReady {
                 tab
@@ -109,7 +109,6 @@ struct FavTabItem: View {
             }
         }
         .onHover { isHovering = $0 }
-        .animation(.easeOut(duration: 0.1), value: isHovering)
         .contextMenu {
             Button(action: onFavoriteToggle) {
                 Label("Remove from Favorites", systemImage: "star.slash")
