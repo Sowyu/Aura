@@ -248,6 +248,9 @@ private struct WindowOriginReader: NSViewRepresentable {
     let onChange: (CGPoint) -> Void
 
     final class OriginView: NSView {
+        /// Spans the whole window above the chrome; AppKit hit-tests this real view before
+        /// SwiftUI ever sees the click, so it must decline or every button goes dead.
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
         var onChange: ((CGPoint) -> Void)?
         private var reported: CGPoint?
 
