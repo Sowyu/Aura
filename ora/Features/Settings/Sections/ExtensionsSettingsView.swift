@@ -95,7 +95,8 @@ private struct FirefoxAddonSearchCard: View {
         SettingsCard(header: "Firefox Add-ons") {
             VStack(alignment: .leading, spacing: 8) {
                 Text(
-                    "Search addons.mozilla.org, or paste an add-on page URL. Firefox extensions are standard web extensions and install directly."
+                    "Search addons.mozilla.org, or paste an add-on page URL. "
+                        + "Firefox extensions are standard web extensions and install directly."
                 )
                 .font(.caption)
                 .foregroundColor(.secondary)

@@ -52,15 +52,16 @@ struct FirefoxAddonStore {
         var components = URLComponents(
             url: apiBase.appendingPathComponent("search/"),
             resolvingAgainstBaseURL: false
-        )!
-        components.queryItems = [
+        )
+        components?.queryItems = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "app", value: "firefox"),
             URLQueryItem(name: "type", value: "extension"),
             URLQueryItem(name: "sort", value: "users"),
             URLQueryItem(name: "page_size", value: "10")
         ]
-        let (data, _) = try await URLSession.shared.data(from: components.url!)
+        guard let searchURL = components?.url else { return [] }
+        let (data, _) = try await URLSession.shared.data(from: searchURL)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let results = json["results"] as? [[String: Any]]
         else { return [] }
