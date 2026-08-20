@@ -61,6 +61,10 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
 
         let contentController = WKUserContentController()
         webConfiguration.userContentController = contentController
+
+        MainActor.assumeIsolated {
+            ExtensionManager.shared.attach(to: webConfiguration, isPrivate: profile.isPrivate)
+        }
         messageNames = configuration.scriptMessageNames
         webView = WKWebView(frame: .zero, configuration: webConfiguration)
         self.delegate = delegate
