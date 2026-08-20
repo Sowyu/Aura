@@ -85,21 +85,15 @@ struct LauncherTextField: NSViewRepresentable {
         /// Safari-style: a click on an unfocused field selects everything, a drag
         /// from the same spot selects a range. The field editor owns the drag, so
         /// the window never moves.
+        /// First click focuses and selects all; subsequent clicks and drags go to the field
+        /// editor, which selects ranges natively. No event pumping: a `nextEvent` loop here
+        /// froze the app when a synthetic mouse-up (remote control) never matched.
         override func mouseDown(with event: NSEvent) {
             guard currentEditor() == nil, let window else {
                 super.mouseDown(with: event)
                 return
             }
             window.makeFirstResponder(self)
-            let start = event.locationInWindow
-            while let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
-                if next.type == .leftMouseUp { return }
-                let moved = hypot(next.locationInWindow.x - start.x, next.locationInWindow.y - start.y)
-                if moved > 3 {
-                    currentEditor()?.mouseDown(with: event)
-                    return
-                }
-            }
         }
     }
 
