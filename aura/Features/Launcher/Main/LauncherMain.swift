@@ -78,9 +78,9 @@ struct LauncherMain: View {
         .frame(minWidth: 320, maxWidth: 814, alignment: .leading)
         .background(theme.launcherMainBackground)
         .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
-        .clipShape(ConditionallyConcentricRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(ConditionallyConcentricRectangle(cornerRadius: 13, style: .continuous))
         .overlay(
-            ConditionallyConcentricRectangle(cornerRadius: 12, style: .continuous)
+            ConditionallyConcentricRectangle(cornerRadius: 13, style: .continuous)
                 .stroke(
                     Color(match?.color ?? theme.foreground)
                         .opacity(0.05),
