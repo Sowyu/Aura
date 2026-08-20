@@ -154,6 +154,10 @@ struct URLBarField: View {
                     onEndEditing: dismissEditing,
                     onEscape: dismissEditing
                 )
+
+                // Single line: let the HStack centre it instead of filling the pill and drawing at the top.
+
+                .fixedSize(horizontal: false, vertical: true)
                 .opacity(showCopiedAnimation ? 0 : 1)
                 .offset(y: showCopiedAnimation ? (startWheelAnimation ? -12 : 12) : 0)
                 .animation(.easeOut(duration: 0.15), value: showCopiedAnimation)
