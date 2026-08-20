@@ -136,8 +136,8 @@ struct URLBarField: View {
             .foregroundColor(foregroundColor)
             .frame(maxWidth: .infinity, alignment: .leading)
             // Only the text area starts editing, so the copy button keeps its own hit area.
-            .contentShape(Rectangle())
-            .onTapGesture { startEditing() }
+            // Mouse-down (not tap) so a drag selects text instead of moving the window.
+            .overlay(MouseDownCatcher { startEditing() })
 
             Button {
                 if let activeTab = tabManager.activeTab {
@@ -265,7 +265,7 @@ extension URLBarField {
         if let activeTab = tabManager.activeTab {
             launcherInput = activeTab.url.absoluteString
         }
-        withAnimation(.easeOut(duration: 0.25)) {
+        withAnimation(.easeOut(duration: 0.1)) {
             appState.isURLBarEditing = true
         }
     }
