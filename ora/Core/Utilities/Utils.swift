@@ -16,8 +16,6 @@ func extractDomainOrIP(from text: String) -> String? {
 
 /// eTLD+1 for permission-style rules, so a decision made on `news.example.com`
 /// also covers `example.com` and its other subdomains.
-/// ponytail: last-two-labels heuristic, no public suffix list. `bbc.co.uk` collapses
-/// to `co.uk`; swap in a PSL if rules ever need to be exact on multi-part TLDs.
 func registrableDomain(from host: String) -> String {
     let normalized = host
         .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -37,8 +35,6 @@ func registrableDomain(from host: String) -> String {
     }
     let suffixCount = suffix.split(separator: ".").count
     return labels.suffix(suffixCount + 1).joined(separator: ".")
-}
-    return labels.suffix(2).joined(separator: ".")
 }
 
 /// Registrable domain for a URL, or nil when the URL has no host (`about:blank`, data URLs).
