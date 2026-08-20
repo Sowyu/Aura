@@ -125,6 +125,29 @@ final class ExtensionManager: ObservableObject {
         registerExtension(at: destination)
     }
 
+    /// Downloads a Firefox add-on's .xpi from addons.mozilla.org, unpacks it,
+    /// and installs it like any other unpacked extension.
+    func installFirefoxAddon(_ addon: FirefoxAddon) async throws {
+        guard let downloadURL = addon.downloadURL else {
+            throw FirefoxAddonStoreError.missingDownload
+        }
+        start()
+
+        let archive = try await FirefoxAddonStore.shared.downloadXPI(from: downloadURL)
+        let staging = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ora-addon-unpack-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: archive)
+            try? FileManager.default.removeItem(at: staging)
+        }
+
+        try XPIUnpacker.unpack(archive, to: staging)
+        guard let root = XPIUnpacker.manifestRoot(in: staging) else {
+            throw ExtensionInstallError.missingManifest
+        }
+        try installExtension(from: root)
+    }
+
     func removeExtension(_ id: String) {
         if #available(macOS 15.4, *) {
             engine.unload(id: id)
