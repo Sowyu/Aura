@@ -83,6 +83,7 @@ struct URLBar: View {
                     foregroundColor: buttonForegroundColor,
                     textColor: URLBarColors.foreground(for: tab)
                 )
+                .windowDragDisabled()
                 .zIndex(1)
 
                 URLBarMenuButton(

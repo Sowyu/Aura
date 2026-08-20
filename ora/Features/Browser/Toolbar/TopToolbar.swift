@@ -80,6 +80,7 @@ struct TopToolbar: View {
                     foregroundColor: theme.foreground.opacity(0.55),
                     textColor: theme.foreground
                 )
+                .windowDragDisabled()
                 .frame(maxWidth: .infinity)
                 .zIndex(1)
             } else {
