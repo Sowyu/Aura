@@ -65,14 +65,19 @@ struct BrowserView: View {
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
-                if !toolbarManager.isToolbarHidden {
+                // In compact mode the revealed bar joins the stack instead of floating over
+                // the page, so it sits flush on the pane and the pane's rounded corners
+                // flare into the bar's colour exactly as they do when the bar is pinned.
+                if !toolbarManager.isToolbarHidden || toolbarManager.isFloatingToolbarVisible {
                     TopToolbar()
                         .background(WindowDragHandle())
+                        .transition(.move(edge: .top))
                         .zIndex(1)
                 }
                 BrowserSplitView()
             }
             .animation(.easeOut(duration: 0.15), value: toolbarManager.isToolbarHidden)
+            .animation(.easeOut(duration: 0.15), value: toolbarManager.isFloatingToolbarVisible)
             .ignoresSafeArea(.all)
             .background(theme.chromeBackground)
             .background(
@@ -190,22 +195,9 @@ private struct FloatingTopToolbar: View {
     }
 
     var body: some View {
+        // The bar itself renders in BrowserView's stack while `isVisible`; this view only
+        // owns the hot zone that flips the flag.
         ZStack(alignment: .top) {
-            if isVisible {
-                // Same fill as the sidebar, so the two pieces of chrome read as one.
-                TopToolbar()
-                    .background(theme.chromeBackground)
-                    .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
-                    .overlay(alignment: .bottom) {
-                        Rectangle()
-                            .fill(theme.foreground.opacity(0.08))
-                            .frame(height: 1)
-                    }
-                    .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
-                    .transition(.move(edge: .top))
-                    .zIndex(1)
-            }
-
             Color.clear
                 .frame(height: GlobalMouseTrackingArea.hotZone)
                 .overlay(
