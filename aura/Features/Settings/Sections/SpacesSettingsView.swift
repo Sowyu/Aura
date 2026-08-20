@@ -12,6 +12,7 @@ struct SpacesSettingsView: View {
     @Query var containers: [TabContainer]
 
     @StateObject private var settings = SettingsStore.shared
+    @ObservedObject private var siteRules = SiteSpaceRuleService.shared
     @State private var searchService = SearchEngineService()
     @State private var selectedContainerId: UUID?
     @State private var completedClearActions: Set<ClearDataAction> = []
@@ -118,6 +119,7 @@ struct SpacesSettingsView: View {
                             }
                         }
 
+                        siteRulesCard(for: container)
                         privacySettingsCard(for: container)
                         adBlockingSettingsCard(for: container)
 
@@ -223,6 +225,33 @@ struct SpacesSettingsView: View {
         completedTitle: String
     ) -> String {
         completedClearActions.contains(action) ? completedTitle : defaultTitle
+    }
+
+    /// Sites pinned to this space by "Always open … in this space".
+    private func siteRulesCard(for container: TabContainer) -> some View {
+        let rules = siteRules.sortedRules.filter { $0.containerID == container.id }
+        return SettingsCard(header: "Site Rules") {
+            VStack(alignment: .leading, spacing: 6) {
+                if rules.isEmpty {
+                    Text("No site rules for this space yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(rules) { rule in
+                        HStack {
+                            Text(rule.host)
+                            Spacer()
+                            Button {
+                                siteRules.removeRule(host: rule.host)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Stop opening \(rule.host) in this space")
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func privacySettingsCard(for container: TabContainer) -> some View {

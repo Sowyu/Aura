@@ -32,6 +32,8 @@ struct TopToolbar: View {
     @Query(sort: [SortDescriptor(\History.lastAccessedAt, order: .reverse)])
     private var histories: [History]
 
+    @State private var historyAnchor: NSView?
+
     private var buttonForegroundColor: Color {
         theme.foreground.opacity(0.7)
     }
@@ -172,16 +174,8 @@ struct TopToolbar: View {
     // MARK: - History
 
     private var historyMenu: some View {
-        Menu {
-            if recentHistory.isEmpty {
-                Text("No recent history")
-            } else {
-                ForEach(recentHistory) { entry in
-                    Button(entry.title.isEmpty ? entry.urlString : entry.title) {
-                        openInNewTab(entry.url)
-                    }
-                }
-            }
+        Button {
+            historyAnchor?.presentAuraMenu(historyItems)
         } label: {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 14, weight: .medium))
@@ -189,10 +183,19 @@ struct TopToolbar: View {
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .buttonStyle(.interactive(cornerRadius: 6, tint: buttonForegroundColor))
+        .background(AuraMenuAnchorView { historyAnchor = $0 })
         .frame(width: Self.buttonSize, height: Self.buttonSize)
         .help("Recent History")
+    }
+
+    private var historyItems: [AuraMenuItem] {
+        guard !recentHistory.isEmpty else { return [.disabled("No recent history")] }
+        return recentHistory.map { entry in
+            .item(entry.title.isEmpty ? entry.urlString : entry.title) {
+                openInNewTab(entry.url)
+            }
+        }
     }
 
     // MARK: - Actions

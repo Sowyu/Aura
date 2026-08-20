@@ -12,6 +12,10 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         _ page: BrowserPage,
         decidePolicyFor navigationAction: BrowserNavigationAction
     ) -> BrowserNavigationActionDisposition {
+        if let routed = routeToRuleSpace(navigationAction, page: page) {
+            return routed
+        }
+
         guard navigationAction.modifierFlags.contains(.command),
               let url = navigationAction.request.url,
               let tab,
@@ -197,6 +201,19 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
     }
 
+    func browserPage(
+        _ page: BrowserPage,
+        didRequestContextMenu info: BrowserContextMenuInfo,
+        at location: CGPoint,
+        inspectElement: (() -> Void)?
+    ) {
+        guard let tab else { return }
+        MainActor.assumeIsolated {
+            let menu = PageContextMenu(tab: tab, page: page, info: info, inspectElement: inspectElement)
+            AuraMenuController.shared.present(menu.items(), at: location, in: page.window)
+        }
+    }
+
     func browserPage(_ page: BrowserPage, didStartDownload download: BrowserDownloadTask) {
         MainActor.assumeIsolated {
             tab?.downloadManager?.handleDownload(download)
@@ -296,5 +313,52 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
             blue: CGFloat(pixels[2]) / 255.0,
             alpha: CGFloat(pixels[3]) / 255.0
         )
+    }
+}
+
+// MARK: - Site-to-space rules
+
+private extension TabBrowserPageDelegate {
+    /// Firefox-style containers: a site pinned to another space is opened there instead.
+    /// Returns nil when the navigation is none of this delegate's business.
+    func routeToRuleSpace(
+        _ navigationAction: BrowserNavigationAction,
+        page: BrowserPage
+    ) -> BrowserNavigationActionDisposition? {
+        guard navigationAction.isMainFrame,
+              let url = navigationAction.request.url,
+              ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              let tab,
+              // Private windows have no spaces to route between.
+              !tab.isPrivate,
+              let tabManager = tab.tabManager,
+              let historyManager = tab.historyManager
+        else {
+            return nil
+        }
+
+        return MainActor.assumeIsolated { () -> BrowserNavigationActionDisposition? in
+            guard let targetID = SiteSpaceRuleService.shared.containerID(for: url),
+                  targetID != tab.container.id,
+                  let space = tabManager.fetchContainers().first(where: { $0.id == targetID })
+            else {
+                return nil
+            }
+
+            tabManager.openTab(
+                url: url,
+                in: space,
+                historyManager: historyManager,
+                downloadManager: tab.downloadManager,
+                isPrivate: tab.isPrivate,
+                reusingHost: true
+            )
+            // A tab opened only to follow this link has nothing to fall back to, so it goes
+            // rather than sitting there blank.
+            if page.lastCommittedURL == nil {
+                tabManager.closeTab(tab: tab)
+            }
+            return .cancel
+        }
     }
 }

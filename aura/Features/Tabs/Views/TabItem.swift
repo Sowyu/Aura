@@ -132,6 +132,7 @@ struct TabItem: View {
         .padding(8)
         .opacity(isDragging ? 0.0 : 1.0)
         .background(backgroundColor, in: .rect(cornerRadius: 10))
+        .overlay(alignment: .leading) { spaceStripe }
         .overlay(
             isDragging ?
                 ConditionallyConcentricRectangle(cornerRadius: 10)
@@ -157,7 +158,7 @@ struct TabItem: View {
             }
         }
         .onHover { isHovering = $0 }
-        .contextMenu { contextMenuItems }
+        .auraContextMenu { contextMenuItems }
         .animation(.spring(response: 0.18, dampingFraction: 0.85), value: isDragging)
         .geometryGroup()
     }
@@ -197,47 +198,61 @@ struct TabItem: View {
         }
     }
 
+    /// A 2pt colour rail marking which space the tab belongs to. Spaces left on Auto have
+    /// no colour, so most sidebars stay unstriped.
     @ViewBuilder
-    private var contextMenuItems: some View {
-        Button(action: onPinToggle) {
-            Label(
+    private var spaceStripe: some View {
+        if let hex = tab.container.iconColorHex, !hex.isEmpty {
+            Capsule()
+                .fill(Color(hex: hex))
+                .frame(width: 2, height: 16)
+        }
+    }
+
+    private var contextMenuItems: [AuraMenuItem] {
+        Array {
+            AuraMenuItem.item(
                 tab.type == .pinned ? "Unpin Tab" : "Pin Tab",
-                systemImage: tab.type == .pinned ? "pin.slash" : "pin"
+                icon: tab.type == .pinned ? "pin.slash" : "pin",
+                action: onPinToggle
             )
-        }
-
-        Button(action: onFavoriteToggle) {
-            Label(
+            AuraMenuItem.item(
                 tab.type == .fav ? "Remove from Favorites" : "Add to Favorites",
-                systemImage: tab.type == .fav ? "star.slash" : "star"
+                icon: tab.type == .fav ? "star.slash" : "star",
+                action: onFavoriteToggle
             )
-        }
-
-        Button(action: onDuplicate) {
-            Label("Duplicate Tab", systemImage: "doc.on.doc")
-        }
-        .disabled(!tab.isWebViewReady)
-
-        Divider()
-
-        if availableContainers.count > 1 {
-            Divider()
-
-            Menu("Move to Container") {
-                ForEach(availableContainers) { container in
-                    if tab.container.id != container.id {
-                        Button(action: { onMoveToContainer(container) }) {
-                            Text(container.emoji.isEmpty ? container.name : "\(container.emoji) \(container.name)")
-                        }
-                    }
-                }
+            AuraMenuItem.item(
+                "Duplicate Tab",
+                icon: "doc.on.doc",
+                isDisabled: !tab.isWebViewReady,
+                action: onDuplicate
+            )
+            AuraMenuItem.separator
+            AuraMenuItem.item("Copy Link", icon: "link") {
+                ClipboardUtils.copyToClipboard(tab.url.absoluteString)
             }
-
-            Divider()
-        }
-
-        Button(role: .destructive, action: onClose) {
-            Label("Close Tab", systemImage: "xmark")
+            SpaceMenuItems.open(
+                url: tab.url,
+                from: tab,
+                title: "Open in Space",
+                spaces: availableContainers
+            )
+            if availableContainers.count > 1 {
+                AuraMenuItem.submenu(
+                    "Move to Space",
+                    icon: "arrow.right.square",
+                    items: availableContainers
+                        .filter { $0.id != tab.container.id }
+                        .map { container in
+                            .item(SpaceMenuItems.label(for: container), icon: container.iconSymbol) {
+                                onMoveToContainer(container)
+                            }
+                        }
+                )
+            }
+            SpaceMenuItems.alwaysOpen(url: tab.url, in: tab.container)
+            AuraMenuItem.separator
+            AuraMenuItem.item("Close Tab", icon: "xmark", isDestructive: true, action: onClose)
         }
     }
 }

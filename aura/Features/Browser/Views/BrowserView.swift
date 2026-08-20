@@ -107,6 +107,10 @@ struct BrowserView: View {
                     isMouseOverURLBar: $isMouseOverURLBar
                 )
             }
+
+            // Last in the stack so every menu draws over the chrome and the page. Renders
+            // nothing and installs no event monitors until a menu is actually open.
+            AuraMenuHost()
         }
         .edgesIgnoringSafeArea(.all)
         .enableInjection()

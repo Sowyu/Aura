@@ -46,7 +46,7 @@ struct FolderItem: View {
         .onTapGesture(count: 2) { beginRename() }
         .onTapGesture { if !isRenaming { onToggle() } }
         .onHover { isHovering = $0 }
-        .contextMenu { contextMenuItems }
+        .auraContextMenu { contextMenuItems }
         .onChange(of: isRenaming, initial: true) { _, renaming in
             if renaming {
                 draftName = folder.name
@@ -95,25 +95,15 @@ struct FolderItem: View {
         return .clear
     }
 
-    @ViewBuilder
-    private var contextMenuItems: some View {
-        Button { beginRename() } label: {
-            Label("Rename", systemImage: "pencil")
-        }
-        Button(action: onNewTab) {
-            Label("New Tab in Folder", systemImage: "plus")
-        }
-        Divider()
-        Button(action: onCloseTabs) {
-            Label("Close All Tabs in Folder", systemImage: "xmark")
-        }
-        .disabled(tabCount == 0)
-        Button { onDelete(false) } label: {
-            Label("Delete Folder", systemImage: "folder.badge.minus")
-        }
-        Button(role: .destructive) { onDelete(true) } label: {
-            Label("Delete Folder and Tabs", systemImage: "trash")
-        }
+    private var contextMenuItems: [AuraMenuItem] {
+        [
+            .item("Rename", icon: "pencil") { beginRename() },
+            .item("New Tab in Folder", icon: "plus", action: onNewTab),
+            .separator,
+            .item("Close All Tabs in Folder", icon: "xmark", isDisabled: tabCount == 0, action: onCloseTabs),
+            .item("Delete Folder", icon: "folder.badge.minus") { onDelete(false) },
+            .item("Delete Folder and Tabs", icon: "trash", isDestructive: true) { onDelete(true) }
+        ]
     }
 
     private func beginRename() {

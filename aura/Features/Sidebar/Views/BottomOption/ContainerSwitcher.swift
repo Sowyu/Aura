@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
@@ -88,8 +89,12 @@ struct ContainerSwitcher: View {
                 hoveredContainer = isHovering ? container.id : nil
             }
         }
-        .contextMenu {
-            Button("Edit Container") {
+        .auraContextMenu { menuItems(for: container) }
+    }
+
+    private func menuItems(for container: TabContainer) -> [AuraMenuItem] {
+        [
+            .item("Edit Space", icon: "pencil") {
                 dialogManager.show { id in
                     EditContainerModal(
                         container: container,
@@ -97,8 +102,14 @@ struct ContainerSwitcher: View {
                     )
                     .environmentObject(tabManager)
                 }
-            }
-            Button("Delete Container") {
+            },
+            .item("New Tab in Space", icon: "plus") {
+                tabManager.activateContainer(container)
+                NotificationCenter.default.post(name: .showLauncher, object: NSApp.keyWindow)
+            },
+            .separator,
+            // Deleting the last space would leave the sidebar with nothing to page through.
+            .item("Delete Space", icon: "trash", isDestructive: true, isDisabled: containers.count == 1) {
                 dialogManager.confirm(
                     title: "Delete \"\(container.name)\"?",
                     message: "All tabs in this space will be permanently removed.",
@@ -106,10 +117,10 @@ struct ContainerSwitcher: View {
                     confirmLabel: "Delete",
                     variant: .destructive
                 ) {
+                    SiteSpaceRuleService.shared.removeRules(forContainer: container.id)
                     tabManager.deleteContainer(container)
                 }
             }
-            .disabled(containers.count == 1) // disabled to avoid crashes
-        }
+        ]
     }
 }

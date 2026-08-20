@@ -42,6 +42,10 @@ enum BrowserPermissionDecision {
 struct BrowserNavigationAction {
     let request: URLRequest
     let modifierFlags: NSEvent.ModifierFlags
+    /// A nil target frame means a brand-new frame or window, which counts as main frame.
+    var isMainFrame = true
+    /// True for a link click or a form submission, as opposed to a redirect or a reload.
+    var isUserInitiated = false
 }
 
 enum BrowserNavigationActionDisposition {
@@ -69,4 +73,19 @@ struct BrowserSnapshotConfiguration {
     let afterScreenUpdates: Bool
 
     static let full = BrowserSnapshotConfiguration(rect: nil, afterScreenUpdates: false)
+}
+
+/// What sat under the pointer when the page's context menu was asked for. Filled by the
+/// page-side `contextmenu` listener, which runs before AppKit builds its own menu.
+struct BrowserContextMenuInfo {
+    var link: URL?
+    var linkText: String?
+    var image: URL?
+    var media: URL?
+    var selection: String?
+    var isEditable = false
+
+    var hasSelection: Bool {
+        !(selection ?? "").isEmpty
+    }
 }

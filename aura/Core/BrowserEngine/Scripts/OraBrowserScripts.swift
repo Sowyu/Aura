@@ -20,6 +20,14 @@ enum OraBrowserScripts {
                 source: navigationAndMediaScript,
                 injectionTime: .atDocumentEnd,
                 forMainFrameOnly: true
+            ),
+            // Subframes included: a right-click inside an iframe still has to describe the
+            // element under the pointer, and this script does not depend on the bridge.
+            BrowserUserScript(
+                name: "ora-context-menu",
+                source: contextMenuScript,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: false
             )
         ]
 
@@ -45,6 +53,54 @@ enum OraBrowserScripts {
         }
         return script
     }
+
+    /// Reports what is under the pointer on every right-click. WebKit dispatches the DOM
+    /// `contextmenu` event before AppKit builds its menu, so the native side always has a
+    /// fresh answer by the time `willOpenMenu` runs.
+    private static let contextMenuScript = """
+    (function () {
+        if (window.__oraContextMenuInstalled) {
+            return;
+        }
+        window.__oraContextMenuInstalled = true;
+
+        function closest(element, selector) {
+            return element && element.closest ? element.closest(selector) : null;
+        }
+
+        function isEditable(element) {
+            if (!element) return false;
+            if (element.isContentEditable) return true;
+            var field = closest(element, 'input, textarea');
+            if (!field) return false;
+            if (field.disabled || field.readOnly) return false;
+            return field.tagName === 'TEXTAREA' || /^(text|search|url|email|tel|password|number)$/i
+                .test(field.type || 'text');
+        }
+
+        document.addEventListener('contextmenu', function (event) {
+            var target = event.target;
+            var anchor = closest(target, 'a[href]');
+            var image = target && target.tagName === 'IMG' ? target : closest(target, 'img[src]');
+            var media = closest(target, 'video, audio');
+            var selection = '';
+            try {
+                selection = String(window.getSelection() || '');
+            } catch (error) {}
+
+            try {
+                window.webkit.messageHandlers.contextMenu.postMessage({
+                    link: anchor ? anchor.href : '',
+                    linkText: anchor ? (anchor.textContent || '').trim().slice(0, 120) : '',
+                    image: image ? image.currentSrc || image.src || '' : '',
+                    media: media ? media.currentSrc || media.src || '' : '',
+                    selection: selection.slice(0, 500),
+                    isEditable: isEditable(target)
+                });
+            } catch (error) {}
+        }, { capture: true });
+    })();
+    """
 
     private static let bridgeScript = """
     (function () {

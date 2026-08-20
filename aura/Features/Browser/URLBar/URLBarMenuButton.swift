@@ -1,7 +1,6 @@
 import AppKit
 import SwiftData
 import SwiftUI
-import UniformTypeIdentifiers
 import WebKit
 
 /// The "..." app menu shown in the toolbar and the floating URL bar.
@@ -20,8 +19,7 @@ struct URLBarMenuButton: View {
     @Query(sort: [SortDescriptor(\History.lastAccessedAt, order: .reverse)])
     private var histories: [History]
 
-    @State private var menuSourceView: NSView?
-    @State private var actions = MenuActionTarget()
+    @State private var anchor: NSView?
 
     private var webView: WKWebView? {
         tabManager.activeTab?.browserPage?.contentView as? WKWebView
@@ -34,7 +32,7 @@ struct URLBarMenuButton: View {
 
     var body: some View {
         Button {
-            showMenu()
+            anchor?.presentAuraMenu(menuItems())
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: URLBarButton.iconSize, weight: .medium))
@@ -43,78 +41,44 @@ struct URLBarMenuButton: View {
         }
         .buttonStyle(.interactive(cornerRadius: URLBarButton.cornerRadius, tint: foregroundColor))
         .help("Menu")
-        .background(
-            MenuSourceView { nsView in
-                menuSourceView = nsView
-            }
-        )
+        .background(AuraMenuAnchorView { anchor = $0 })
     }
 
     // MARK: - Menu
 
-    private func showMenu() {
-        guard let sourceView = menuSourceView else { return }
-
-        let target = MenuActionTarget()
-        actions = target
-
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-
-        // Pinned now: while the menu tracks, the menu's own window is key, so a
-        // handler that resolves its target from `NSApp.keyWindow` finds nothing.
-        let hostWindow = sourceView.window
-        let sections = [
-            newItemsSection(target),
-            librarySection(target, hostWindow: hostWindow),
-            pageSection(target, sourceView: sourceView),
-            zoomSection(target),
-            appSection(target, hostWindow: hostWindow)
-        ]
-        for section in sections {
-            if !menu.items.isEmpty {
-                menu.addItem(.separator())
-            }
-            for item in section {
-                menu.addItem(item)
-            }
-        }
-
-        // `popUp` puts the menu's top-left corner at this point, in the view's own
-        // coordinates. `MenuSourceView` is flipped, so 4pt past maxY is 4pt below the
-        // button; in an unflipped view the same y would land above the toolbar.
-        let point = NSPoint(x: 0, y: sourceView.bounds.maxY + 4)
-        menu.popUp(positioning: nil, at: point, in: sourceView)
+    private func menuItems() -> [AuraMenuItem] {
+        let hostWindow = anchor?.window
+        return newItemsSection()
+            + [.separator] + librarySection(hostWindow: hostWindow)
+            + [.separator] + pageSection()
+            + [.separator] + zoomSection()
+            + [.separator] + appSection(hostWindow: hostWindow)
     }
 
-    private func newItemsSection(_ target: MenuActionTarget) -> [NSMenuItem] {
+    private func newItemsSection() -> [AuraMenuItem] {
         [
-            target.item("New Tab", symbol: "plus", shortcut: KeyboardShortcuts.Tabs.new) {
+            .item("New Tab", icon: "plus", shortcut: KeyboardShortcuts.Tabs.new) {
                 NotificationCenter.default.post(name: .showLauncher, object: NSApp.keyWindow)
             },
-            target.item("New Window", symbol: "macwindow", shortcut: KeyboardShortcuts.Window.new) {
+            .item("New Window", icon: "macwindow", shortcut: KeyboardShortcuts.Window.new) {
                 openWindow(id: "normal")
             },
-            target.item(
-                "New Private Window",
-                symbol: "eyeglasses",
-                shortcut: KeyboardShortcuts.Window.newPrivate
-            ) {
+            .item("New Private Window", icon: "eyeglasses", shortcut: KeyboardShortcuts.Window.newPrivate) {
                 openWindow(id: "private")
             }
         ]
     }
 
-    private func librarySection(_ target: MenuActionTarget, hostWindow: NSWindow?) -> [NSMenuItem] {
+    private func librarySection(hostWindow: NSWindow?) -> [AuraMenuItem] {
         [
-            historyItem(target: target),
-            target.item("Downloads", symbol: "arrow.down.circle") {
+            historyItem(),
+            .item("Downloads", icon: "arrow.down.circle") {
                 downloadManager.isShowingDownloadsHistory = true
             },
-            target.item("Passwords", symbol: "key.horizontal") {
+            .item("Passwords", icon: "key.horizontal") {
                 openPasswordsWindow()
             },
-            target.item("Extensions", symbol: "puzzlepiece.extension") {
+            .item("Extensions", icon: "puzzlepiece.extension") {
                 NotificationCenter.default.post(
                     name: .openSettingsTab,
                     object: hostWindow,
@@ -124,74 +88,61 @@ struct URLBarMenuButton: View {
         ]
     }
 
-    private func pageSection(_ target: MenuActionTarget, sourceView: NSView) -> [NSMenuItem] {
+    private func pageSection() -> [AuraMenuItem] {
         [
-            target.item(
-                "Print…",
-                symbol: "printer",
-                key: "p",
-                modifiers: [.command],
-                enabled: webView != nil,
-                handler: printPage
-            ),
-            target.item(
+            .item("Print…", icon: "printer", shortcut: "⌘P", isDisabled: webView == nil, action: printPage),
+            .item(
                 "Save Page As…",
-                symbol: "square.and.arrow.down",
-                enabled: webView != nil,
-                handler: savePageAs
+                icon: "square.and.arrow.down",
+                isDisabled: webView == nil,
+                action: savePageAs
             ),
-            target.item("Share link", symbol: "square.and.arrow.up") {
-                onShare(sourceView, sourceView.bounds)
+            .item("Share link", icon: "square.and.arrow.up") {
+                guard let anchor else { return }
+                onShare(anchor, anchor.bounds)
             },
-            target.item("Find in Page…", symbol: "magnifyingglass", shortcut: KeyboardShortcuts.Edit.find) {
+            .item("Find in Page…", icon: "magnifyingglass", shortcut: KeyboardShortcuts.Edit.find) {
                 NotificationCenter.default.post(name: .findInPage, object: NSApp.keyWindow)
             },
-            javaScriptItem()
+            .submenu("JavaScript", icon: "curlybraces", items: JavaScriptSiteMenu.items(for: tabManager.activeTab?.url))
         ]
     }
 
-    private func javaScriptItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "JavaScript", action: nil, keyEquivalent: "")
-        item.image = NSImage(systemSymbolName: "curlybraces", accessibilityDescription: nil)
-        item.submenu = JavaScriptSiteMenu.makeMenu(for: tabManager.activeTab?.url)
-        return item
-    }
-
-    private func zoomSection(_ target: MenuActionTarget) -> [NSMenuItem] {
+    private func zoomSection() -> [AuraMenuItem] {
         [
-            target.item(
+            .item(
                 "Zoom In",
-                symbol: "plus.magnifyingglass",
+                icon: "plus.magnifyingglass",
                 shortcut: KeyboardShortcuts.Zoom.zoomIn,
-                enabled: webView != nil
+                isDisabled: webView == nil
             ) {
                 setZoom { min($0 + 0.1, 3.0) }
             },
-            target.item(
+            .item(
                 "Zoom Out",
-                symbol: "minus.magnifyingglass",
+                icon: "minus.magnifyingglass",
                 shortcut: KeyboardShortcuts.Zoom.zoomOut,
-                enabled: webView != nil
+                isDisabled: webView == nil
             ) {
                 setZoom { max($0 - 0.1, 0.5) }
             },
-            target.item(
+            .item(
                 "Actual Size",
-                symbol: "1.magnifyingglass",
+                icon: "1.magnifyingglass",
                 shortcut: KeyboardShortcuts.Zoom.reset,
-                enabled: webView != nil
+                isDisabled: webView == nil
             ) {
                 setZoom { _ in 1.0 }
             }
         ]
     }
 
-    private func appSection(_ target: MenuActionTarget, hostWindow: NSWindow?) -> [NSMenuItem] {
+    private func appSection(hostWindow: NSWindow?) -> [AuraMenuItem] {
         [
-            target.item("Settings", symbol: "gearshape", shortcut: KeyboardShortcuts.App.preferences) {
+            .item("Settings", icon: "gearshape", shortcut: KeyboardShortcuts.App.preferences) {
                 NotificationCenter.default.post(name: .openSettingsTab, object: hostWindow)
             },
-            target.item("Help", symbol: "questionmark.circle") {
+            .item("Help", icon: "questionmark.circle") {
                 if let url = URL(string: "https://github.com/Sowyu/Aura") {
                     openInNewTab(url)
                 }
@@ -199,29 +150,26 @@ struct URLBarMenuButton: View {
         ]
     }
 
-    /// History submenu. There is no all-history window in the app yet, so the
-    /// submenu lists recent entries only.
-    private func historyItem(target: MenuActionTarget) -> NSMenuItem {
-        let item = NSMenuItem(title: "History", action: nil, keyEquivalent: "")
-        item.image = NSImage(systemSymbolName: "clock.arrow.circlepath", accessibilityDescription: nil)
-
-        let submenu = NSMenu()
-        submenu.autoenablesItems = false
+    /// History submenu. There is no all-history window in the app yet, so the submenu
+    /// lists recent entries only.
+    private func historyItem() -> AuraMenuItem {
         let entries = recentHistory
-        if entries.isEmpty {
-            let empty = NSMenuItem(title: "No recent history", action: nil, keyEquivalent: "")
-            empty.isEnabled = false
-            submenu.addItem(empty)
-        } else {
-            for entry in entries {
-                let title = entry.title.isEmpty ? entry.urlString : entry.title
-                submenu.addItem(target.item(title, symbol: nil) {
-                    openInNewTab(entry.url)
-                })
-            }
+        guard !entries.isEmpty else {
+            return .submenu(
+                "History",
+                icon: "clock.arrow.circlepath",
+                items: [.disabled("No recent history")]
+            )
         }
-        item.submenu = submenu
-        return item
+        return .submenu(
+            "History",
+            icon: "clock.arrow.circlepath",
+            items: entries.map { entry in
+                .item(entry.title.isEmpty ? entry.urlString : entry.title) {
+                    openInNewTab(entry.url)
+                }
+            }
+        )
     }
 
     // MARK: - Actions
@@ -241,125 +189,11 @@ struct URLBarMenuButton: View {
     }
 
     private func printPage() {
-        guard let webView else { return }
-        let info = NSPrintInfo.shared
-        let operation = webView.printOperation(with: info)
-        operation.view?.frame = webView.bounds
-        if let window = webView.window {
-            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
-        } else {
-            operation.run()
-        }
+        tabManager.activeTab?.browserPage?.printPage()
     }
 
     private func savePageAs() {
-        guard let webView, let tab = tabManager.activeTab else { return }
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [UTType("com.apple.webarchive")].compactMap { $0 }
-        let name = tab.title.isEmpty ? (tab.url.host ?? "page") : tab.title
-        panel.nameFieldStringValue = "\(name).webarchive"
-        panel.canCreateDirectories = true
-
-        let complete: (URL) -> Void = { destination in
-            webView.createWebArchiveData { result in
-                guard case let .success(data) = result else { return }
-                try? data.write(to: destination)
-            }
-        }
-
-        if let window = webView.window {
-            panel.beginSheetModal(for: window) { response in
-                guard response == .OK, let url = panel.url else { return }
-                complete(url)
-            }
-        } else if panel.runModal() == .OK, let url = panel.url {
-            complete(url)
-        }
+        guard let tab = tabManager.activeTab else { return }
+        tab.browserPage?.saveWebArchive(named: tab.title.isEmpty ? (tab.url.host ?? "page") : tab.title)
     }
-}
-
-// MARK: - Menu plumbing
-
-/// Holds the closures for a popped-up `NSMenu`; menu items only carry a tag.
-private final class MenuActionTarget: NSObject {
-    private var handlers: [() -> Void] = []
-
-    func item(
-        _ title: String,
-        symbol: String?,
-        key: String = "",
-        modifiers: NSEvent.ModifierFlags = [],
-        enabled: Bool = true,
-        handler: @escaping () -> Void
-    ) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: #selector(run(_:)), keyEquivalent: key)
-        item.keyEquivalentModifierMask = modifiers
-        item.target = self
-        item.tag = handlers.count
-        item.isEnabled = enabled
-        if let symbol {
-            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-        }
-        handlers.append(handler)
-        return item
-    }
-
-    /// Same as above, but takes the key equivalent from a shortcut definition.
-    func item(
-        _ title: String,
-        symbol: String?,
-        shortcut: KeyboardShortcutDefinition,
-        enabled: Bool = true,
-        handler: @escaping () -> Void
-    ) -> NSMenuItem {
-        let chord = shortcut.currentChord
-        var flags: NSEvent.ModifierFlags = []
-        if chord.modifiers.contains(.command) {
-            flags.insert(.command)
-        }
-        if chord.modifiers.contains(.shift) {
-            flags.insert(.shift)
-        }
-        if chord.modifiers.contains(.option) {
-            flags.insert(.option)
-        }
-        if chord.modifiers.contains(.control) {
-            flags.insert(.control)
-        }
-        return item(
-            title,
-            symbol: symbol,
-            key: String(chord.keyEquivalent.character).lowercased(),
-            modifiers: flags,
-            enabled: enabled,
-            handler: handler
-        )
-    }
-
-    @objc func run(_ sender: NSMenuItem) {
-        guard handlers.indices.contains(sender.tag) else { return }
-        handlers[sender.tag]()
-    }
-}
-
-private struct MenuSourceView: NSViewRepresentable {
-    let onViewCreated: (NSView) -> Void
-
-    /// Flipped so `showMenu` can express "just below the button" as a single y value
-    /// that does not depend on whatever SwiftUI's host view happens to use.
-    final class FlippedView: NSView {
-        override var isFlipped: Bool { true }
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = FlippedView()
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
-        DispatchQueue.main.async {
-            onViewCreated(view)
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
 }

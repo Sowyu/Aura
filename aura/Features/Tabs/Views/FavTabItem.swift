@@ -111,32 +111,36 @@ struct FavTabItem: View {
             }
         }
         .onHover { isHovering = $0 }
-        .contextMenu {
-            Button(action: onFavoriteToggle) {
-                Label("Remove from Favorites", systemImage: "star.slash")
+        .auraContextMenu { contextMenuItems }
+    }
+
+    private var contextMenuItems: [AuraMenuItem] {
+        Array {
+            AuraMenuItem.item("Remove from Favorites", icon: "star.slash", action: onFavoriteToggle)
+            AuraMenuItem.item("Duplicate Tab", icon: "doc.on.doc", action: onDuplicate)
+            AuraMenuItem.item("Copy Link", icon: "link") {
+                ClipboardUtils.copyToClipboard(tab.url.absoluteString)
             }
-
-            Button(action: onDuplicate) {
-                Label("Duplicate Tab", systemImage: "doc.on.doc")
-            }
-
-            // Divider()
-
-            //      Menu("Move to Container") {
-            //        ForEach(containers) { container in
-            //            if container.id != tabManager.activeContainer?.id {
-            //            Button(action: { onMoveToContainer(container) }) {
-            //              Label(container.title, systemImage: container.icon)
-            //            }
-            //          }
-            //        }
-            //      }
-
-            Divider()
-
-            Button(role: .destructive, action: onClose) {
-                Label("Close Tab", systemImage: "xmark")
-            }
+            AuraMenuItem.separator
+            SpaceMenuItems.open(
+                url: tab.url,
+                from: tab,
+                title: "Open in Space",
+                spaces: containers
+            )
+            AuraMenuItem.submenu(
+                "Move to Space",
+                icon: "arrow.right.square",
+                items: containers
+                    .filter { $0.id != tab.container.id }
+                    .map { container in
+                        .item(SpaceMenuItems.label(for: container), icon: container.iconSymbol) {
+                            onMoveToContainer(container)
+                        }
+                    }
+            )
+            AuraMenuItem.separator
+            AuraMenuItem.item("Close Tab", icon: "xmark", isDestructive: true, action: onClose)
         }
     }
 

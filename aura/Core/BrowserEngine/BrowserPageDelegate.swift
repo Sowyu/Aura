@@ -30,6 +30,14 @@ protocol BrowserPageDelegate: AnyObject {
         completion: @escaping (String?) -> Void
     )
     func browserPage(_ page: BrowserPage, didStartDownload download: BrowserDownloadTask)
+    /// `location` is in window coordinates. `inspectElement` is nil when WebKit offered no
+    /// inspector item, which is the case while developer extras are off.
+    func browserPage(
+        _ page: BrowserPage,
+        didRequestContextMenu info: BrowserContextMenuInfo,
+        at location: CGPoint,
+        inspectElement: (() -> Void)?
+    )
 }
 
 extension BrowserPageDelegate {
@@ -81,4 +89,11 @@ extension BrowserPageDelegate {
     }
 
     func browserPage(_ page: BrowserPage, didStartDownload download: BrowserDownloadTask) {}
+
+    func browserPage(
+        _ page: BrowserPage,
+        didRequestContextMenu info: BrowserContextMenuInfo,
+        at location: CGPoint,
+        inspectElement: (() -> Void)?
+    ) {}
 }

@@ -675,7 +675,7 @@ class TabManager: ObservableObject {
         activateTab(targetTab)
     }
 
-    private func fetchContainers() -> [TabContainer] {
+    func fetchContainers() -> [TabContainer] {
         do {
             let descriptor = FetchDescriptor<TabContainer>(sortBy: [SortDescriptor(\.lastAccessedAt, order: .reverse)])
             return try modelContext.fetch(descriptor)

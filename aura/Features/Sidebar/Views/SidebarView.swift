@@ -80,9 +80,9 @@ struct SidebarView: View {
             .simultaneousGesture(downloadsNavigationGesture(width: width))
         }
         .auraGlassChrome()
-        // Tab rows carry their own menu, and the innermost one wins, so this only
-        // fires on empty sidebar background.
-        .contextMenu { sidebarContextMenu }
+        // Behind the content, so a tab row's own catcher takes the click first and this
+        // only fires on empty sidebar background.
+        .auraBackgroundContextMenu { sidebarContextMenu }
         .enableInjection()
     }
 
@@ -94,63 +94,76 @@ struct SidebarView: View {
             : "Add Selected Tab to Favorites"
     }
 
-    @ViewBuilder
-    private var sidebarContextMenu: some View {
-        Menu("Compact Mode") {
-            Toggle("Enable compact mode", isOn: Binding(
-                get: { sidebarManager.isCompactEnabled },
-                set: { sidebarManager.setCompactEnabled($0, toolbar: toolbarManager) }
-            ))
-
-            Divider()
-
-            ForEach(CompactModeHides.allCases, id: \.self) { option in
-                Toggle(option.menuTitle, isOn: Binding(
-                    get: { sidebarManager.compactHides == option },
-                    set: { _ in sidebarManager.setCompactHides(option, toolbar: toolbarManager) }
-                ))
+    private var sidebarContextMenu: [AuraMenuItem] {
+        Array {
+            AuraMenuItem.submenu("Compact Mode", icon: "sidebar.left", items: compactModeItems)
+            AuraMenuItem.separator
+            AuraMenuItem.item("New Tab", icon: "plus", shortcut: KeyboardShortcuts.Tabs.new) {
+                appState.showLauncher = true
+            }
+            AuraMenuItem.item("New Folder", icon: "folder.badge.plus") {
+                NotificationCenter.default.post(name: .newTabFolder, object: window)
+            }
+            AuraMenuItem.separator
+            AuraMenuItem.item(
+                "Reload Selected Tab",
+                icon: "arrow.clockwise",
+                shortcut: KeyboardShortcuts.Navigation.reload,
+                isDisabled: tabManager.activeTab == nil
+            ) {
+                tabManager.activeTab?.reload()
+            }
+            AuraMenuItem.item(
+                favoritesItemTitle,
+                icon: tabManager.activeTab?.type == .fav ? "star.slash" : "star",
+                isDisabled: tabManager.activeTab == nil
+            ) {
+                if let tab = tabManager.activeTab { tabManager.toggleFavTab(tab) }
+            }
+            AuraMenuItem.item(
+                "Reopen Closed Tab",
+                icon: "arrow.uturn.backward",
+                shortcut: KeyboardShortcuts.Tabs.restore
+            ) {
+                NotificationCenter.default.post(name: .restoreLastTab, object: window)
+            }
+            AuraMenuItem.separator
+            AuraMenuItem.item(
+                "Tabs on the Right",
+                icon: "sidebar.right",
+                state: sidebarManager.sidebarPosition == .secondary ? .checked : .none
+            ) {
+                sidebarManager.toggleSidebarPosition()
+            }
+            AuraMenuItem.item("Edit Theme…", icon: "paintpalette") {
+                NotificationCenter.default.post(
+                    name: .openSettingsTab,
+                    object: window,
+                    userInfo: ["tab": SettingsTab.general.rawValue]
+                )
             }
         }
+    }
 
-        Divider()
-
-        Button("New Tab") { appState.showLauncher = true }
-            .keyboardShortcut(KeyboardShortcuts.Tabs.new.keyboardShortcut)
-
-        Button("New Folder") {
-            NotificationCenter.default.post(name: .newTabFolder, object: window)
+    private var compactModeItems: [AuraMenuItem] {
+        var items: [AuraMenuItem] = [
+            .item(
+                "Enable compact mode",
+                state: sidebarManager.isCompactEnabled ? .checked : .none
+            ) {
+                sidebarManager.setCompactEnabled(!sidebarManager.isCompactEnabled, toolbar: toolbarManager)
+            },
+            .separator
+        ]
+        items += CompactModeHides.allCases.map { option in
+            .item(
+                option.menuTitle,
+                state: sidebarManager.compactHides == option ? .radioOn : .none
+            ) {
+                sidebarManager.setCompactHides(option, toolbar: toolbarManager)
+            }
         }
-
-        Divider()
-
-        Button("Reload Selected Tab") { tabManager.activeTab?.reload() }
-            .keyboardShortcut(KeyboardShortcuts.Navigation.reload.keyboardShortcut)
-            .disabled(tabManager.activeTab == nil)
-
-        Button(favoritesItemTitle) {
-            if let tab = tabManager.activeTab { tabManager.toggleFavTab(tab) }
-        }
-        .disabled(tabManager.activeTab == nil)
-
-        Button("Reopen Closed Tab") {
-            NotificationCenter.default.post(name: .restoreLastTab, object: window)
-        }
-        .keyboardShortcut(KeyboardShortcuts.Tabs.restore.keyboardShortcut)
-
-        Divider()
-
-        Toggle("Tabs on the Right", isOn: Binding(
-            get: { sidebarManager.sidebarPosition == .secondary },
-            set: { _ in sidebarManager.toggleSidebarPosition() }
-        ))
-
-        Button("Edit Theme…") {
-            NotificationCenter.default.post(
-                name: .openSettingsTab,
-                object: window,
-                userInfo: ["tab": SettingsTab.general.rawValue]
-            )
-        }
+        return items
     }
 
     /// Computes transition progress (0 = spaces visible, 1 = downloads visible)

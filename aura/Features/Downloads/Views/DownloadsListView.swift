@@ -53,8 +53,11 @@ struct DownloadsListView: View {
                     LazyVStack(spacing: 1) {
                         ForEach(downloadManager.recentDownloads) { download in
                             DownloadListItem(download: download)
-                                .contextMenu {
-                                    DownloadContextMenu(download: download)
+                                .auraContextMenu {
+                                    DownloadContextMenu.items(
+                                        for: download,
+                                        manager: downloadManager
+                                    )
                                 }
                         }
                     }
@@ -216,35 +219,29 @@ struct DownloadListItem: View {
     }
 }
 
-struct DownloadContextMenu: View {
-    let download: Download
-    @EnvironmentObject var downloadManager: DownloadManager
-
-    var body: some View {
-        Group {
+/// Rows for a download in the compact downloads popover.
+@MainActor
+enum DownloadContextMenu {
+    static func items(for download: Download, manager: DownloadManager) -> [AuraMenuItem] {
+        Array {
             if download.status == .completed {
-                Button("Show in Finder") {
-                    downloadManager.openDownloadInFinder(download)
+                AuraMenuItem.item("Show in Finder", icon: "folder") {
+                    manager.openDownloadInFinder(download)
                 }
-
-                Button("Copy Path") {
+                AuraMenuItem.item("Copy Path", icon: "doc.on.doc") {
                     if let path = download.destinationURL?.path {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(path, forType: .string)
+                        ClipboardUtils.copyToClipboard(path)
                     }
                 }
             }
-
             if download.status == .downloading {
-                Button("Cancel Download") {
-                    downloadManager.cancelDownload(download)
+                AuraMenuItem.item("Cancel Download", icon: "xmark.circle", isDestructive: true) {
+                    manager.cancelDownload(download)
                 }
             }
-
-            Divider()
-
-            Button("Remove from List") {
-                downloadManager.deleteDownload(download)
+            AuraMenuItem.separator
+            AuraMenuItem.item("Remove from List", icon: "minus.circle") {
+                manager.deleteDownload(download)
             }
         }
     }

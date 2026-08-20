@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -6,6 +7,7 @@ struct DownloadHistoryRow: View {
     @EnvironmentObject var downloadManager: DownloadManager
     @Environment(\.theme) private var theme
     @State private var isHovered = false
+    @State private var menuAnchor: NSView?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -77,9 +79,7 @@ struct DownloadHistoryRow: View {
                 downloadManager.openFile(download)
             }
         }
-        .contextMenu {
-            downloadMenuItems
-        }
+        .auraContextMenu { downloadMenuItems }
     }
 
     // MARK: - Subviews
@@ -109,79 +109,57 @@ struct DownloadHistoryRow: View {
     }
 
     private var moreMenuButton: some View {
-        Menu {
-            downloadMenuItems
+        Button {
+            menuAnchor?.presentAuraMenu(downloadMenuItems)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
                 .frame(width: 20, height: 20)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .background(AuraMenuAnchorView { menuAnchor = $0 })
         .fixedSize()
     }
 
-    @ViewBuilder
-    private var downloadMenuItems: some View {
-        if download.status == .completed {
-            Button {
-                downloadManager.openFile(download)
-            } label: {
-                Label("Open", systemImage: "arrow.up.doc")
-            }
-
-            Button {
-                downloadManager.openDownloadInFinder(download)
-            } label: {
-                Label("Show in Finder", systemImage: "folder")
-            }
-
-            Button {
-                if let path = download.destinationURL?.path {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(path, forType: .string)
+    private var downloadMenuItems: [AuraMenuItem] {
+        Array {
+            if download.status == .completed {
+                AuraMenuItem.item("Open", icon: "arrow.up.doc") {
+                    downloadManager.openFile(download)
                 }
-            } label: {
-                Label("Copy Path", systemImage: "doc.on.doc")
-            }
-
-            Divider()
-
-            Button(role: .destructive) {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    downloadManager.moveToTrash(download)
+                AuraMenuItem.item("Show in Finder", icon: "folder") {
+                    downloadManager.openDownloadInFinder(download)
                 }
-            } label: {
-                Label("Move to Trash", systemImage: "trash")
-            }
-        }
-
-        if download.status == .downloading {
-            Button(role: .destructive) {
-                downloadManager.cancelDownload(download)
-            } label: {
-                Label("Cancel Download", systemImage: "xmark.circle")
-            }
-        }
-
-        if download.status == .failed || download.status == .cancelled {
-            Button {
-                downloadManager.retryDownload(download)
-            } label: {
-                Label("Retry Download", systemImage: "arrow.clockwise")
-            }
-        }
-
-        if download.status != .downloading {
-            Divider()
-
-            Button {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    downloadManager.deleteDownload(download)
+                AuraMenuItem.item("Copy Path", icon: "doc.on.doc") {
+                    if let path = download.destinationURL?.path {
+                        ClipboardUtils.copyToClipboard(path)
+                    }
                 }
-            } label: {
-                Label("Remove from Aura", systemImage: "minus.circle")
+                AuraMenuItem.separator
+                AuraMenuItem.item("Move to Trash", icon: "trash", isDestructive: true) {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        downloadManager.moveToTrash(download)
+                    }
+                }
+            }
+            if download.status == .downloading {
+                AuraMenuItem.item("Cancel Download", icon: "xmark.circle", isDestructive: true) {
+                    downloadManager.cancelDownload(download)
+                }
+            }
+            if download.status == .failed || download.status == .cancelled {
+                AuraMenuItem.item("Retry Download", icon: "arrow.clockwise") {
+                    downloadManager.retryDownload(download)
+                }
+            }
+            if download.status != .downloading {
+                AuraMenuItem.separator
+                AuraMenuItem.item("Remove from Aura", icon: "minus.circle") {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        downloadManager.deleteDownload(download)
+                    }
+                }
             }
         }
     }

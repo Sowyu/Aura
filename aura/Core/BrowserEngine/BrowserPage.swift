@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 @preconcurrency import WebKit
 
 private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
@@ -17,7 +18,7 @@ private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
 final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     weak var delegate: BrowserPageDelegate?
 
-    private let webView: WKWebView
+    private let webView: AuraWebView
     private let messageNames: [String]
     private let spaceID: UUID
     /// The scripts every page gets. Kept because advanced blocking has to replace the
@@ -32,6 +33,11 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     private var isReadyForNavigation = false
     private var pendingLoadRequest: URLRequest?
     private var pendingReload = false
+    /// Last report from the page-side `contextmenu` listener. WebKit fires the DOM event
+    /// before AppKit builds its menu, so by `willOpenMenu` this already describes the
+    /// element under the pointer.
+    /// Written only by `cacheContextMenuInfo`, which lives in BrowserPage+Actions.swift.
+    var lastContextMenuInfo = BrowserContextMenuInfo()
 
     init(
         profile: BrowserEngineProfile,
@@ -74,7 +80,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         messageNames = configuration.scriptMessageNames
         spaceID = profile.identifier
         baseUserScripts = configuration.userScripts
-        webView = WKWebView(frame: .zero, configuration: webConfiguration)
+        webView = AuraWebView(frame: .zero, configuration: webConfiguration)
         self.delegate = delegate
 
         super.init()
@@ -95,6 +101,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        installContextMenuBridge()
         webView.allowsMagnification = true
         webView.allowsBackForwardNavigationGestures = configuration.allowsBackForwardNavigationGestures
         webView.wantsLayer = true
@@ -119,6 +126,12 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     }
 
     var contentView: NSView {
+        webView
+    }
+
+    /// The concrete web view, so the actions split into BrowserPage+Actions.swift can
+    /// reach it without opening `webView` up to the rest of the app.
+    var auraWebView: AuraWebView {
         webView
     }
 
@@ -210,6 +223,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         webView.stopLoading()
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
+        webView.onContextMenu = nil
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
         for messageName in messageNames {
@@ -274,6 +288,11 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
             return
         }
 
+        if message.name == "contextMenu" {
+            cacheContextMenuInfo(message.body)
+            return
+        }
+
         delegate?.browserPage(
             self,
             didReceiveScriptMessage: BrowserScriptMessage(name: message.name, body: message.body)
@@ -292,7 +311,11 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
 
         let action = BrowserNavigationAction(
             request: navigationAction.request,
-            modifierFlags: navigationAction.modifierFlags
+            modifierFlags: navigationAction.modifierFlags,
+            isMainFrame: navigationAction.targetFrame?.isMainFrame ?? true,
+            isUserInitiated: navigationAction.navigationType == .linkActivated
+                || navigationAction.navigationType == .formSubmitted
+                || navigationAction.navigationType == .other
         )
 
         switch delegate?.browserPage(self, decidePolicyFor: action) ?? .allow {
