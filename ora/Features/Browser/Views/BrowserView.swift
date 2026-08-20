@@ -67,6 +67,7 @@ struct BrowserView: View {
             VStack(spacing: 0) {
                 if !toolbarManager.isToolbarHidden {
                     TopToolbar()
+                        .background(WindowDragHandle())
                         .zIndex(1)
                 }
                 BrowserSplitView()

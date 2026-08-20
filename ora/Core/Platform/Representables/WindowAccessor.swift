@@ -57,6 +57,7 @@ struct WindowAccessor: NSViewRepresentable {
         DispatchQueue.main.async {
             guard let window = view.window else { return }
             isFullscreen = window.styleMask.contains(.fullScreen)
+            window.disableImplicitDragging()
 
             let coordinator = context.coordinator
 

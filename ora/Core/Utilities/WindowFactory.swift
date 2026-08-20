@@ -11,6 +11,7 @@ enum WindowFactory {
         )
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.disableImplicitDragging()
         window.isReleasedWhenClosed = false
         window.identifier = NSUserInterfaceItemIdentifier("normal")
 
