@@ -215,18 +215,14 @@ actor AdBlockService {
 
             let coverage: FilterListCoverage
             if artifactStore.hasCompiledArtifacts(for: record.id, revision: revision),
+               artifactStore.hasAdvancedArtifacts(for: record.id, revision: revision),
                let cachedCoverage = artifactStore.coverage(for: record.id, revision: revision)
             {
                 coverage = cachedCoverage
             } else {
                 let compiled = try compileService.compile(record: fetchResult.record, rawText: rawText)
                 try artifactStore.storeRawListText(rawText, for: record.id)
-                try artifactStore.storeCompiledArtifacts(
-                    jsonShards: compiled.jsonShards,
-                    coverage: compiled.coverage,
-                    for: record.id,
-                    revision: compiled.revision
-                )
+                try artifactStore.storeCompiledArtifacts(compiled, for: record.id)
                 coverage = compiled.coverage
             }
 

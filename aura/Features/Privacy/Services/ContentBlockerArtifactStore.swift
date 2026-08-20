@@ -11,6 +11,8 @@ final class ContentBlockerArtifactStore {
     private let fileManager: FileManager
     private let baseURL: URL
     private let identifierPrefix = "com.orabrowser.adblock"
+    private static let advancedRulesFileName = "advanced.txt"
+    private static let removeParamFileName = "removeparam.txt"
 
     init(fileManager: FileManager = .default, baseURL: URL? = nil) {
         self.fileManager = fileManager
@@ -41,17 +43,13 @@ final class ContentBlockerArtifactStore {
         try rawText.write(to: url, atomically: true, encoding: .utf8)
     }
 
-    func storeCompiledArtifacts(
-        jsonShards: [String],
-        coverage: FilterListCoverage,
-        for listID: String,
-        revision: String
-    ) throws {
+    func storeCompiledArtifacts(_ artifacts: CompiledFilterArtifacts, for listID: String) throws {
+        let revision = artifacts.revision
         let revisionURL = compiledRevisionURL(for: listID, revision: revision)
         try? fileManager.removeItem(at: revisionURL)
         try fileManager.createDirectory(at: revisionURL, withIntermediateDirectories: true, attributes: nil)
 
-        for (index, json) in jsonShards.enumerated() {
+        for (index, json) in artifacts.jsonShards.enumerated() {
             try json.write(
                 to: revisionURL.appendingPathComponent("shard-\(index).json"),
                 atomically: true,
@@ -59,8 +57,19 @@ final class ContentBlockerArtifactStore {
             )
         }
 
+        try artifacts.advancedRulesText.write(
+            to: revisionURL.appendingPathComponent(Self.advancedRulesFileName),
+            atomically: true,
+            encoding: .utf8
+        )
+        try artifacts.removeParamRules.joined(separator: "\n").write(
+            to: revisionURL.appendingPathComponent(Self.removeParamFileName),
+            atomically: true,
+            encoding: .utf8
+        )
+
         let manifestURL = revisionURL.appendingPathComponent("manifest.json")
-        let manifestData = try JSONEncoder().encode(RevisionManifest(coverage: coverage))
+        let manifestData = try JSONEncoder().encode(RevisionManifest(coverage: artifacts.coverage))
         try manifestData.write(to: manifestURL, options: .atomic)
 
         let listCompiledRoot = compiledListURL(for: listID)
@@ -82,6 +91,37 @@ final class ContentBlockerArtifactStore {
         let manifestURL = compiledRevisionURL(for: listID, revision: revision).appendingPathComponent("manifest.json")
         guard let data = try? Data(contentsOf: manifestURL) else { return nil }
         return try? JSONDecoder().decode(RevisionManifest.self, from: data).coverage
+    }
+
+    /// Rules WebKit cannot express, kept next to the JSON shards for the same revision
+    /// so the advanced engine and the content blocker can never drift apart.
+    func advancedRulesText(for listID: String, revision: String) -> String? {
+        try? String(
+            contentsOf: compiledRevisionURL(for: listID, revision: revision)
+                .appendingPathComponent(Self.advancedRulesFileName),
+            encoding: .utf8
+        )
+    }
+
+    func removeParamRules(for listID: String, revision: String) -> [String] {
+        guard let text = try? String(
+            contentsOf: compiledRevisionURL(for: listID, revision: revision)
+                .appendingPathComponent(Self.removeParamFileName),
+            encoding: .utf8
+        ) else {
+            return []
+        }
+        return text.components(separatedBy: "\n").filter { !$0.isEmpty }
+    }
+
+    /// True when this revision was compiled by a build that also wrote advanced rules.
+    /// Revisions from an older build have JSON shards but no advanced text, so they have
+    /// to be recompiled rather than reused.
+    func hasAdvancedArtifacts(for listID: String, revision: String) -> Bool {
+        fileManager.fileExists(
+            atPath: compiledRevisionURL(for: listID, revision: revision)
+                .appendingPathComponent(Self.advancedRulesFileName).path
+        )
     }
 
     func ruleListIdentifiers(for listID: String, revision: String) -> [String] {

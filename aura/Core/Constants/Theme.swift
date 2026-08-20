@@ -4,6 +4,9 @@ import SwiftUI
 // swiftlint:disable identifier_name
 struct Theme: Equatable {
     let colorScheme: ColorScheme
+    /// Set only on the glass chrome, where readable text follows the tint's luminance
+    /// rather than the system appearance.
+    var forcedForeground: Color?
 
     var primary: Color {
         Color(hex: "#f3e5d6")
@@ -22,7 +25,13 @@ struct Theme: Equatable {
     }
 
     var foreground: Color {
-        colorScheme == .dark ? .white : .black
+        forcedForeground ?? (colorScheme == .dark ? .white : .black)
+    }
+
+    func withForeground(_ color: Color) -> Theme {
+        var copy = self
+        copy.forcedForeground = color
+        return copy
     }
 
     var subtleWindowBackgroundColor: Color {

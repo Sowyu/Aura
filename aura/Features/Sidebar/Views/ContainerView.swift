@@ -94,6 +94,7 @@ struct ContainerView: View {
                     )
                 }
                 .animation(.easeOut(duration: 0.12), value: draggedItem == nil)
+                .adaptiveScrollElasticity()
             }
         }
         .modifier(OraWindowDragGesture(isDragging: $isDragging))

@@ -3,6 +3,15 @@ import CoreImage
 import FaviconFinder
 import SwiftUI
 
+/// One resolved favicon: the 64 px render for display, plus the bytes it came from so
+/// the on-disk copy keeps the site's full resolution.
+struct FaviconPayload {
+    let image: NSImage
+    let data: Data
+    let sourceURL: URL
+    let pixels: CGFloat
+}
+
 final class FaviconService: ObservableObject {
     static let shared = FaviconService()
     private var cache: [String: NSImage] = [:]
@@ -10,6 +19,13 @@ final class FaviconService: ObservableObject {
     private var sourceURLCache: [String: URL] = [:]
     private var isFetching: Set<String> = []
     private var pendingCompletions: [String: [(NSImage?) -> Void]] = [:]
+    /// Original downloaded bytes, kept so a second tab on the same domain writes the real
+    /// icon file rather than a TIFF snapshot of the already-downscaled image.
+    private let originalBytes = NSCache<NSString, NSData>()
+    /// Decoded 64 px icons keyed by on-disk path, shared by every row showing that file.
+    private let fileImages = NSCache<NSString, NSImage>()
+    /// Never download more than this many candidates before settling for the best so far.
+    private static let maxCandidateDownloads = 3
     // Negative cache: without it, every SwiftUI render of a domain with no
     // resolvable favicon kicks off another full network fetch.
     private var failedFetches: [String: Date] = [:]
@@ -118,16 +134,18 @@ final class FaviconService: ObservableObject {
                 self.completeFetch(
                     for: domain,
                     favicon: payload?.image,
-                    sourceURL: payload?.sourceURL
+                    sourceURL: payload?.sourceURL,
+                    data: payload?.data
                 )
             }
         }
     }
 
     @MainActor
-    private func completeFetch(for domain: String, favicon: NSImage?, sourceURL: URL?) {
+    private func completeFetch(for domain: String, favicon: NSImage?, sourceURL: URL?, data: Data? = nil) {
         if let favicon {
             cache[domain] = favicon
+            if let data { originalBytes.setObject(data as NSData, forKey: domain as NSString) }
             colorCache[domain] = Color(favicon.averageColor())
             if let sourceURL {
                 sourceURLCache[domain] = sourceURL
@@ -145,19 +163,50 @@ final class FaviconService: ObservableObject {
         }
     }
 
-    private func fetchFaviconPayload(for domain: String) async -> (image: NSImage, data: Data, sourceURL: URL)? {
+    /// Loads a stored favicon file and decodes it once, at 64 px, for every row that
+    /// shows it. Safe to call off the main thread.
+    func icon(atFile fileURL: URL) -> NSImage? {
+        let key = fileURL.path as NSString
+        if let cached = fileImages.object(forKey: key) { return cached }
+        guard let data = try? Data(contentsOf: fileURL),
+              let image = FaviconDecoder.decode(data)
+        else { return nil }
+        fileImages.setObject(image, forKey: key)
+        return image
+    }
+
+    /// Walks the ranked candidates, stopping at the first one that is genuinely ≥ 32 px
+    /// and otherwise keeping the largest that did download.
+    private func fetchFaviconPayload(for domain: String) async -> FaviconPayload? {
         guard let siteURL = canonicalURL(for: domain) else { return nil }
 
-        do {
-            let favicon = try await FaviconFinder(url: siteURL)
-                .fetchFaviconURLs()
-                .download()
-                .largest()
-            guard let faviconImage = favicon.image else { return nil }
-            return (faviconImage.image, faviconImage.data, favicon.url.source)
-        } catch {
-            return nil
+        let declared = (try? await FaviconFinder(url: siteURL).fetchFaviconURLs()) ?? []
+        var candidates = FaviconCandidates.ranked(declared)
+        // Every declared icon was a share card, so the root .ico is the only hope left.
+        if candidates.isEmpty, let rootICO = URL(string: "https://\(domain)/favicon.ico") {
+            candidates = [FaviconURL(source: rootICO, format: .ico, sourceType: .ico)]
         }
+
+        var best: FaviconPayload?
+        for candidate in candidates.prefix(Self.maxCandidateDownloads) {
+            guard let favicon = try? await candidate.download(),
+                  let downloaded = favicon.image
+            else { continue }
+
+            let pixels = FaviconDecoder.nativeDimension(of: downloaded.image)
+            guard let decoded = FaviconDecoder.decode(downloaded.data) else { continue }
+            if pixels > (best?.pixels ?? 0) {
+                best = FaviconPayload(
+                    image: decoded,
+                    data: downloaded.data,
+                    sourceURL: favicon.url.source,
+                    pixels: pixels
+                )
+            }
+            if pixels >= FaviconCandidates.minimumPixels { break }
+        }
+
+        return best
     }
 
     func downloadAndSaveFavicon(
@@ -167,11 +216,11 @@ final class FaviconService: ObservableObject {
         completion: @escaping (URL?, Bool) -> Void
     ) {
         let normalizedDomain = normalizeDomain(domain)
-        if let cachedFavicon = cache[normalizedDomain],
-           let data = cachedFavicon.tiffRepresentation
-        {
+        // The original bytes, never a re-encode of the downscaled render: writing
+        // `tiffRepresentation` here is what used to bake 16 px icons onto disk.
+        if let data = originalBytes.object(forKey: normalizedDomain as NSString) {
             do {
-                try data.write(to: saveURL, options: .atomic)
+                try (data as Data).write(to: saveURL, options: .atomic)
                 completion(faviconURL(for: normalizedDomain), true)
             } catch {
                 completion(nil, false)
@@ -192,7 +241,12 @@ final class FaviconService: ObservableObject {
                     return
                 }
 
-                self.completeFetch(for: normalizedDomain, favicon: payload.image, sourceURL: payload.sourceURL)
+                self.completeFetch(
+                    for: normalizedDomain,
+                    favicon: payload.image,
+                    sourceURL: payload.sourceURL,
+                    data: payload.data
+                )
 
                 do {
                     try payload.data.write(to: saveURL, options: .atomic)

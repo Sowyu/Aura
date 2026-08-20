@@ -37,6 +37,8 @@ struct GeneralSettingsView: View {
 
             AppearanceSelector(selection: $appearanceManager.appearance)
 
+            GlassSettingsCard()
+
             SettingsCard(header: "Tab Management") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {

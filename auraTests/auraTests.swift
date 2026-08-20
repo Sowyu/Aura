@@ -382,16 +382,25 @@ struct OraTests {
         }
 
         try store.storeCompiledArtifacts(
-            jsonShards: ["[{\"trigger\":{\"url-filter\":\".*\"},\"action\":{\"type\":\"block\"}}]"],
-            coverage: coverage,
-            for: "custom.list",
-            revision: "revision123"
+            CompiledFilterArtifacts(
+                revision: "revision123",
+                coverage: coverage,
+                jsonShards: ["[{\"trigger\":{\"url-filter\":\".*\"},\"action\":{\"type\":\"block\"}}]"],
+                advancedRulesText: "example.com#?#div:has(> .ad)",
+                removeParamRules: ["$removeparam=utm_source"]
+            ),
+            for: "custom.list"
         )
 
         let identifiers = store.ruleListIdentifiers(for: "custom.list", revision: "revision123")
 
         #expect(identifiers.count == 1)
         #expect(store.encodedRuleList(for: identifiers[0])?.contains("\"type\":\"block\"") == true)
+        // The advanced rules have to live under the same revision as the JSON shards,
+        // otherwise the two blocking layers can drift apart.
+        #expect(store.hasAdvancedArtifacts(for: "custom.list", revision: "revision123"))
+        #expect(store.advancedRulesText(for: "custom.list", revision: "revision123")?.contains(":has(") == true)
+        #expect(store.removeParamRules(for: "custom.list", revision: "revision123").count == 1)
     }
 
     @Test func failedAdBlockRefreshPreservesLastKnownGoodRevision() {

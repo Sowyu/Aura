@@ -50,6 +50,17 @@ struct FilterListCoverage: Codable, Equatable, Hashable {
     var skippedRuleCount: Int
     var safariRuleCount: Int
     var shardCount: Int
+    /// Rules WebKit cannot express that the advanced layer applies instead (scriptlets,
+    /// procedural selectors, CSS injection, script rules). Optional so coverage written
+    /// by an older build still decodes.
+    var advancedRuleCount: Int?
+    /// `$removeparam` rules Aura strips from document URLs itself.
+    var removeParamRuleCount: Int?
+
+    /// Rules neither WebKit nor the advanced layer can apply.
+    var unsupportedRuleCount: Int {
+        max(totalRuleCount - convertedRuleCount - (advancedRuleCount ?? 0) - (removeParamRuleCount ?? 0), 0)
+    }
 }
 
 struct FilterListRecord: Codable, Equatable, Hashable, Identifiable {

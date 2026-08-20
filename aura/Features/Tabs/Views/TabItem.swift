@@ -11,14 +11,15 @@ struct LocalFavIcon: View {
         if let image {
             Image(nsImage: image)
                 .resizable()
-                .scaledToFit()
+                .interpolation(.high)
+                .antialiased(true)
+                .aspectRatio(contentMode: .fit)
                 .frame(width: 16, height: 16)
                 .cornerRadius(4)
-                .grayscale(1.0)
         } else {
             Image(systemName: "globe")
                 .resizable()
-                .scaledToFit()
+                .aspectRatio(contentMode: .fit)
                 .frame(width: 16, height: 16)
                 .foregroundColor(textColor)
                 .onAppear(perform: loadFavicon)
@@ -29,12 +30,12 @@ struct LocalFavIcon: View {
         guard let localURL = faviconLocalFile,
               FileManager.default.fileExists(atPath: localURL.path) else { return }
 
-        // Loading may block briefly, so you can even do it async if needed
+        // Reading and decoding both block; the service memoises the 64 px result so only
+        // the first row to ask for a given file pays for it.
         DispatchQueue.global(qos: .utility).async {
-            if let loadedImage = NSImage(contentsOfFile: localURL.path) {
-                DispatchQueue.main.async {
-                    self.image = loadedImage
-                }
+            guard let loadedImage = FaviconService.shared.icon(atFile: localURL) else { return }
+            DispatchQueue.main.async {
+                self.image = loadedImage
             }
         }
     }
@@ -55,7 +56,9 @@ struct FavIcon: View {
                 ) { image in
                     image
                         .resizable()
-                        .scaledToFit()
+                        .interpolation(.high)
+                        .antialiased(true)
+                        .aspectRatio(contentMode: .fit)
                         .frame(width: 16, height: 16)
                 } placeholder: {
                     LocalFavIcon(

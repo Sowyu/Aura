@@ -118,13 +118,17 @@ class Tab: ObservableObject, Identifiable {
 
         let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
         guard let faviconURL = FaviconService.shared.faviconURL(for: domain) else { return }
-        // In-page navigations re-report the same URL constantly; re-running the download
-        // rewrites the same PNG to disk every time. A new domain still refreshes.
-        guard self.favicon != faviconURL else { return }
-        self.favicon = faviconURL
 
-        let fileName = "\(self.id.uuidString).png"
+        // Extension-free: the bytes on disk are whatever the site served, .ico or .svg
+        // as often as .png, and `NSImage(data:)` sniffs the format anyway.
+        let fileName = "\(self.id.uuidString).favicon"
         let saveURL = FileManager.default.faviconDirectory.appendingPathComponent(fileName)
+
+        // In-page navigations re-report the same URL constantly; re-running the download
+        // rewrites the same bytes every time. A new domain, or a cache-version bump that
+        // left this tab without a file, still refreshes.
+        guard self.favicon != faviconURL || !FileManager.default.fileExists(atPath: saveURL.path) else { return }
+        self.favicon = faviconURL
 
         FaviconService.shared
             .downloadAndSaveFavicon(for: domain, faviconURL: faviconURL, to: saveURL) {
@@ -421,10 +425,18 @@ class Tab: ObservableObject, Identifiable {
 }
 
 extension FileManager {
+    /// Bumped to v2 when favicons started being stored as their original bytes. The old
+    /// folder holds 16 px TIFFs written under a `.png` name, so it is dropped outright
+    /// and every tab refetches at full resolution.
     var faviconDirectory: URL {
-        let dir = urls(for: .cachesDirectory, in: .userDomainMask).first!
+        let root = urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Favicons")
+        let dir = root.appendingPathComponent("v2")
         if !fileExists(atPath: dir.path) {
+            let legacy = (try? contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+            for file in legacy where file.lastPathComponent != "v2" {
+                try? removeItem(at: file)
+            }
             try? createDirectory(at: dir, withIntermediateDirectories: true)
         }
         return dir

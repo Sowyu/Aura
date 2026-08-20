@@ -29,7 +29,9 @@ struct FavTabItem: View {
                 ) { image in
                     image
                         .resizable()
-                        .scaledToFit()
+                        .interpolation(.high)
+                        .antialiased(true)
+                        .aspectRatio(contentMode: .fit)
                         .frame(width: 20, height: 20)
                 } placeholder: {
                     LocalFavIcon(

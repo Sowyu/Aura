@@ -19,6 +19,9 @@ struct LauncherView: View {
     @State private var mouseMonitor: Any?
 
     var clearOverlay: Bool? = false
+    /// Pane to centre on, in this view's own coordinate space. `nil` means the launcher
+    /// already fills the content pane, so its own bounds are the pane.
+    var contentPane: CGRect?
 
     private func onTabPress() {
         guard !input.isEmpty else { return }
@@ -65,79 +68,25 @@ struct LauncherView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.black.opacity(clearOverlay! ? 0 : 0.3)
-                .ignoresSafeArea()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.easeOut(duration: 0.1), value: isVisible)
-                .onTapGesture {
-                    if tabManager.activeTab != nil {
-                        isVisible = false
-                        DispatchQueue.main.async {
-                            appState.showLauncher = false
+        GeometryReader { geo in
+            let pane = contentPane ?? CGRect(origin: .zero, size: geo.size)
+            ZStack(alignment: .top) {
+                Color.black.opacity(clearOverlay == true ? 0 : 0.3)
+                    .ignoresSafeArea()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .animation(.easeOut(duration: 0.1), value: isVisible)
+                    .onTapGesture {
+                        if tabManager.activeTab != nil {
+                            isVisible = false
+                            DispatchQueue.main.async {
+                                appState.showLauncher = false
+                            }
                         }
                     }
-                }
 
-            LauncherMain(
-                text: $input,
-                match: $match,
-                isFocused: $isTextFieldFocused,
-                onTabPress: onTabPress,
-                onSubmit: onSubmit,
-                viewModel: viewModel
-            )
-            .gradientAnimatingBorder(
-                color: match?.color ?? .clear,
-                trigger: match != nil
-            )
-            .padding(.horizontal, 20)
-            .offset(y: 250)
-            .scaleEffect(isVisible ? 1.0 : 0.9)
-            .opacity(isVisible ? 1.0 : 0.0)
-            .blur(radius: isVisible ? 0 : 2)
-            .animation(.easeOut(duration: 0.1), value: isVisible)
-            .onAppear {
-                isVisible = true
-                isTextFieldFocused = true
-                if !appState.launcherSearchText.isEmpty {
-                    input = appState.launcherSearchText
-                    appState.launcherSearchText = ""
-                }
-                viewModel.searchEngineService.setTheme(theme)
-                viewModel.configure(
-                    tabManager: tabManager,
-                    historyManager: historyManager,
-                    downloadManager: downloadManager,
-                    appState: appState,
-                    privacyMode: privacyMode,
-                    onSubmit: onSubmit,
-                    onDismiss: { [weak appState] in
-                        appState?.showLauncher = false
-                    }
-                )
-                mouseHasMoved = false
-                mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { event in
-                    mouseHasMoved = true
-                    if let monitor = mouseMonitor {
-                        NSEvent.removeMonitor(monitor)
-                        mouseMonitor = nil
-                    }
-                    return event
-                }
-            }
-            .onDisappear {
-                if let monitor = mouseMonitor {
-                    NSEvent.removeMonitor(monitor)
-                    mouseMonitor = nil
-                }
-                viewModel.reset()
-                input = ""
-                match = nil
-                isTextFieldFocused = false
-            }
-            .onChange(of: appState.showLauncher) { _, newValue in
-                isVisible = newValue
+                panel
+                    .frame(width: pane.width)
+                    .position(LauncherPlacement.position(in: pane))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -149,6 +98,67 @@ struct LauncherView: View {
                     appState.showLauncher = false
                 }
             }
+        }
+    }
+
+    private var panel: some View {
+        LauncherMain(
+            text: $input,
+            match: $match,
+            isFocused: $isTextFieldFocused,
+            onTabPress: onTabPress,
+            onSubmit: onSubmit,
+            viewModel: viewModel
+        )
+        .gradientAnimatingBorder(
+            color: match?.color ?? .clear,
+            trigger: match != nil
+        )
+        .padding(.horizontal, 20)
+        .opacity(isVisible ? 1.0 : 0.0)
+        .blur(radius: isVisible ? 0 : 2)
+        .animation(.easeOut(duration: 0.1), value: isVisible)
+        .onAppear {
+            isVisible = true
+            isTextFieldFocused = true
+            if !appState.launcherSearchText.isEmpty {
+                input = appState.launcherSearchText
+                appState.launcherSearchText = ""
+            }
+            viewModel.searchEngineService.setTheme(theme)
+            viewModel.configure(
+                tabManager: tabManager,
+                historyManager: historyManager,
+                downloadManager: downloadManager,
+                appState: appState,
+                privacyMode: privacyMode,
+                onSubmit: onSubmit,
+                onDismiss: { [weak appState] in
+                    appState?.showLauncher = false
+                }
+            )
+            mouseHasMoved = false
+            mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { event in
+                mouseHasMoved = true
+                if let monitor = mouseMonitor {
+                    NSEvent.removeMonitor(monitor)
+                    mouseMonitor = nil
+                }
+                return event
+            }
+        }
+        .onDisappear {
+            if let monitor = mouseMonitor {
+                NSEvent.removeMonitor(monitor)
+                mouseMonitor = nil
+            }
+            viewModel.reset()
+            input = ""
+            match = nil
+            isTextFieldFocused = false
+        }
+        .onChange(of: appState.showLauncher) { _, newValue in
+            isVisible = newValue
         }
     }
 }

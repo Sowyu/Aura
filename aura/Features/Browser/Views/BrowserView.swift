@@ -79,12 +79,14 @@ struct BrowserView: View {
                 BlurEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
                     .ignoresSafeArea(.all)
             )
-            .overlay {
-                if appState.showLauncher, tabManager.activeTab != nil {
-                    LauncherView()
-                }
-                if appState.isFloatingTabSwitchVisible {
-                    FloatingTabSwitcher()
+            .overlayPreferenceValue(ContentPaneBoundsKey.self) { paneAnchor in
+                GeometryReader { proxy in
+                    if appState.showLauncher, tabManager.activeTab != nil {
+                        LauncherView(contentPane: paneAnchor.map { proxy[$0] })
+                    }
+                    if appState.isFloatingTabSwitchVisible {
+                        FloatingTabSwitcher()
+                    }
                 }
             }
 

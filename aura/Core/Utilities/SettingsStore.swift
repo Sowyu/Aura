@@ -148,6 +148,7 @@ class SettingsStore: ObservableObject {
     private let adBlockingKey = "settings.tracking.adBlocking"
     private let cookiesPolicyKey = "settings.cookies.policy"
     private let blockJavaScriptByDefaultKey = "privacy.javascript.blockedByDefault"
+    private let advancedBlockingEnabledKey = "privacy.advancedBlocking.enabled"
     private let adBlockFilterListsKey = "settings.adBlock.filterLists"
     private let sitePermissionsKey = "settings.permissions.sitePermissions"
     private let customSearchEnginesKey = "settings.customSearchEngines"
@@ -205,6 +206,16 @@ class SettingsStore: ObservableObject {
     /// Global default for page JavaScript. Per-site rules in `SiteJavaScriptRule` override it.
     @Published var blockJavaScriptByDefault: Bool {
         didSet { defaults.set(blockJavaScriptByDefault, forKey: blockJavaScriptByDefaultKey) }
+    }
+
+    /// Applies the filter rules WebKit's content blocking format cannot express
+    /// (scriptlets, procedural selectors, CSS injection). Per-site overrides live in
+    /// `AdvancedBlockingService`.
+    @Published var advancedBlockingEnabled: Bool {
+        didSet {
+            defaults.set(advancedBlockingEnabled, forKey: advancedBlockingEnabledKey)
+            NotificationCenter.default.post(name: AdvancedBlockingService.didChangeNotification, object: nil)
+        }
     }
 
     @Published var sitePermissions: [String: SitePermissionSettings] {
@@ -284,6 +295,7 @@ class SettingsStore: ObservableObject {
         }
 
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
+        advancedBlockingEnabled = defaults.object(forKey: advancedBlockingEnabledKey) as? Bool ?? true
 
         sitePermissions =
             Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]

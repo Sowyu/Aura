@@ -26,7 +26,7 @@ struct BrowserPageConfiguration {
             allowsInspectableDebugging: true,
             allowsBackForwardNavigationGestures: true,
             mediaPlaybackRequiresUserAction: false,
-            scriptMessageNames: ["listener", "linkHover", "mediaEvent", "passwordManager"],
+            scriptMessageNames: ["listener", "linkHover", "mediaEvent", "passwordManager", "advancedBlocking"],
             userScripts: userScripts,
             privacySettings: privacySettings
         )

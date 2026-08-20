@@ -43,6 +43,13 @@ final class JavaScriptSiteMenu: NSObject {
         let reset = owner.item(title: "Reset to Default", checked: false, action: #selector(resetSite))
         reset.isEnabled = rule != nil
         menu.addItem(reset)
+
+        menu.addItem(.separator())
+        menu.addItem(owner.item(
+            title: "Advanced blocking on \(host)",
+            checked: !AdvancedBlockingService.shared.isDisabled(host: host),
+            action: #selector(toggleAdvancedBlocking)
+        ))
         return menu
     }
 
@@ -66,6 +73,14 @@ final class JavaScriptSiteMenu: NSObject {
     @objc private func resetSite() {
         guard let host else { return }
         JavaScriptPolicyService.shared.removeRule(host: host)
+    }
+
+    /// Scriptlets and procedural cosmetic rules break the odd site, so they get the same
+    /// permanent per-domain switch page JavaScript has.
+    @objc private func toggleAdvancedBlocking() {
+        guard let host else { return }
+        let service = AdvancedBlockingService.shared
+        service.setEnabled(service.isDisabled(host: host), forHost: host)
     }
 }
 
