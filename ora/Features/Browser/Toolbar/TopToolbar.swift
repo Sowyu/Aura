@@ -7,6 +7,14 @@ import SwiftUI
 struct TopToolbar: View {
     /// Leading room reserved for the native window buttons.
     static let trafficLightGap: CGFloat = 78
+    static let rowHeight: CGFloat = 44
+    private static let buttonSize: CGFloat = 28
+    /// Between two buttons that read as one control.
+    private static let pairSpacing: CGFloat = 2
+    /// Between button groups.
+    private static let groupSpacing: CGFloat = 8
+    private static let edgeInset: CGFloat = 12
+    private static let fieldMaxWidth: CGFloat = 760
 
     @Environment(\.theme) private var theme
     @EnvironmentObject private var tabManager: TabManager
@@ -33,102 +41,121 @@ struct TopToolbar: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
-            if !appState.isFullscreen {
-                // Space for the native traffic lights, which WindowAccessor
-                // repositions into this row.
-                Color.clear.frame(width: Self.trafficLightGap, height: 1)
-            }
+        HStack(spacing: Self.groupSpacing) {
+            navigationGroup
+            historyGroup
 
-            URLBarButton(
-                systemName: "chevron.left",
+            Spacer(minLength: Self.groupSpacing)
+            URLBarField(
+                tab: tabManager.activeTab,
+                foregroundColor: theme.foreground.opacity(0.55),
+                textColor: theme.foreground
+            )
+            .frame(maxWidth: Self.fieldMaxWidth)
+            // Beats the two Spacers to the free space, so the field reaches its
+            // max width and they only split what is left, centring it.
+            .layoutPriority(1)
+            .zIndex(1)
+            Spacer(minLength: Self.groupSpacing)
+
+            ExtensionToolbarIcons(foregroundColor: buttonForegroundColor)
+            appGroup
+
+            Rectangle()
+                .fill(theme.foreground.opacity(0.2))
+                .frame(width: 1, height: 16)
+
+            windowGroup
+        }
+        // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
+        .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
+        .padding(.trailing, Self.edgeInset)
+        .frame(height: Self.rowHeight)
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Button groups
+
+    private var navigationGroup: some View {
+        HStack(spacing: Self.pairSpacing) {
+            toolbarButton(
+                "chevron.left",
                 isEnabled: tabManager.activeTab?.canGoBack ?? false,
-                foregroundColor: buttonForegroundColor,
                 action: { tabManager.activeTab?.goBack() }
             )
             .oraShortcutHelp("Go Back", for: KeyboardShortcuts.Navigation.back)
 
-            URLBarButton(
-                systemName: "chevron.right",
+            toolbarButton(
+                "chevron.right",
                 isEnabled: tabManager.activeTab?.canGoForward ?? false,
-                foregroundColor: buttonForegroundColor,
                 action: { tabManager.activeTab?.goForward() }
             )
             .oraShortcutHelp("Go Forward", for: KeyboardShortcuts.Navigation.forward)
+        }
+    }
 
-            URLBarButton(
-                systemName: "arrow.clockwise",
+    private var historyGroup: some View {
+        HStack(spacing: Self.groupSpacing) {
+            toolbarButton(
+                "arrow.clockwise",
                 isEnabled: tabManager.activeTab != nil,
-                foregroundColor: buttonForegroundColor,
                 action: { tabManager.activeTab?.reload() }
             )
             .oraShortcutHelp("Reload This Page", for: KeyboardShortcuts.Navigation.reload)
 
-            historyMenu
+            HStack(spacing: Self.pairSpacing) {
+                historyMenu
 
-            URLBarButton(
-                systemName: "house",
-                isEnabled: tabManager.activeTab != nil,
-                foregroundColor: buttonForegroundColor,
-                action: goHome
-            )
-            .help("Home")
-
-            if let tab = tabManager.activeTab {
-                URLBarField(
-                    tab: tab,
-                    foregroundColor: theme.foreground.opacity(0.55),
-                    textColor: theme.foreground
-                )
-                .frame(maxWidth: .infinity)
-                .zIndex(1)
-            } else {
-                Spacer()
+                toolbarButton("house", isEnabled: tabManager.activeTab != nil, action: goHome)
+                    .help("Home")
             }
+        }
+    }
 
-            ExtensionToolbarIcons(foregroundColor: buttonForegroundColor)
-
-            URLBarButton(
-                systemName: "gearshape",
+    private var appGroup: some View {
+        HStack(spacing: Self.pairSpacing) {
+            toolbarButton(
+                "gearshape",
                 isEnabled: true,
-                foregroundColor: buttonForegroundColor,
                 action: { NotificationCenter.default.post(name: .openSettingsTab, object: nil) }
             )
             .oraShortcutHelp("Settings", for: KeyboardShortcuts.App.preferences)
 
             URLBarMenuButton(
                 foregroundColor: buttonForegroundColor,
+                size: Self.buttonSize,
                 onShare: { sourceView, sourceRect in
                     if let activeTab = tabManager.activeTab {
                         shareCurrentPage(tab: activeTab, sourceView: sourceView, sourceRect: sourceRect)
                     }
                 }
             )
+        }
+    }
 
-            Divider()
-                .frame(height: 18)
-                .padding(.horizontal, 2)
-
-            URLBarButton(
-                systemName: sidebarIcon,
-                isEnabled: true,
-                foregroundColor: buttonForegroundColor,
-                action: { sidebarManager.toggleSidebar() }
-            )
-            .oraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)
+    private var windowGroup: some View {
+        HStack(spacing: Self.pairSpacing) {
+            toolbarButton(sidebarIcon, isEnabled: true, action: { sidebarManager.toggleSidebar() })
+                .oraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)
 
             if !privacyMode.isPrivate {
                 DownloadsWidget()
             }
         }
-        .padding(.horizontal, 8)
-        .frame(height: 44)
-        .frame(maxWidth: .infinity)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(theme.foreground.opacity(0.07))
-                .frame(height: 1)
-        }
+    }
+
+    private func toolbarButton(
+        _ systemName: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        URLBarButton(
+            systemName: systemName,
+            isEnabled: isEnabled,
+            foregroundColor: buttonForegroundColor,
+            size: Self.buttonSize,
+            action: action
+        )
     }
 
     // MARK: - History
@@ -147,13 +174,13 @@ struct TopToolbar: View {
         } label: {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(buttonForegroundColor)
-                .frame(width: 30, height: 30)
+                .foregroundColor(buttonForegroundColor.opacity(0.85))
+                .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .frame(width: 30, height: 30)
+        .frame(width: Self.buttonSize, height: Self.buttonSize)
         .help("Recent History")
     }
 

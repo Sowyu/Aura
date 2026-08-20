@@ -96,7 +96,7 @@ struct SettingsContentView: View {
     private var windowLayout: some View {
         NavigationSplitView {
             sidebarList
-                .navigationSplitViewColumnWidth(200)
+                .navigationSplitViewColumnWidth(SettingsMetrics.sidebarWidth)
                 .padding(.top, 8)
         } detail: {
             detailPane
@@ -112,8 +112,8 @@ struct SettingsContentView: View {
             sidebarList
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
-                .frame(width: 220)
-                .padding(.top, 8)
+                .frame(width: SettingsMetrics.sidebarWidth)
+                .padding(.vertical, 8)
 
             Divider()
 
@@ -130,6 +130,7 @@ struct SettingsContentView: View {
         List(SettingsTab.allCases, id: \.self, selection: selection) { tab in
             Label(tab.title, systemImage: tab.symbol)
                 .tag(tab)
+                .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
         }
     }
 
@@ -137,16 +138,16 @@ struct SettingsContentView: View {
     private var pageHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(selectedTab.title)
-                .font(.title2.bold())
+                .font(.title3.weight(.semibold))
             Text(selectedTab.subtitle)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Horizontal inset matches `SettingsSection`, so the header lines up with the cards below.
-        .padding(.horizontal, 16)
-        .padding(.top, 24)
-        .padding(.bottom, 8)
+        // Matches `SettingsSection`, so the header lines up with the cards below.
+        // The section supplies its own top padding, hence none at the bottom here.
+        .padding(.horizontal, SettingsMetrics.pagePadding)
+        .padding(.top, SettingsMetrics.pagePadding)
     }
 
     // Section views bring their own `ScrollView` (see `SettingsSection`), so none is added here.

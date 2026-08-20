@@ -35,13 +35,13 @@ struct SpacesSettingsView: View {
                     .tag(container.id)
                 }
             }
-            .frame(minWidth: 200, idealWidth: 200, maxWidth: 220)
+            .frame(width: SettingsMetrics.sidebarWidth)
 
             Divider()
 
             // Right details
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
                     if let container = selectedContainer {
                         SettingsCard(header: "Defaults") {
                             Grid(alignment: .leading, verticalSpacing: 12) {
@@ -182,7 +182,7 @@ struct SpacesSettingsView: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(16)
+                .padding(SettingsMetrics.pagePadding)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

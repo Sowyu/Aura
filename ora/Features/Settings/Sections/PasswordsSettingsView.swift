@@ -38,11 +38,11 @@ struct PasswordsSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
             passwordsOverview
             vaultSection
         }
-        .padding(16)
+        .padding(SettingsMetrics.pagePadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             if selectedContainerId == nil {

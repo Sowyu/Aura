@@ -25,7 +25,7 @@ struct SettingsCard<Content: View>: View {
 
             content()
         }
-        .padding(14)
+        .padding(SettingsMetrics.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             ConditionallyConcentricRectangle(cornerRadius: cornerRadius, style: .continuous)

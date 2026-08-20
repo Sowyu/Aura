@@ -4,10 +4,12 @@ import SwiftUI
 /// Address field shared by the top toolbar and the floating URL bar.
 /// Shows the current URL and morphs into the inline launcher while editing.
 struct URLBarField: View {
-    let tab: Tab
+    /// `nil` while no tab is active; the field still renders as an empty pill.
+    let tab: Tab?
     /// Muted colour used for icons and secondary text.
     let foregroundColor: Color
-    /// Full-strength colour used for typed text and the caret.
+    /// Full-strength colour used for typed text and the caret. Also drives the
+    /// pill fill, so callers must pass an undimmed colour.
     let textColor: Color
 
     @EnvironmentObject var tabManager: TabManager
@@ -35,6 +37,19 @@ struct URLBarField: View {
         appState.isURLBarEditing
     }
 
+    /// One pill for both modes so entering edit mode cannot change the height.
+    private var pill: some View {
+        ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+            .fill(textColor.opacity(0.08))
+            .overlay(
+                ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                    .stroke(textColor.opacity(0.06), lineWidth: 1)
+            )
+    }
+
+    static let height: CGFloat = 30
+    private static let cornerRadius: CGFloat = 10
+
     // MARK: - Body
 
     var body: some View {
@@ -54,7 +69,7 @@ struct URLBarField: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.easeOut(duration: 0.25), value: isEditing)
+        .animation(.easeOut(duration: 0.15), value: isEditing)
         // Hidden button for the focus-address-bar shortcut
         .overlay(
             Button("") { startEditing() }
@@ -89,12 +104,12 @@ struct URLBarField: View {
         HStack(spacing: 8) {
             // Security indicator
             ZStack {
-                if tab.isLoading {
+                if tab?.isLoading == true {
                     ProgressView()
                         .tint(foregroundColor)
                         .scaleEffect(0.5)
                 } else {
-                    Image(systemName: tab.url.scheme == "https" ? "shield.lefthalf.filled" : "globe")
+                    Image(systemName: securitySymbol)
                         .font(.system(size: 12))
                         .foregroundColor(foregroundColor)
                 }
@@ -108,18 +123,18 @@ struct URLBarField: View {
                     startWheelAnimation: $startWheelAnimation
                 )
 
-                // URL display
-                let parts = URLDisplayUtils.displayParts(
-                    url: tab.url,
-                    title: tab.title,
-                    showFull: toolbarManager.showFullURL
-                )
                 HStack(spacing: 0) {
-                    Text(parts.host)
-                        .font(.system(size: 14))
-                        .foregroundColor(foregroundColor)
-                    if let title = parts.title {
-                        Text(" / \(title)")
+                    if let parts = displayParts {
+                        Text(parts.host)
+                            .font(.system(size: 14))
+                            .foregroundColor(foregroundColor)
+                        if let title = parts.title {
+                            Text(" / \(title)")
+                                .font(.system(size: 14))
+                                .foregroundColor(foregroundColor.opacity(0.6))
+                        }
+                    } else {
+                        Text("Search or enter address")
                             .font(.system(size: 14))
                             .foregroundColor(foregroundColor.opacity(0.6))
                     }
@@ -129,8 +144,8 @@ struct URLBarField: View {
                 .truncationMode(.middle)
                 .opacity(showCopiedAnimation ? 0 : 1)
                 .offset(y: showCopiedAnimation ? (startWheelAnimation ? -12 : 12) : 0)
-                .animation(.easeOut(duration: 0.3), value: showCopiedAnimation)
-                .animation(.easeOut(duration: 0.3), value: startWheelAnimation)
+                .animation(.easeOut(duration: 0.15), value: showCopiedAnimation)
+                .animation(.easeOut(duration: 0.15), value: startWheelAnimation)
             }
             .font(.system(size: 14))
             .foregroundColor(foregroundColor)
@@ -154,15 +169,28 @@ struct URLBarField: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.interactive(cornerRadius: 6, tint: foregroundColor))
+            .disabled(tab == nil)
+            .opacity(tab == nil ? 0 : 1)
             .oraShortcutHelp("Copy URL", for: KeyboardShortcuts.Address.copyURL)
             .accessibilityLabel(Text("Copy URL"))
         }
-        .frame(height: 30)
+        .frame(height: Self.height)
         .padding(.leading, 8)
         .padding(.trailing, 4)
-        .background(
-            ConditionallyConcentricRectangle(cornerRadius: 10, style: .continuous)
-                .fill(foregroundColor.opacity(0.08))
+        .background(pill)
+    }
+
+    private var securitySymbol: String {
+        guard let tab else { return "magnifyingglass" }
+        return tab.url.scheme == "https" ? "shield.lefthalf.filled" : "globe"
+    }
+
+    private var displayParts: URLDisplayParts? {
+        guard let tab else { return nil }
+        return URLDisplayUtils.displayParts(
+            url: tab.url,
+            title: tab.title,
+            showFull: toolbarManager.showFullURL
         )
     }
 
@@ -211,20 +239,10 @@ struct URLBarField: View {
         .onDisappear {
             cleanupInlineLauncher()
         }
-        .frame(height: 30)
+        .frame(height: Self.height)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            ConditionallyConcentricRectangle(cornerRadius: 10, style: .continuous)
-                .fill(foregroundColor.opacity(0.08))
-                .overlay(
-                    ConditionallyConcentricRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(
-                            foregroundColor.opacity(0.1),
-                            lineWidth: 1.2
-                        )
-                )
-        )
+        .background(pill)
     }
 
     // MARK: - Suggestions Overlay
@@ -284,7 +302,7 @@ extension URLBarField {
             privacyMode: privacyMode,
             onSubmit: onLauncherSubmit,
             onDismiss: dismissEditing,
-            navigateInCurrentTab: true
+            navigateInCurrentTab: tabManager.activeTab != nil
         )
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -325,7 +343,7 @@ extension URLBarField {
     private func dismissEditing() {
         DispatchQueue.main.async {
             guard appState.isURLBarEditing else { return }
-            withAnimation(.easeOut(duration: 0.2)) {
+            withAnimation(.easeOut(duration: 0.15)) {
                 appState.isURLBarEditing = false
             }
         }
@@ -344,7 +362,17 @@ extension URLBarField {
                 customEngine: customEngine
             )
             if let url = launcherViewModel.searchEngineService.createSearchURL(for: match, query: correctInput) {
-                tabManager.activeTab?.loadURL(url.absoluteString)
+                if let activeTab = tabManager.activeTab {
+                    activeTab.loadURL(url.absoluteString)
+                } else {
+                    // No tab to navigate: the field is still usable, so open one.
+                    tabManager.openTab(
+                        url: url,
+                        historyManager: historyManager,
+                        downloadManager: downloadManager,
+                        isPrivate: privacyMode.isPrivate
+                    )
+                }
             }
         }
         dismissEditing()

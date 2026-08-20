@@ -121,11 +121,14 @@ struct WindowAccessor: NSViewRepresentable {
         }
 
         guard let containerHeight = buttons.first?.1.superview?.bounds.height else { return }
+        // The titlebar container's top edge lines up with the top of the toolbar
+        // row, and AppKit coordinates run upward from its bottom. The container is
+        // usually shorter than 44pt, so the origin goes negative; that is correct,
+        // and NSView does not clip its subviews by default.
+        let rowCenterY = containerHeight - Self.toolbarHeight / 2
         for (index, entry) in buttons.enumerated() {
             let size = entry.1.frame.size
-            // Titlebar coordinates run from the bottom of the (short) titlebar view,
-            // so clamp instead of pushing the button outside its superview.
-            let originY = max(0, containerHeight - Self.toolbarHeight / 2 - size.height / 2)
+            let originY = (rowCenterY - size.height / 2).rounded()
             let originX = Self.trafficLightLeading + CGFloat(index) * Self.trafficLightSpacing
             entry.1.setFrameOrigin(NSPoint(x: originX, y: originY))
         }

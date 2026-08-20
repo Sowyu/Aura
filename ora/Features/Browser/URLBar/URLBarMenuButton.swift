@@ -7,6 +7,7 @@ import WebKit
 /// The "..." app menu shown in the toolbar and the floating URL bar.
 struct URLBarMenuButton: View {
     let foregroundColor: Color
+    var size: CGFloat = 30
     let onShare: (NSView, NSRect) -> Void
 
     @EnvironmentObject private var tabManager: TabManager
@@ -22,14 +23,6 @@ struct URLBarMenuButton: View {
     @State private var menuSourceView: NSView?
     @State private var actions = MenuActionTarget()
 
-    private var cornerRadius: CGFloat {
-        if #available(macOS 26, *) {
-            return 10
-        } else {
-            return 6
-        }
-    }
-
     private var webView: WKWebView? {
         tabManager.activeTab?.browserPage?.contentView as? WKWebView
     }
@@ -44,11 +37,11 @@ struct URLBarMenuButton: View {
             showMenu()
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: URLBarButton.iconSize, weight: .medium))
                 .foregroundColor(foregroundColor.opacity(0.85))
-                .frame(width: 30, height: 30)
+                .frame(width: size, height: size)
         }
-        .buttonStyle(.interactive(cornerRadius: cornerRadius, tint: foregroundColor))
+        .buttonStyle(.interactive(cornerRadius: URLBarButton.cornerRadius, tint: foregroundColor))
         .help("Menu")
         .background(
             MenuSourceView { nsView in

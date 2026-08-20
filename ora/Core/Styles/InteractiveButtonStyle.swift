@@ -34,7 +34,8 @@ struct InteractiveButtonStyle: ButtonStyle {
             configuration.label
                 .background(tint.opacity(opacity), in: .rect(cornerRadius: cornerRadius))
                 .contentShape(.rect(cornerRadius: cornerRadius))
-                .scaleEffect(configuration.isPressed ? 0.94 : 1)
+                // No scale: chrome rows and tabs jitter their neighbours when a
+                // pressed button changes size. The press tint is the feedback.
                 .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
                 .animation(.easeOut(duration: 0.08), value: isHovering)
                 .onHover { isHovering = $0 }
