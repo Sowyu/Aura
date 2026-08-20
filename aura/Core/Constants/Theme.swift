@@ -34,7 +34,10 @@ struct Theme: Equatable {
         return copy
     }
 
-    var subtleWindowBackgroundColor: Color {
+    /// The one fill behind every piece of window chrome: the pinned toolbar row, the
+    /// sidebar, and both of their floating counterparts. Translucent, so the window
+    /// blur underneath still shows through.
+    var chromeBackground: Color {
         colorScheme == .dark ? self.primaryDark.opacity(0.3) : self.primary.opacity(0.3)
     }
 

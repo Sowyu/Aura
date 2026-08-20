@@ -74,7 +74,7 @@ struct BrowserView: View {
             }
             .animation(.easeOut(duration: 0.15), value: toolbarManager.isToolbarHidden)
             .ignoresSafeArea(.all)
-            .background(theme.subtleWindowBackgroundColor)
+            .background(theme.chromeBackground)
             .background(
                 BlurEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
                     .ignoresSafeArea(.all)
@@ -116,7 +116,7 @@ struct BrowserView: View {
         }
         .edgesIgnoringSafeArea(.all)
         .enableInjection()
-        .animation(.easeOut(duration: 0.1), value: showFloatingSidebar)
+        .animation(.easeOut(duration: 0.15), value: showFloatingSidebar)
         .onChange(of: showFloatingSidebar) { _, visible in
             injectSidebarMouseShield(visible: visible)
         }
@@ -172,8 +172,8 @@ struct BrowserView: View {
     }
 }
 
-/// Compact mode's top edge: a 4pt strip that slides the real toolbar in on hover
-/// and lets it go once the pointer leaves both the strip and the toolbar itself.
+/// Compact mode's top edge: a 12pt band at the window edge slides the real toolbar in,
+/// and the whole row stays hot while it is up so the pointer can use it.
 private struct FloatingTopToolbar: View {
     @Environment(\.theme) private var theme
     @Environment(AppState.self) private var appState
@@ -183,17 +183,19 @@ private struct FloatingTopToolbar: View {
     /// the native traffic lights back with the row.
     private var isVisible: Bool { toolbarManager.isFloatingToolbarVisible }
 
-    /// While shown, the toolbar row is the hover target, so leaving it hides again.
-    private var stripHeight: CGFloat { isVisible ? TopToolbar.rowHeight : 4 }
+    /// A live URL edit, an open menu or the launcher hold the row up no matter where
+    /// the pointer went.
+    private var isHeld: Bool {
+        appState.isURLBarEditing || appState.showLauncher || AuraMenuController.shared.isOpen
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             if isVisible {
-                // Opaque, not blurred: the row sits over live page content, and the
-                // traffic lights AppKit draws into it are opaque anyway.
+                // Same fill as the sidebar, so the two pieces of chrome read as one.
                 TopToolbar()
-                    .background(theme.subtleWindowBackgroundColor)
-                    .background(theme.background)
+                    .background(theme.chromeBackground)
+                    .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
                     .overlay(alignment: .bottom) {
                         Rectangle()
                             .fill(theme.foreground.opacity(0.08))
@@ -205,23 +207,17 @@ private struct FloatingTopToolbar: View {
             }
 
             Color.clear
-                .frame(height: stripHeight)
+                .frame(height: GlobalMouseTrackingArea.hotZone)
                 .overlay(
                     GlobalMouseTrackingArea(
                         mouseEntered: Binding(
                             get: { isVisible },
-                            set: { entered in
-                                // A live URL edit must not yank the row away. An open menu
-                                // swallows mouse-moved events, so it holds by itself.
-                                if !entered, appState.isURLBarEditing { return }
-                                toolbarManager.isFloatingToolbarVisible = entered
-                            }
+                            set: { toolbarManager.isFloatingToolbarVisible = $0 }
                         ),
                         edge: .top,
-                        padding: stripHeight,
-                        slack: 8
+                        revealedExtent: TopToolbar.rowHeight,
+                        isHeld: { isHeld }
                     )
-                    .id(stripHeight)
                 )
         }
         .animation(.easeOut(duration: 0.15), value: isVisible)

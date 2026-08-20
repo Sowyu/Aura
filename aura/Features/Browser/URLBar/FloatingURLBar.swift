@@ -1,12 +1,13 @@
 import SwiftUI
 
 struct FloatingURLBar: View {
+    @Environment(AppState.self) private var appState
+
     @Binding var showFloatingURLBar: Bool
     @Binding var isMouseOverURLBar: Bool
 
-    private var triggerAreaPadding: CGFloat {
-        showFloatingURLBar ? 50 : 16
-    }
+    /// Depth of the bar once it is out; the band that arms it is 12pt at the edge.
+    private static let revealedHeight: CGFloat = 50
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -30,33 +31,32 @@ struct FloatingURLBar: View {
             }
 
             VStack(alignment: .leading) {
-                hoverStrip(width: .infinity)
+                hoverStrip()
                 Spacer()
             }
             .frame(maxWidth: .infinity)
-            .frame(height: triggerAreaPadding)
+            .frame(height: GlobalMouseTrackingArea.hotZone)
         }
-        .animation(.easeInOut(duration: 0.1), value: showFloatingURLBar)
+        .animation(.easeOut(duration: 0.15), value: showFloatingURLBar)
     }
 
-    private func hoverStrip(width: CGFloat) -> some View {
+    private func hoverStrip() -> some View {
         Color.clear
             .overlay(
                 GlobalMouseTrackingArea(
                     mouseEntered: Binding(
                         get: { showFloatingURLBar },
                         set: { newValue in
-                            withAnimation(.easeInOut(duration: 0.25)) {
+                            withAnimation(.easeOut(duration: 0.15)) {
                                 isMouseOverURLBar = newValue
                                 showFloatingURLBar = newValue
                             }
                         }
                     ),
                     edge: .top,
-                    padding: triggerAreaPadding,
-                    slack: 8
+                    revealedExtent: Self.revealedHeight,
+                    isHeld: { appState.isURLBarEditing || AuraMenuController.shared.isOpen }
                 )
-                .id(triggerAreaPadding)
             )
     }
 }

@@ -5,6 +5,7 @@ struct FloatingSidebarOverlay: View {
     static let maxFraction: CGFloat = 0.30
 
     @Environment(SidebarManager.self) private var sidebarManager
+    @Environment(AppState.self) private var appState
 
     @Binding var showFloatingSidebar: Bool
     @Binding var isMouseOverSidebar: Bool
@@ -44,11 +45,11 @@ struct FloatingSidebarOverlay: View {
 
                 HStack(spacing: 0) {
                     if sidebarManager.sidebarPosition == .primary {
-                        hoverStrip(width: showFloatingSidebar ? floatingWidth : 10)
+                        hoverStrip(revealedWidth: floatingWidth)
                         Spacer()
                     } else {
                         Spacer()
-                        hoverStrip(width: showFloatingSidebar ? floatingWidth : 10)
+                        hoverStrip(revealedWidth: floatingWidth)
                     }
                 }
                 .zIndex(2)
@@ -56,24 +57,30 @@ struct FloatingSidebarOverlay: View {
         }
     }
 
-    private func hoverStrip(width: CGFloat) -> some View {
+    /// Downloads, an open menu, the launcher and a live URL edit all keep the sidebar
+    /// out no matter where the pointer went.
+    private var isHeld: Bool {
+        isDownloadsOpen || AuraMenuController.shared.isOpen
+            || appState.showLauncher || appState.isURLBarEditing
+    }
+
+    /// The band that arms the reveal is 12pt at the window edge; once the sidebar is
+    /// out, the whole column it occupies keeps it out.
+    private func hoverStrip(revealedWidth: CGFloat) -> some View {
         Color.clear
-            .frame(width: width)
+            .frame(width: GlobalMouseTrackingArea.hotZone)
             .overlay(
                 GlobalMouseTrackingArea(
                     mouseEntered: Binding(
                         get: { showFloatingSidebar },
                         set: { newValue in
                             isMouseOverSidebar = newValue
-                            if !newValue, isDownloadsOpen {
-                                return
-                            }
                             showFloatingSidebar = newValue
                         }
                     ),
                     edge: sidebarManager.sidebarPosition == .primary ? .left : .right,
-                    padding: 40,
-                    slack: 8
+                    revealedExtent: revealedWidth,
+                    isHeld: { isHeld }
                 )
             )
     }

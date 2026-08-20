@@ -4,11 +4,16 @@ import SwiftUI
 /// that previews the chrome against a stand-in page so the tint can be judged before it
 /// is applied to the window.
 struct GlassSettingsCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(AuraGlass.enabledKey) private var enabled = false
     @AppStorage(AuraGlass.tintKey) private var tintHex = AuraGlass.defaultTintHex
+    @AppStorage(AuraGlass.opacityKey) private var tintOpacity = AuraGlass.defaultOpacity
 
     private var tint: Color { Color(hex: tintHex) }
-    private var chromeForeground: Color { AuraGlass.foreground(forTintHex: tintHex) }
+
+    private var chromeForeground: Color {
+        AuraGlass.foreground(forTintHex: tintHex, opacity: tintOpacity, colorScheme: colorScheme)
+    }
 
     var body: some View {
         SettingsCard(
@@ -18,6 +23,7 @@ struct GlassSettingsCard: View {
             HStack(alignment: .top, spacing: 20) {
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle("Enable Liquid Glass", isOn: $enabled)
+                    if enabled { opacitySlider }
                     preview
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -27,6 +33,19 @@ struct GlassSettingsCard: View {
                 }
             }
             .animation(.easeOut(duration: 0.15), value: enabled)
+        }
+    }
+
+    /// 0 leaves the chrome clear glass, 1 makes the tint a solid fill.
+    private var opacitySlider: some View {
+        HStack(spacing: 10) {
+            Text("Tint opacity")
+            Slider(value: $tintOpacity, in: 0 ... 1)
+                .frame(maxWidth: 220)
+            Text("\(Int(tintOpacity * 100))%")
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
         }
     }
 
@@ -41,7 +60,7 @@ struct GlassSettingsCard: View {
             .padding(8)
             .frame(width: 78, alignment: .leading)
             .frame(maxHeight: .infinity)
-            .background { chromeBackground }
+            .background { previewChrome }
 
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color(nsColor: .textBackgroundColor))
@@ -57,9 +76,9 @@ struct GlassSettingsCard: View {
     }
 
     @ViewBuilder
-    private var chromeBackground: some View {
+    private var previewChrome: some View {
         if enabled {
-            AuraGlassSurface(tint: tint)
+            AuraGlassSurface(tint: tint, opacity: tintOpacity)
         } else {
             Color(nsColor: .underPageBackgroundColor)
         }

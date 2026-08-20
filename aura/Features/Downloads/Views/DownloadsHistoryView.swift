@@ -24,7 +24,7 @@ struct DownloadsHistoryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 4)
-        .background(theme.subtleWindowBackgroundColor)
+        .background(theme.chromeBackground)
         .background(BlurEffectView(material: .underWindowBackground, blendingMode: .behindWindow))
     }
 

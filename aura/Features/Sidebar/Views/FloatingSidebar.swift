@@ -16,7 +16,7 @@ struct FloatingSidebar: View {
 
         ZStack(alignment: .leading) {
             SidebarView()
-                .background(theme.subtleWindowBackgroundColor)
+                .background(theme.chromeBackground)
                 .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
                 .clipShape(clipShape)
                 .overlay(clipShape
