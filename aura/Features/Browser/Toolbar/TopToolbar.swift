@@ -7,12 +7,11 @@ import SwiftUI
 struct TopToolbar: View {
     /// Leading room reserved for the native window buttons.
     static let trafficLightGap: CGFloat = 78
-    static let rowHeight: CGFloat = 46
     /// Height of the tallest control in the row, the address pill.
     private static let contentHeight: CGFloat = 30
-    /// Empty space the row leaves above and below its controls. Views placed under
-    /// the row subtract it so the visible gap matches the window's other insets.
-    static var verticalSlack: CGFloat { (rowHeight - contentHeight) / 2 }
+    /// Empty space the row leaves above and below the address pill.
+    static let verticalSlack: CGFloat = 4
+    static let rowHeight: CGFloat = contentHeight + verticalSlack * 2
     private static let buttonSize: CGFloat = 28
     /// Between two buttons that read as one control.
     private static let pairSpacing: CGFloat = 2
@@ -33,6 +32,9 @@ struct TopToolbar: View {
     private var histories: [History]
 
     @State private var historyAnchor: NSView?
+    @State private var leadingWidth: CGFloat = 0
+    @State private var trailingWidth: CGFloat = 0
+    @State private var rowWidth: CGFloat = 0
 
     private var buttonForegroundColor: Color {
         theme.foreground.opacity(0.7)
@@ -47,24 +49,56 @@ struct TopToolbar: View {
         return histories.filter { $0.container?.id == containerId }.prefix(10).map { $0 }
     }
 
-    var body: some View {
-        HStack(spacing: Self.groupSpacing) {
-            navigationGroup
-            historyGroup
+    /// Widest group decides the half-width left for the field, so a field centred on
+    /// the window can never reach either group. `edgeInset` is the minimum breathing
+    /// room between the field and the nearer group.
+    private var fieldWidth: CGFloat {
+        let side = max(leadingWidth, trailingWidth) + Self.edgeInset
+        return min(Self.fieldMaxWidth, max(rowWidth - 2 * side, 0))
+    }
 
-            Spacer(minLength: Self.groupSpacing)
+    var body: some View {
+        ZStack {
+            HStack(spacing: Self.groupSpacing) {
+                leadingGroup
+                    .onGeometryChange(for: CGFloat.self, of: \.size.width) { leadingWidth = $0 }
+                Spacer(minLength: Self.groupSpacing)
+                trailingGroup
+                    .onGeometryChange(for: CGFloat.self, of: \.size.width) { trailingWidth = $0 }
+            }
+
+            // Centred on the window, not on the space between the groups: the two
+            // sides differ in width, so splitting the leftover would sit the field
+            // right of the window's midpoint.
             URLBarField(
                 tab: tabManager.activeTab,
                 foregroundColor: theme.foreground.opacity(0.55),
                 textColor: theme.foreground
             )
-            .frame(maxWidth: Self.fieldMaxWidth)
-            // Beats the two Spacers to the free space, so the field reaches its
-            // max width and they only split what is left, centring it.
+            .frame(width: fieldWidth)
             .layoutPriority(1)
             .zIndex(1)
-            Spacer(minLength: Self.groupSpacing)
+        }
+        .frame(height: Self.rowHeight)
+        .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self, of: \.size.width) { rowWidth = $0 }
+        .auraGlassChrome()
+    }
 
+    // MARK: - Button groups
+
+    private var leadingGroup: some View {
+        HStack(spacing: Self.groupSpacing) {
+            navigationGroup
+            historyGroup
+        }
+        // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
+        // Measured with the group so `fieldWidth` counts it as occupied space.
+        .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
+    }
+
+    private var trailingGroup: some View {
+        HStack(spacing: Self.groupSpacing) {
             JavaScriptBlockedBadge(
                 foregroundColor: buttonForegroundColor,
                 url: tabManager.activeTab?.url,
@@ -79,15 +113,8 @@ struct TopToolbar: View {
 
             windowGroup
         }
-        // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
-        .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
         .padding(.trailing, Self.edgeInset)
-        .frame(height: Self.rowHeight)
-        .frame(maxWidth: .infinity)
-        .auraGlassChrome()
     }
-
-    // MARK: - Button groups
 
     private var navigationGroup: some View {
         HStack(spacing: Self.pairSpacing) {

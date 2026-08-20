@@ -3,12 +3,10 @@ import SwiftUI
 /// Inset between the window chrome and the rounded content pane, all four sides.
 let browserContentInset: CGFloat = 8
 
-/// Top-up applied under the toolbar row. The row already leaves
-/// `TopToolbar.verticalSlack` empty below the address pill, so anything sitting
-/// under it only adds the remainder to reach `browserContentInset` of visible gap.
-var browserContentTopInset: CGFloat {
-    max(browserContentInset - TopToolbar.verticalSlack, 0)
-}
+/// Gap under the toolbar row. Half `browserContentInset`, because the row already
+/// leaves `TopToolbar.verticalSlack` (4pt) empty below the address pill and the two
+/// together read as the same 8pt the other three sides use.
+let browserContentTopInset: CGFloat = 4
 
 struct BrowserContentContainer<Content: View>: View {
     @Environment(TabManager.self) private var tabManager
