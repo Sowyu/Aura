@@ -30,6 +30,10 @@ extension Notification.Name {
     static let clearCacheAndReload = Notification.Name("ClearCacheAndReload")
     static let clearCookiesAndReload = Notification.Name("ClearCookiesAndReload")
     static let spacePrivacySettingsChanged = Notification.Name("SpacePrivacySettingsChanged")
+    /// A per-site JavaScript rule or the global default changed. userInfo: ["host": String] when
+    /// a single site changed, absent when the global default did.
+    static let javaScriptPolicyChanged = Notification.Name("JavaScriptPolicyChanged")
+    static let toggleSiteJavaScript = Notification.Name("ToggleSiteJavaScript")
 
     /// App lifecycle
     static let quitRequested = Notification.Name("QuitRequested")

@@ -1,4 +1,5 @@
 import Foundation
+import PublicSuffixList
 
 func extractDomainOrIP(from text: String) -> String? {
     let hasScheme = text.hasPrefix("http://") || text.hasPrefix("https://")
@@ -11,6 +12,40 @@ func extractDomainOrIP(from text: String) -> String? {
     }
 
     return host
+}
+
+/// eTLD+1 for permission-style rules, so a decision made on `news.example.com`
+/// also covers `example.com` and its other subdomains.
+/// ponytail: last-two-labels heuristic, no public suffix list. `bbc.co.uk` collapses
+/// to `co.uk`; swap in a PSL if rules ever need to be exact on multi-part TLDs.
+func registrableDomain(from host: String) -> String {
+    let normalized = host
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+        .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+
+    // IPv4/IPv6 literals and single-label hosts such as `localhost` have no parent domain.
+    guard !normalized.isEmpty, !normalized.contains(":") else { return normalized }
+    if normalized.range(of: #"^(\d{1,3}\.){3}\d{1,3}$"#, options: .regularExpression) != nil {
+        return normalized
+    }
+
+    // Public Suffix List, so "news.bbc.co.uk" -> "bbc.co.uk", not "co.uk".
+    let labels = normalized.split(separator: ".")
+    guard let suffix = PublicSuffixList.parsePublicSuffix(normalized)?.suffix, suffix != normalized else {
+        return labels.count > 2 ? labels.suffix(2).joined(separator: ".") : normalized
+    }
+    let suffixCount = suffix.split(separator: ".").count
+    return labels.suffix(suffixCount + 1).joined(separator: ".")
+}
+    return labels.suffix(2).joined(separator: ".")
+}
+
+/// Registrable domain for a URL, or nil when the URL has no host (`about:blank`, data URLs).
+func registrableDomain(from url: URL) -> String? {
+    guard let host = url.host, !host.isEmpty else { return nil }
+    let domain = registrableDomain(from: host)
+    return domain.isEmpty ? nil : domain
 }
 
 func isValidURL(_ text: String) -> Bool {

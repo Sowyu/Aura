@@ -145,8 +145,16 @@ struct URLBarMenuButton: View {
             },
             target.item("Find in Page…", symbol: "magnifyingglass", shortcut: KeyboardShortcuts.Edit.find) {
                 NotificationCenter.default.post(name: .findInPage, object: NSApp.keyWindow)
-            }
+            },
+            javaScriptItem()
         ]
+    }
+
+    private func javaScriptItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "JavaScript", action: nil, keyEquivalent: "")
+        item.image = NSImage(systemSymbolName: "curlybraces", accessibilityDescription: nil)
+        item.submenu = JavaScriptSiteMenu.makeMenu(for: tabManager.activeTab?.url)
+        return item
     }
 
     private func zoomSection(_ target: MenuActionTarget) -> [NSMenuItem] {

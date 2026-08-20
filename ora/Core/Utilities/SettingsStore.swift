@@ -147,6 +147,7 @@ class SettingsStore: ObservableObject {
     private let fingerprintingKey = "settings.tracking.blockFingerprinting"
     private let adBlockingKey = "settings.tracking.adBlocking"
     private let cookiesPolicyKey = "settings.cookies.policy"
+    private let blockJavaScriptByDefaultKey = "privacy.javascript.blockedByDefault"
     private let adBlockFilterListsKey = "settings.adBlock.filterLists"
     private let sitePermissionsKey = "settings.permissions.sitePermissions"
     private let customSearchEnginesKey = "settings.customSearchEngines"
@@ -199,6 +200,11 @@ class SettingsStore: ObservableObject {
 
     @Published var cookiesPolicy: CookiesPolicy {
         didSet { defaults.set(cookiesPolicy.rawValue, forKey: cookiesPolicyKey) }
+    }
+
+    /// Global default for page JavaScript. Per-site rules in `SiteJavaScriptRule` override it.
+    @Published var blockJavaScriptByDefault: Bool {
+        didSet { defaults.set(blockJavaScriptByDefault, forKey: blockJavaScriptByDefaultKey) }
     }
 
     @Published var sitePermissions: [String: SitePermissionSettings] {
@@ -276,6 +282,8 @@ class SettingsStore: ObservableObject {
         } else {
             cookiesPolicy = .allowAll
         }
+
+        blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
 
         sitePermissions =
             Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]

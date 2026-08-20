@@ -6,6 +6,7 @@ struct GeneralSettingsView: View {
     @EnvironmentObject var updateService: UpdateService
     @StateObject private var settings = SettingsStore.shared
     @StateObject private var defaultBrowserManager = DefaultBrowserManager.shared
+    @ObservedObject private var javaScriptPolicy = JavaScriptPolicyService.shared
 
     var body: some View {
         SettingsSection {
@@ -81,6 +82,8 @@ struct GeneralSettingsView: View {
                 Toggle("Auto Picture-in-Picture on tab switch", isOn: $settings.autoPiPEnabled)
             }
 
+            javaScriptCard
+
             SettingsCard(header: "Updates") {
                 Toggle("Auto-check for updates", isOn: $settings.autoUpdateEnabled)
 
@@ -113,6 +116,43 @@ struct GeneralSettingsView: View {
                         Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
                             .font(.caption2)
                             .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private var javaScriptCard: some View {
+        SettingsCard(
+            header: "JavaScript",
+            description: "Per-site rules always win over the default and are kept until you remove them."
+        ) {
+            Toggle("Block JavaScript by default", isOn: Binding(
+                get: { javaScriptPolicy.blocksByDefault },
+                set: { javaScriptPolicy.setBlocksByDefault($0) }
+            ))
+
+            Divider()
+
+            let rules = javaScriptPolicy.sortedRules
+            if rules.isEmpty {
+                Text("No site rules yet. Use the toolbar menu's JavaScript submenu on any page.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(rules) { rule in
+                    HStack(spacing: 12) {
+                        Image(systemName: rule.isAllowed ? "curlybraces" : "nosign")
+                            .foregroundStyle(rule.isAllowed ? Color.green : Color.red)
+                        Text(rule.host)
+                        Spacer()
+                        Text(rule.isAllowed ? "Allowed" : "Blocked")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Remove", role: .destructive) {
+                            javaScriptPolicy.removeRule(host: rule.host)
+                        }
+                        .buttonStyle(.borderless)
                     }
                 }
             }

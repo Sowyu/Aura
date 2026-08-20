@@ -94,7 +94,7 @@ struct OraCommands: Commands {
                     NotificationCenter.default.post(name: .toggleCompactMode, object: NSApp.keyWindow)
                 }
             ))
-            .keyboardShortcut("c", modifiers: [.command, .option])
+            .keyboardShortcut(KeyboardShortcuts.Window.toggleCompactMode.keyboardShortcut)
 
             Divider()
 
@@ -106,6 +106,14 @@ struct OraCommands: Commands {
             Button(showFullURL ? "Hide Full URL" : "Show Full URL") {
                 NotificationCenter.default.post(name: .toggleFullURL, object: NSApp.keyWindow)
             }
+
+            Divider()
+
+            Button(KeyboardShortcuts.Privacy.toggleJavaScript.name) {
+                NotificationCenter.default.post(name: .toggleSiteJavaScript, object: NSApp.keyWindow)
+            }
+            .keyboardShortcut(KeyboardShortcuts.Privacy.toggleJavaScript.keyboardShortcut)
+
             Divider()
         }
 

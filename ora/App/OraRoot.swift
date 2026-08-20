@@ -316,6 +316,31 @@ struct OraRoot: View {
                     }
                 }
 
+                // A rule change repaints the badge everywhere, so every window re-reads its
+                // own active tab rather than only the one that made the change.
+                observe(.javaScriptPolicyChanged) { note in
+                    Task { @MainActor in
+                        guard let tab = tabManager.activeTab else { return }
+                        if let changedHost = note.userInfo?["host"] as? String,
+                           registrableDomain(from: tab.url) != changedHost
+                        {
+                            return
+                        }
+                        tab.reload()
+                    }
+                }
+
+                observe(.toggleSiteJavaScript) { note in
+                    Task { @MainActor in
+                        guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
+                        guard let url = tabManager.activeTab?.url,
+                              let host = registrableDomain(from: url)
+                        else { return }
+                        let service = JavaScriptPolicyService.shared
+                        service.setRule(host: host, allowed: !service.isAllowed(for: url))
+                    }
+                }
+
                 observe(.spacePrivacySettingsChanged) { note in
                     Task { @MainActor in
                         guard let containerId = note.userInfo?["containerId"] as? UUID else { return }

@@ -63,6 +63,11 @@ struct TopToolbar: View {
             .zIndex(1)
             Spacer(minLength: Self.groupSpacing)
 
+            JavaScriptBlockedBadge(
+                foregroundColor: buttonForegroundColor,
+                url: tabManager.activeTab?.url,
+                size: Self.buttonSize
+            )
             ExtensionToolbarIcons(foregroundColor: buttonForegroundColor)
             appGroup
 

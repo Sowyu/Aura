@@ -258,11 +258,16 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         )
     }
 
+    /// The `preferences` variant is the only one implemented: WebKit calls just one of
+    /// the two, and this is where `allowsContentJavaScript` can be set per navigation.
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
-        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        preferences: WKWebpagePreferences,
+        decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
     ) {
+        applyJavaScriptPolicy(to: preferences, for: navigationAction, in: webView)
+
         let action = BrowserNavigationAction(
             request: navigationAction.request,
             modifierFlags: navigationAction.modifierFlags
@@ -270,14 +275,33 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
 
         switch delegate?.browserPage(self, decidePolicyFor: action) ?? .allow {
         case .allow:
-            decisionHandler(.allow)
+            decisionHandler(.allow, preferences)
         case .cancel:
-            decisionHandler(.cancel)
+            decisionHandler(.cancel, preferences)
         case .openInNewTab:
             if let url = navigationAction.request.url {
                 delegate?.browserPage(self, didRequestOpenInNewTab: url)
             }
-            decisionHandler(.cancel)
+            decisionHandler(.cancel, preferences)
+        }
+    }
+
+    private func applyJavaScriptPolicy(
+        to preferences: WKWebpagePreferences,
+        for navigationAction: WKNavigationAction,
+        in webView: WKWebView
+    ) {
+        // A nil target frame means a brand-new frame or window, so the request URL is
+        // the document being loaded. A real subframe is judged by the main document's
+        // host instead, otherwise a blocked page could smuggle scripts in via iframes.
+        let isMainFrame = navigationAction.targetFrame?.isMainFrame ?? true
+        let policyURL = isMainFrame
+            ? navigationAction.request.url
+            : (webView.url ?? navigationAction.request.url)
+        guard let policyURL else { return }
+
+        preferences.allowsContentJavaScript = MainActor.assumeIsolated {
+            JavaScriptPolicyService.shared.isAllowed(for: policyURL)
         }
     }
 

@@ -162,6 +162,12 @@ enum KeyboardShortcuts {
             category: "Window",
             defaultChord: KeyChord(keyEquivalent: .init("n"), modifiers: [.command])
         )
+        static let toggleCompactMode = KeyboardShortcutDefinition(
+            id: "window.toggleCompactMode",
+            name: "Toggle Compact Mode",
+            category: "Window",
+            defaultChord: KeyChord(keyEquivalent: .init("b"), modifiers: [.command])
+        )
         static let newPrivate = KeyboardShortcutDefinition(
             id: "window.newPrivate",
             name: "New Private Window",
@@ -256,6 +262,17 @@ enum KeyboardShortcuts {
         )
     }
 
+    // MARK: - Privacy
+
+    enum Privacy {
+        static let toggleJavaScript = KeyboardShortcutDefinition(
+            id: "privacy.toggleJavaScript",
+            name: "Toggle JavaScript for This Site",
+            category: "Privacy",
+            defaultChord: KeyChord(keyEquivalent: .init("j"), modifiers: [.command, .option])
+        )
+    }
+
     // MARK: - Developer
 
     enum Developer {
@@ -307,7 +324,10 @@ enum KeyboardShortcuts {
             defaultChord: KeyChord(keyEquivalent: .init("d"), modifiers: [.command, .shift])
         )
     }
+}
 
+// Catalogue kept out of the enum body so adding a shortcut does not grow it past the type length limit.
+extension KeyboardShortcuts {
     /// All keyboard shortcut definitions
     static let allShortcuts: [KeyboardShortcutDefinition] = [
         // Tabs
@@ -333,6 +353,9 @@ enum KeyboardShortcuts {
 
         // Zoom
         Zoom.zoomIn, Zoom.zoomOut, Zoom.reset,
+
+        // Privacy
+        Privacy.toggleJavaScript,
 
         // Developer
         Developer.toggleDevTools, Developer.reloadIgnoringCache,

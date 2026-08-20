@@ -3,6 +3,9 @@ options:
   bundleIdPrefix: com.orabrowser
 
 packages:
+  PublicSuffixList:
+    url: https://github.com/ameshkov/swift-psl
+    from: 1.1.0
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.6.0
@@ -31,6 +34,7 @@ targets:
         optional: true
     dependencies:
       - package: Sparkle
+      - package: PublicSuffixList
       - package: Inject
       - package: FaviconFinder
       - package: SafariConverterLib
