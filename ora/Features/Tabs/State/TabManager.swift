@@ -166,8 +166,18 @@ class TabManager: ObservableObject {
     }
 
     @discardableResult
-    func createContainer(name: String = "Default", emoji: String = "•") -> TabContainer {
-        let newContainer = TabContainer(name: name, emoji: emoji)
+    func createContainer(
+        name: String = "Default",
+        emoji: String = "•",
+        iconSymbol: String? = nil,
+        iconColorHex: String? = nil
+    ) -> TabContainer {
+        let newContainer = TabContainer(
+            name: name,
+            emoji: emoji,
+            iconSymbol: iconSymbol,
+            iconColorHex: iconColorHex
+        )
         modelContext.insert(newContainer)
         activeContainer = newContainer
         self.activeTab = nil
@@ -176,9 +186,17 @@ class TabManager: ObservableObject {
         return newContainer
     }
 
-    func renameContainer(_ container: TabContainer, name: String, emoji: String) {
+    func renameContainer(
+        _ container: TabContainer,
+        name: String,
+        emoji: String,
+        iconSymbol: String? = nil,
+        iconColorHex: String? = nil
+    ) {
         container.name = name
         container.emoji = emoji
+        container.iconSymbol = iconSymbol
+        container.iconColorHex = iconColorHex
         try? modelContext.save()
     }
 

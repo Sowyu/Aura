@@ -29,7 +29,9 @@ private struct NewContainerDialog: View {
 
     @State private var name = ""
     @State private var emoji = ""
-    @State private var isEmojiPickerOpen = false
+    @State private var iconSymbol: String?
+    @State private var iconColorHex: String?
+    @State private var isIconPickerOpen = false
 
     @Environment(\.theme) private var theme
     @EnvironmentObject var tabManager: TabManager
@@ -56,7 +58,9 @@ private struct NewContainerDialog: View {
                     ContainerForm(
                         name: $name,
                         emoji: $emoji,
-                        isEmojiPickerOpen: $isEmojiPickerOpen,
+                        iconSymbol: $iconSymbol,
+                        iconColorHex: $iconColorHex,
+                        isIconPickerOpen: $isIconPickerOpen,
                         onSubmit: createContainer,
                         defaultEmoji: ContainerConstants.defaultEmoji
                     )
@@ -106,7 +110,12 @@ private struct NewContainerDialog: View {
     private func createContainer() {
         guard !name.isEmpty else { return }
         let finalEmoji = emoji.isEmpty ? ContainerConstants.defaultEmoji : emoji
-        tabManager.createContainer(name: name, emoji: finalEmoji)
+        tabManager.createContainer(
+            name: name,
+            emoji: finalEmoji,
+            iconSymbol: iconSymbol,
+            iconColorHex: iconColorHex
+        )
         dismiss()
     }
 }

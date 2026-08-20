@@ -45,11 +45,9 @@ class Tab: ObservableObject, Identifiable {
     @Transient @Published var loadingProgress: Double = 10.0
     @Transient var colorUpdated = false
     @Transient var maybeIsActive = false
-    /// 40 ticks at 0.25 s gives the page 10 s to settle. Without a cap the retry chain
-    /// reschedules forever on a page whose dominant colour never resolves.
-    static let maxSnapshotRetries = 40
-    @Transient private(set) var snapshotRetriesLeft = 0
-    @Transient private var snapshotTimer: Timer?
+    /// Retries exist only for the case where the snapshot cannot be taken at all: a tab
+    /// that is not laid out yet. A painted page is done after the first one.
+    static let maxSnapshotRetries = 4
     @Transient @Published var hasNavigationError: Bool = false
     @Transient @Published var navigationError: Error?
     @Transient @Published var failedURL: URL?
@@ -153,10 +151,17 @@ class Tab: ObservableObject, Identifiable {
         }
     }
 
-    func updateHeaderColor() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            if let page = self?.browserPage {
-                self?.pageDelegate?.takeSnapshotAfterLoad(page)
+    /// One snapshot per finished navigation. `takeSnapshot` forces the web content process
+    /// to render, so taking them on a timer while the page is busy is a tax on the page
+    /// itself; a retry only happens when the snapshot could not be taken at all.
+    func updateHeaderColor(retriesLeft: Int = Tab.maxSnapshotRetries) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, let page = self.browserPage else { return }
+            guard self.pageDelegate?.takeSnapshotAfterLoad(page) == true else {
+                if retriesLeft > 0 {
+                    self.updateHeaderColor(retriesLeft: retriesLeft - 1)
+                }
+                return
             }
         }
     }
@@ -172,27 +177,6 @@ class Tab: ObservableObject, Identifiable {
                     container: self.container
                 )
             }
-        }
-    }
-
-    /// Starts a fresh round of header-colour retries. Called once per navigation start.
-    func maintainSnapShots() {
-        snapshotRetriesLeft = Self.maxSnapshotRetries
-        runSnapshotMaintenance()
-    }
-
-    private func runSnapshotMaintenance() {
-        snapshotTimer?.invalidate()
-        snapshotTimer = nil
-
-        guard self.maybeIsActive, !self.colorUpdated || self.browserPage?.isLoading == true else { return }
-        guard snapshotRetriesLeft > 0 else { return }
-        snapshotRetriesLeft -= 1
-
-        self.updateHeaderColor()
-
-        snapshotTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { [weak self] _ in
-            self?.runSnapshotMaintenance()
         }
     }
 

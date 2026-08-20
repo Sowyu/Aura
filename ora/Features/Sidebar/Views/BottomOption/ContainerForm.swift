@@ -3,63 +3,84 @@ import SwiftUI
 struct ContainerForm: View {
     @Binding var name: String
     @Binding var emoji: String
-    @Binding var isEmojiPickerOpen: Bool
+    @Binding var iconSymbol: String?
+    @Binding var iconColorHex: String?
+    @Binding var isIconPickerOpen: Bool
 
     let onSubmit: () -> Void
     let defaultEmoji: String
 
     @Environment(\.theme) private var theme
-    @State private var isEmojiPickerHovering = false
+    @State private var isIconPickerHovering = false
     @FocusState private var isNameFocused: Bool
+
+    private var isEmpty: Bool { iconSymbol == nil && emoji.isEmpty }
 
     var body: some View {
         HStack(spacing: 8) {
-            emojiPickerButton
+            iconPickerButton
             nameTextField
         }
         .onAppear { isNameFocused = true }
     }
 
-    private var emojiPickerButton: some View {
+    private var iconPickerButton: some View {
         Button(action: {
-            isEmojiPickerOpen.toggle()
+            isIconPickerOpen.toggle()
         }) {
             ZStack {
                 RoundedRectangle(cornerRadius: ContainerConstants.UI.cornerRadius, style: .continuous)
                     .stroke(
-                        emoji.isEmpty ? theme.border : theme.border,
-                        style: emoji.isEmpty
+                        theme.border,
+                        style: isEmpty
                             ? StrokeStyle(lineWidth: 1, dash: [5])
                             : StrokeStyle(lineWidth: 1)
                     )
                     .animation(
                         .easeOut(duration: ContainerConstants.Animation.emojiPickerDuration),
-                        value: emoji.isEmpty
+                        value: isEmpty
                     )
-                    .background(isEmojiPickerHovering ? theme.mutedBackground.opacity(0.8)
+                    .background(isIconPickerHovering ? theme.mutedBackground.opacity(0.8)
                         : theme.mutedBackground)
                     .cornerRadius(ContainerConstants.UI.cornerRadius)
 
-                if emoji.isEmpty {
+                if isEmpty {
                     Image(systemName: "plus")
                         .font(.system(size: 12))
                 } else {
-                    Text(emoji)
-                        .font(.system(size: 12))
+                    SpaceIconView(symbol: iconSymbol, colorHex: iconColorHex, emoji: emoji, size: 14)
                 }
             }
         }
-        .popover(isPresented: $isEmojiPickerOpen, arrowEdge: .bottom) {
-            EmojiPickerView(onSelect: { selectedEmoji in
-                emoji = selectedEmoji
-                isEmojiPickerOpen = false
-            })
+        .popover(isPresented: $isIconPickerOpen, arrowEdge: .bottom) {
+            SpaceIconPicker(
+                initialSymbol: iconSymbol,
+                initialColorHex: iconColorHex,
+                onSelect: apply
+            )
         }
         .frame(width: ContainerConstants.UI.emojiButtonSize, height: ContainerConstants.UI.emojiButtonSize)
         .cornerRadius(ContainerConstants.UI.cornerRadius)
         .buttonStyle(InteractiveButtonStyle(cornerRadius: ContainerConstants.UI.cornerRadius, hoverOpacity: 0))
-        .onHover { isEmojiPickerHovering = $0 }
-        .animation(.easeOut(duration: 0.1), value: isEmojiPickerHovering)
+        .onHover { isIconPickerHovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: isIconPickerHovering)
+    }
+
+    /// An emoji clears any chosen symbol; a symbol wins over the stored emoji.
+    private func apply(_ selection: SpaceIconSelection) {
+        switch selection {
+        case let .emoji(value):
+            emoji = value
+            iconSymbol = nil
+            iconColorHex = nil
+            isIconPickerOpen = false
+        case let .symbol(name, colorHex):
+            iconSymbol = name
+            iconColorHex = colorHex
+            isIconPickerOpen = false
+        case let .color(colorHex):
+            iconColorHex = colorHex
+        }
     }
 
     private var nameTextField: some View {

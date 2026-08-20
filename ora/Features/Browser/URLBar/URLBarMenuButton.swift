@@ -80,7 +80,10 @@ struct URLBarMenuButton: View {
             }
         }
 
-        let point = NSPoint(x: 0, y: sourceView.bounds.height + 4)
+        // `popUp` puts the menu's top-left corner at this point, in the view's own
+        // coordinates. `MenuSourceView` is flipped, so 4pt past maxY is 4pt below the
+        // button; in an unflipped view the same y would land above the toolbar.
+        let point = NSPoint(x: 0, y: sourceView.bounds.maxY + 4)
         menu.popUp(positioning: nil, at: point, in: sourceView)
     }
 
@@ -334,8 +337,14 @@ private final class MenuActionTarget: NSObject {
 private struct MenuSourceView: NSViewRepresentable {
     let onViewCreated: (NSView) -> Void
 
+    /// Flipped so `showMenu` can express "just below the button" as a single y value
+    /// that does not depend on whatever SwiftUI's host view happens to use.
+    final class FlippedView: NSView {
+        override var isFlipped: Bool { true }
+    }
+
     func makeNSView(context: Context) -> NSView {
-        let view = NSView()
+        let view = FlippedView()
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor.clear.cgColor
         DispatchQueue.main.async {

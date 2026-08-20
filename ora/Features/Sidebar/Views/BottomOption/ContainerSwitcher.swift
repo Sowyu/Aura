@@ -35,28 +35,37 @@ struct ContainerSwitcher: View {
     }
 
     @ViewBuilder
+    private func icon(for container: TabContainer, isCollapsed: Bool, isDot: Bool, size: CGFloat) -> some View {
+        if isCollapsed {
+            Text(ContainerConstants.defaultEmoji)
+                .font(.system(size: size))
+                .foregroundColor(.primary)
+        } else {
+            SpaceIconView(container: container, size: size)
+                .foregroundColor(isDot ? .primary : .secondary)
+        }
+    }
+
+    @ViewBuilder
     private func containerButton(for container: TabContainer, isCompact: Bool)
         -> some View
     {
         let isActive = tabManager.activeContainer?.id == container.id
         let isHovered = hoveredContainer == container.id
-        let displayEmoji = isCompact && !isActive ? (isHovered ? container.emoji : ContainerConstants.defaultEmoji) :
-            container.emoji
+        // Collapsed, inactive spaces shrink to a dot until hovered.
+        let isCollapsed = isCompact && !isActive && !isHovered
+        let hasSymbol = container.iconSymbol?.isEmpty == false
+        let isDot = !hasSymbol && container.emoji == ContainerConstants.defaultEmoji
         let buttonSize = isCompact && !isActive ?
             (isHovered ? ContainerConstants.UI.compactButtonWidth + 4 : ContainerConstants.UI.compactButtonWidth) :
             ContainerConstants.UI.normalButtonWidth
-        let fontSize: CGFloat = isCompact && !isActive ?
-            (isHovered ? (container.emoji == ContainerConstants.defaultEmoji ? 24 : 12) : 12
-            ) :
-            (container.emoji == ContainerConstants.defaultEmoji ? 24 : 12)
+        let iconSize: CGFloat = isCollapsed ? 12 : (hasSymbol ? 14 : (isDot ? 24 : 12))
 
         Button(action: {
             onContainerSelected(container)
         }) {
             HStack {
-                Text(displayEmoji)
-                    .font(.system(size: fontSize))
-                    .foregroundColor(displayEmoji == ContainerConstants.defaultEmoji ? .primary : .secondary)
+                icon(for: container, isCollapsed: isCollapsed, isDot: isDot, size: iconSize)
             }
             .frame(width: buttonSize, height: buttonSize)
             .grayscale(!isActive && !isHovered ? 0.5 : 0)

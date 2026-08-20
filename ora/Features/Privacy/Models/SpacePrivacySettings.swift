@@ -9,7 +9,7 @@ struct SpacePrivacySettings: Codable, Equatable, Hashable {
     init(
         blockThirdPartyTrackers: Bool = false,
         blockFingerprinting: Bool = true,
-        adBlocking: Bool = false,
+        adBlocking: Bool = true,
         adBlock: SpaceAdBlockSettings? = nil,
         cookiesPolicy: CookiesPolicy = .allowAll
     ) {
@@ -41,7 +41,7 @@ struct SpacePrivacySettings: Codable, Equatable, Hashable {
         if let nestedAdBlock = try container.decodeIfPresent(SpaceAdBlockSettings.self, forKey: .adBlock) {
             adBlock = nestedAdBlock
         } else {
-            let legacyAdBlocking = try container.decodeIfPresent(Bool.self, forKey: .adBlocking) ?? false
+            let legacyAdBlocking = try container.decodeIfPresent(Bool.self, forKey: .adBlocking) ?? true
             adBlock = SpaceAdBlockSettings(enabled: legacyAdBlocking)
         }
     }

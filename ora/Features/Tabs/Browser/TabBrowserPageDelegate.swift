@@ -58,7 +58,7 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         case .started:
             progressResetWorkItem?.cancel()
             tab.clearNavigationError()
-            tab.maintainSnapShots()
+            tab.colorUpdated = false
             passwordCoordinator?.clearAutofillState()
             tab.isLoading = event.isLoading
             tab.loadingProgress = event.progress
@@ -211,8 +211,11 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
     }
 
-    func takeSnapshotAfterLoad(_ page: BrowserPage) {
-        guard !page.isLoading, page.contentView.bounds.width > 0 else { return }
+    /// Returns false when the page cannot produce a snapshot yet, so the caller can retry
+    /// instead of the tab polling for one.
+    @discardableResult
+    func takeSnapshotAfterLoad(_ page: BrowserPage) -> Bool {
+        guard !page.isLoading, page.contentView.bounds.width > 0 else { return false }
 
         page.takeSnapshot(
             configuration: BrowserSnapshotConfiguration(
@@ -229,6 +232,8 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
                 self.tab?.colorUpdated = true
             }
         }
+
+        return true
     }
 
     private func handleURLUpdateMessage(_ body: Any?, for tab: Tab) {

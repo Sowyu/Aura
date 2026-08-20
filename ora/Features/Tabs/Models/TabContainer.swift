@@ -8,6 +8,10 @@ class TabContainer: ObservableObject, Identifiable {
     var id: UUID
     var name: String
     var emoji: String
+    /// SF Symbol name when the space uses an icon instead of an emoji.
+    var iconSymbol: String?
+    /// Tint for `iconSymbol`; `nil` means follow the theme foreground.
+    var iconColorHex: String?
     var createdAt: Date
     var lastAccessedAt: Date
 
@@ -19,12 +23,16 @@ class TabContainer: ObservableObject, Identifiable {
         id: UUID = UUID(),
         name: String = "Default",
         isActive: Bool = true,
-        emoji: String = "💩"
+        emoji: String = "💩",
+        iconSymbol: String? = nil,
+        iconColorHex: String? = nil
     ) {
         let nowDate = Date()
         self.id = id
         self.name = name
         self.emoji = emoji
+        self.iconSymbol = iconSymbol
+        self.iconColorHex = iconColorHex
         self.createdAt = nowDate
         self.lastAccessedAt = nowDate
     }

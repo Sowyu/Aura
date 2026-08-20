@@ -219,11 +219,12 @@ struct SidebarView: View {
     private var spacesContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             // The top toolbar owns the traffic lights and nav buttons, so while it is
-            // up the sidebar only keeps an 8pt breathing gap under it.
+            // up the sidebar only keeps a breathing gap under it, matching the one
+            // the content pane leaves on its top edge.
             if toolbarManager.isToolbarHidden {
                 SidebarHeader()
             } else {
-                Color.clear.frame(height: 8)
+                Color.clear.frame(height: browserContentTopInset)
             }
             NSPageView(
                 selection: selectedContainerIndex,

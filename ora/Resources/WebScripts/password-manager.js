@@ -124,6 +124,13 @@
 
     function relevantFieldsFor(element) {
         const scope = element.form || element.closest("form") || document;
+        // This runs on every focus of every input. Without a password field there is
+        // nothing to autofill, and the walk below measures every input in the scope,
+        // which forces layout on pages that have hundreds of them.
+        if (!scope.querySelector("input[type='password']")) {
+            return null;
+        }
+
         const inputs = Array.from(scope.querySelectorAll("input"))
             .filter(isRelevantInput)
             .filter(isVisible);
@@ -413,6 +420,8 @@
     document.addEventListener("focusout", handleBlur, true);
     document.addEventListener("keydown", handleKeyDown, true);
     document.addEventListener("submit", handleSubmit, true);
-    window.addEventListener("scroll", scheduleRectUpdate, true);
-    window.addEventListener("resize", scheduleRectUpdate, true);
+    // Passive: neither handler calls preventDefault, and a non-passive scroll listener
+    // makes WebKit take the slow scrolling path on every page in the browser.
+    window.addEventListener("scroll", scheduleRectUpdate, { capture: true, passive: true });
+    window.addEventListener("resize", scheduleRectUpdate, { capture: true, passive: true });
 })();

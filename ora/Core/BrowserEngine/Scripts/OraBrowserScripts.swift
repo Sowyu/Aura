@@ -88,14 +88,53 @@ private extension OraBrowserScripts {
             }
         }
 
-        const titleObserver = new MutationObserver(() => notifyChange());
-        const titleElement = document.querySelector('title');
-        if (titleElement) {
-            titleObserver.observe(titleElement, { childList: true });
+        // A router-driven app can call pushState hundreds of times a second, and every
+        // message costs a hop into the native side. One message per 150 ms is as fresh as
+        // the sidebar can show anyway.
+        let notifyTimer = 0;
+
+        function scheduleNotify() {
+            if (notifyTimer) return;
+            notifyTimer = setTimeout(() => {
+                notifyTimer = 0;
+                notifyChange();
+            }, 150);
         }
 
-        setInterval(() => notifyChange(), 500);
-        window.addEventListener('popstate', () => notifyChange(true));
+        const titleObserver = new MutationObserver(scheduleNotify);
+
+        function observeTitle() {
+            const titleElement = document.querySelector('title');
+            if (!titleElement) return false;
+            titleObserver.observe(titleElement, { childList: true });
+            return true;
+        }
+
+        // A document that has no <title> yet gets one watch on <head> until it grows one.
+        // Everything else is event driven: polling the URL and title from a timer costs
+        // every page in the browser, benchmark pages included.
+        if (!observeTitle() && document.head) {
+            const headObserver = new MutationObserver(() => {
+                if (observeTitle()) {
+                    headObserver.disconnect();
+                    scheduleNotify();
+                }
+            });
+            headObserver.observe(document.head, { childList: true });
+        }
+
+        for (const method of ['pushState', 'replaceState']) {
+            const original = history[method];
+            if (typeof original !== 'function') continue;
+            history[method] = function () {
+                const result = original.apply(this, arguments);
+                scheduleNotify();
+                return result;
+            };
+        }
+
+        window.addEventListener('popstate', scheduleNotify, { passive: true });
+        window.addEventListener('hashchange', scheduleNotify, { passive: true });
         notifyChange(true);
 
         let lastHover = null;
@@ -120,8 +159,8 @@ private extension OraBrowserScripts {
             }
         }
 
-        document.addEventListener('mouseover', onMouseOver, true);
-        document.addEventListener('mouseout', onMouseOut, true);
+        document.addEventListener('mouseover', onMouseOver, { capture: true, passive: true });
+        document.addEventListener('mouseout', onMouseOut, { capture: true, passive: true });
     })();
 
     (function () {
@@ -180,22 +219,6 @@ private extension OraBrowserScripts {
             title: document.title
         });
 
-        function watchRemoval(element, callback) {
-            const observer = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    for (const removed of mutation.removedNodes) {
-                        if (removed === element || removed.contains(element)) {
-                            callback();
-                            observer.disconnect();
-                            return;
-                        }
-                    }
-                }
-            });
-
-            observer.observe(document.body, { childList: true, subtree: true });
-        }
-
         function attach(element) {
             if (!element || element.__oraAttached) return;
             element.__oraAttached = true;
@@ -213,11 +236,11 @@ private extension OraBrowserScripts {
                 element.__oraWasPlayed = true;
                 update();
             }
-            watchRemoval(element, () => post({ type: 'removed' }));
         }
 
         let hadMedia = false;
         let scanPending = false;
+        let treeObserver = null;
 
         function scan() {
             const elements = document.querySelectorAll('video, audio');
@@ -225,7 +248,12 @@ private extension OraBrowserScripts {
             // the observer fires on every DOM batch. One message still goes out when
             // media disappears so the native side can clear its session.
             if (elements.length === 0 && !hadMedia) return;
-            hadMedia = elements.length > 0;
+            if (elements.length === 0) {
+                hadMedia = false;
+                post({ type: 'removed' });
+                return;
+            }
+            hadMedia = true;
             elements.forEach(attach);
             caps();
         }
@@ -239,9 +267,32 @@ private extension OraBrowserScripts {
             }, 250);
         }
 
-        const observer = new MutationObserver(scheduleScan);
-        observer.observe(document.documentElement, { childList: true, subtree: true });
-        scan();
+        // Watching every DOM mutation in the document is the single most expensive thing
+        // this script can do, so a page without media never starts the observer. The
+        // capture listeners below cost nothing until a media element actually loads.
+        function startWatchingTree() {
+            if (treeObserver) return;
+            treeObserver = new MutationObserver(scheduleScan);
+            treeObserver.observe(document.documentElement, { childList: true, subtree: true });
+        }
+
+        function onMediaLifecycle(event) {
+            const element = event.target;
+            if (!element || (element.tagName !== 'VIDEO' && element.tagName !== 'AUDIO')) return;
+            startWatchingTree();
+            hadMedia = true;
+            attach(element);
+            caps();
+        }
+
+        for (const name of ['play', 'playing', 'loadedmetadata', 'loadeddata']) {
+            document.addEventListener(name, onMediaLifecycle, { capture: true, passive: true });
+        }
+
+        if (document.querySelector('video, audio')) {
+            startWatchingTree();
+            scan();
+        }
 
         window.__oraMedia = {
             active: null,

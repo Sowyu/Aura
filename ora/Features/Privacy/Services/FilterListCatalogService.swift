@@ -3,18 +3,117 @@ import Foundation
 struct FilterListCatalogService {
     static let shared = FilterListCatalogService()
 
+    static let uBlockFiltersID = "ublock-filters"
+    static let uBlockBadwareID = "ublock-badware"
+    static let uBlockPrivacyID = "ublock-privacy"
+    static let uBlockQuickFixesID = "ublock-quick-fixes"
+    static let uBlockUnbreakID = "ublock-unbreak"
+    static let easyListID = "easylist"
+    static let easyPrivacyID = "easyprivacy"
+    static let peterLoweID = "peter-lowe"
     static let adGuardBaseID = "adguard-base"
     static let adGuardMobileAdsID = "adguard-mobile-ads"
     static let adGuardTrackingProtectionID = "adguard-tracking-protection"
     static let adGuardURLTrackingID = "adguard-url-tracking"
     static let adGuardAnnoyancesID = "adguard-annoyances"
 
+    /// uBlock Origin's own default selection, plus the AdGuard lists Ora already shipped.
+    /// WebKit cannot run uBO itself, so matching its list set is how Ora gets the same coverage.
     static let defaultBuiltinSelectionIDs = [
+        uBlockFiltersID,
+        uBlockBadwareID,
+        uBlockPrivacyID,
+        uBlockQuickFixesID,
+        uBlockUnbreakID,
+        easyListID,
+        easyPrivacyID,
+        peterLoweID,
         adGuardBaseID,
         adGuardMobileAdsID
     ]
 
     let builtinRecords: [FilterListRecord] = [
+        FilterListRecord(
+            id: FilterListCatalogService.uBlockFiltersID,
+            name: "uBlock filters",
+            summary: "uBlock Origin's own ad and nuisance rules.",
+            sourceKind: .builtin,
+            sourceURL: "https://ublockorigin.github.io/uAssets/filters/filters.txt",
+            isRecommended: true,
+            enabledByDefault: true,
+            status: .idle
+        ),
+        FilterListRecord(
+            id: FilterListCatalogService.uBlockBadwareID,
+            name: "uBlock Badware risks",
+            summary: "Domains known to host malware, scams, and unwanted software.",
+            sourceKind: .builtin,
+            sourceURL: "https://ublockorigin.github.io/uAssets/filters/badware.txt",
+            isRecommended: true,
+            enabledByDefault: true,
+            status: .idle
+        ),
+        FilterListRecord(
+            id: FilterListCatalogService.uBlockPrivacyID,
+            name: "uBlock Privacy",
+            summary: "Trackers and telemetry endpoints beyond what EasyPrivacy covers.",
+            sourceKind: .builtin,
+            sourceURL: "https://ublockorigin.github.io/uAssets/filters/privacy.txt",
+            isRecommended: true,
+            enabledByDefault: true,
+            status: .idle
+        ),
+        FilterListRecord(
+            id: FilterListCatalogService.uBlockQuickFixesID,
+            name: "uBlock Quick fixes",
+            summary: "Fast-moving fixes uBlock Origin ships between list releases.",
+            sourceKind: .builtin,
+            sourceURL: "https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt",
+            isRecommended: true,
+            enabledByDefault: true,
+            status: .idle
+        ),
+        FilterListRecord(
+            id: FilterListCatalogService.uBlockUnbreakID,
+            name: "uBlock Unbreak",
+            summary: "Exception rules that repair sites the other lists break.",
+            sourceKind: .builtin,
+            sourceURL: "https://ublockorigin.github.io/uAssets/filters/unbreak.txt",
+            isRecommended: true,
+            enabledByDefault: true,
+            status: .idle
+        ),
+        FilterListRecord(
+            id: FilterListCatalogService.easyListID,
+            name: "EasyList",
+            summary: "The baseline ad-blocking list most blockers build on.",
+            sourceKind: .builtin,
+            sourceURL: "https://easylist.to/easylist/easylist.txt",
+            isRecommended: true,
+            enabledByDefault: true,
+            status: .idle
+        ),
+        FilterListRecord(
+            id: FilterListCatalogService.easyPrivacyID,
+            name: "EasyPrivacy",
+            summary: "Tracking scripts, analytics beacons, and web bugs.",
+            sourceKind: .builtin,
+            sourceURL: "https://easylist.to/easylist/easyprivacy.txt",
+            isRecommended: true,
+            enabledByDefault: true,
+            status: .idle
+        ),
+        FilterListRecord(
+            id: FilterListCatalogService.peterLoweID,
+            name: "Peter Lowe's Ad and tracking server list",
+            summary: "A hand-maintained blocklist of ad and tracking servers.",
+            sourceKind: .builtin,
+            sourceURL: "https://pgl.yoyo.org/adservers/serverlist.php" +
+                "?hostformat=adblockplus&showintro=0&mimetype=plaintext",
+            isRecommended: true,
+            enabledByDefault: true,
+            status: .idle
+        ),
         FilterListRecord(
             id: FilterListCatalogService.adGuardBaseID,
             name: "AdGuard Base",

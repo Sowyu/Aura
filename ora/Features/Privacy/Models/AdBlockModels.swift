@@ -115,7 +115,7 @@ struct SpaceAdBlockSettings: Codable, Equatable, Hashable {
     var updateMode: AdBlockUpdateMode
 
     init(
-        enabled: Bool = false,
+        enabled: Bool = true,
         enabledBuiltinListIDs: [String] = FilterListCatalogService.defaultBuiltinSelectionIDs,
         enabledCustomListIDs: [String] = [],
         updateMode: AdBlockUpdateMode = .onLaunchDaily

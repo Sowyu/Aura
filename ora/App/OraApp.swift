@@ -15,11 +15,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Second ⌘Q while the confirmation is up: take it as the confirmation. The
+        // parked reply is answered too, in case AppKit is still spinning on it.
+        if DialogManager.isQuitConfirmationVisible {
+            DialogManager.isQuitConfirmationVisible = false
+            NSApp.reply(toApplicationShouldTerminate: true)
+            return .terminateNow
+        }
+
         // Only browser windows host the quit-confirmation observer; targeting any other
         // window (Settings, Passwords) would leave the terminateLater reply unanswered.
         let browserWindows = NSApp.windows.filter { $0.isVisible && Self.isBrowserWindow($0) }
         let targetWindow = browserWindows.first(where: \.isKeyWindow) ?? browserWindows.first
         guard let targetWindow else { return .terminateNow }
+        DialogManager.isQuitConfirmationVisible = true
         NotificationCenter.default.post(name: .quitRequested, object: targetWindow)
         return .terminateLater
     }

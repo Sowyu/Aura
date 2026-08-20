@@ -1,78 +1,70 @@
 import SwiftUI
 
-struct EmojiPickerView: View {
+/// Grid of base emoji only. Emoji with skin-tone or hair forms open a small
+/// variant strip instead of committing straight away.
+struct EmojiGridView: View {
+    @ObservedObject var viewModel: EmojiViewModel
     let onSelect: (String) -> Void
 
-    @StateObject private var viewModel = EmojiViewModel()
+    @Environment(\.theme) private var theme
     @State private var hoveredEmoji: String?
+    @State private var variantItemID: UUID?
 
     var body: some View {
-        emojiContentView
-            .frame(width: 400, height: 400)
-            .padding(8)
-            .overlay {
-                if viewModel.isLoading {
-                    ProgressView("Loading Emojis...")
-                } else if let error = viewModel.error {
-                    Text("Error: \(error)")
-                        .foregroundColor(.red)
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 32), spacing: 4)], spacing: 4) {
+                ForEach(viewModel.filteredEmojis) { item in
+                    cell(for: item)
                 }
             }
-    }
-
-    private var emojiContentView: some View {
-        VStack(spacing: 8) {
-            SearchBar(text: $viewModel.searchText)
-                .frame(height: 40)
-
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 30))], spacing: 10) {
-                    ForEach(viewModel.filteredEmojis) { item in
-                        Text(item.emoji)
-                            .font(.system(size: 16))
-                            .frame(width: 32, height: 32)
-                            .background(hoveredEmoji == item.emoji ? Color.gray.opacity(0.2) : Color.clear)
-                            .cornerRadius(8)
-                            .animation(.easeOut(duration: 0.1), value: hoveredEmoji)
-                            .onHover { hoveredEmoji = $0 ? item.emoji : nil }
-                            .onTapGesture { onSelect(item.emoji) }
-                    }
-                }
-            }
-
-            // Bottom category navigation
-            HStack {
-                Spacer()
-                ForEach(viewModel.categories) { category in
-                    Button {
-                        viewModel.selectedCategory = category.category
-                    } label: {
-                        // Use a placeholder system image; replace with category-specific emoji if available
-                        Image(systemName: categoryIcon(for: category.category))
-                            .font(.system(size: 16))
-                            .foregroundColor(viewModel.selectedCategory == category.category ? .blue : .gray)
-                    }
-                    .buttonStyle(.interactive(cornerRadius: 6))
-                    .padding(4)
-
-                    Spacer()
-                }
-            }
+            .padding(.vertical, 2)
         }
     }
 
-    /// Map category names to bottom icons (customize based on JSON or screenshot)
-    private func categoryIcon(for category: String) -> String {
-        switch category.lowercased() {
-        case let str where str.contains("smileys"): return "face.smiling.inverse"
-        case let str where str.contains("animals"): return "pawprint"
-        case let str where str.contains("food"): return "fork.knife"
-        case let str where str.contains("travel"): return "sun.max"
-        case let str where str.contains("objects"): return "gift"
-        case let str where str.contains("symbols"): return "heart"
-        case let str where str.contains("flags"): return "flag"
-        default: return "questionmark"
+    private func cell(for item: EmojiItem) -> some View {
+        emojiTile(item.emoji, size: 16)
+            .onTapGesture {
+                if item.variants.isEmpty {
+                    onSelect(item.emoji)
+                } else {
+                    variantItemID = item.id
+                }
+            }
+            .popover(isPresented: variantBinding(for: item), arrowEdge: .bottom) {
+                variantStrip(for: item)
+            }
+    }
+
+    private func variantBinding(for item: EmojiItem) -> Binding<Bool> {
+        Binding(
+            get: { variantItemID == item.id },
+            set: { if !$0, variantItemID == item.id { variantItemID = nil } }
+        )
+    }
+
+    private func variantStrip(for item: EmojiItem) -> some View {
+        let forms = [item] + item.variants
+        return LazyVGrid(columns: Array(repeating: GridItem(.fixed(32), spacing: 4), count: 6), spacing: 4) {
+            ForEach(forms) { form in
+                emojiTile(form.emoji, size: 18)
+                    .onTapGesture {
+                        variantItemID = nil
+                        onSelect(form.emoji)
+                    }
+            }
         }
+        .padding(8)
+        .frame(width: 232)
+    }
+
+    private func emojiTile(_ emoji: String, size: CGFloat) -> some View {
+        Text(emoji)
+            .font(.system(size: size))
+            .frame(width: 32, height: 32)
+            .background(hoveredEmoji == emoji ? theme.mutedBackground : Color.clear)
+            .cornerRadius(6)
+            .contentShape(Rectangle())
+            .onHover { hoveredEmoji = $0 ? emoji : nil }
     }
 }
 

@@ -18,7 +18,6 @@ struct BrowserView: View {
     @State private var showFloatingURLBar = false
     @State private var isMouseOverSidebar = false
     @State private var showFloatingSidebar = false
-    @State private var showFloatingToolbar = false
 
     // MARK: - Sidebar mouse shield
 
@@ -98,7 +97,7 @@ struct BrowserView: View {
             }
 
             if toolbarManager.isToolbarHidden, sidebarManager.isCompactEnabled {
-                FloatingTopToolbar(isVisible: $showFloatingToolbar)
+                FloatingTopToolbar()
             } else if toolbarManager.isToolbarHidden, sidebarManager.sidebarPosition != .primary {
                 FloatingURLBar(
                     showFloatingURLBar: $showFloatingURLBar,
@@ -147,6 +146,9 @@ struct BrowserView: View {
             }
         }
         .onAppear {
+            // Compact mode's hidden flags live in their own defaults keys, so a fresh
+            // window reconciles them with the persisted compact settings.
+            sidebarManager.applyCompactModeIfEnabled(toolbar: toolbarManager)
             if let tab = tabManager.activeTab, !tab.isWebViewReady {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     tab.restoreTransientState(
@@ -166,8 +168,11 @@ struct BrowserView: View {
 private struct FloatingTopToolbar: View {
     @Environment(\.theme) private var theme
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var toolbarManager: ToolbarManager
 
-    @Binding var isVisible: Bool
+    /// Lives on the manager rather than in local state so `WindowAccessor` can bring
+    /// the native traffic lights back with the row.
+    private var isVisible: Bool { toolbarManager.isFloatingToolbarVisible }
 
     /// While shown, the toolbar row is the hover target, so leaving it hides again.
     private var stripHeight: CGFloat { isVisible ? TopToolbar.rowHeight : 4 }
@@ -175,13 +180,15 @@ private struct FloatingTopToolbar: View {
     var body: some View {
         ZStack(alignment: .top) {
             if isVisible {
+                // Opaque, not blurred: the row sits over live page content, and the
+                // traffic lights AppKit draws into it are opaque anyway.
                 TopToolbar()
                     .background(theme.subtleWindowBackgroundColor)
-                    .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
+                    .background(theme.background)
                     .overlay(alignment: .bottom) {
                         Rectangle()
-                            .fill(theme.foreground.opacity(0.12))
-                            .frame(height: 0.5)
+                            .fill(theme.foreground.opacity(0.08))
+                            .frame(height: 1)
                     }
                     .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
                     .transition(.move(edge: .top))
@@ -198,7 +205,7 @@ private struct FloatingTopToolbar: View {
                                 // A live URL edit must not yank the row away. An open menu
                                 // swallows mouse-moved events, so it holds by itself.
                                 if !entered, appState.isURLBarEditing { return }
-                                isVisible = entered
+                                toolbarManager.isFloatingToolbarVisible = entered
                             }
                         ),
                         edge: .top,
@@ -209,5 +216,6 @@ private struct FloatingTopToolbar: View {
                 )
         }
         .animation(.easeOut(duration: 0.15), value: isVisible)
+        .onDisappear { toolbarManager.isFloatingToolbarVisible = false }
     }
 }

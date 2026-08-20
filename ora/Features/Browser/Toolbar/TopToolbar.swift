@@ -8,6 +8,11 @@ struct TopToolbar: View {
     /// Leading room reserved for the native window buttons.
     static let trafficLightGap: CGFloat = 78
     static let rowHeight: CGFloat = 44
+    /// Height of the tallest control in the row, the address pill.
+    private static let contentHeight: CGFloat = 30
+    /// Empty space the row leaves above and below its controls. Views placed under
+    /// the row subtract it so the visible gap matches the window's other insets.
+    static var verticalSlack: CGFloat { (rowHeight - contentHeight) / 2 }
     private static let buttonSize: CGFloat = 28
     /// Between two buttons that read as one control.
     private static let pairSpacing: CGFloat = 2

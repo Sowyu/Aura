@@ -29,7 +29,7 @@ struct SpacesSettingsView: View {
             List(selection: $selectedContainerId) {
                 ForEach(containers) { container in
                     HStack {
-                        Text(container.emoji)
+                        SpaceIconView(container: container, size: 14)
                         Text(container.name)
                     }
                     .tag(container.id)

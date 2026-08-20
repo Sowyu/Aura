@@ -28,7 +28,6 @@ struct URLBarField: View {
     // Inline launcher state
     @StateObject private var launcherViewModel = LauncherViewModel()
     @State private var launcherInput = ""
-    @FocusState private var isLauncherFocused: Bool
     @State private var mouseHasMoved = false
     @State private var mouseMonitor: Any?
     @State private var suppressInitialSearch = false
@@ -53,15 +52,7 @@ struct URLBarField: View {
     // MARK: - Body
 
     var body: some View {
-        Group {
-            if isEditing {
-                inlineLauncherInput
-                    .transition(.blurReplace)
-            } else {
-                urlDisplayField
-                    .transition(.blurReplace)
-            }
-        }
+        field
         .overlay(alignment: .top) {
             if isEditing {
                 suggestionsOverlay()
@@ -77,6 +68,13 @@ struct URLBarField: View {
                 .opacity(0)
                 .allowsHitTesting(false)
         )
+        .onChange(of: isEditing) { _, editing in
+            if editing {
+                setupInlineLauncher()
+            } else {
+                cleanupInlineLauncher()
+            }
+        }
         .onChange(of: tabManager.activeTab?.id) { _, _ in
             if isEditing {
                 dismissEditing()
@@ -98,18 +96,19 @@ struct URLBarField: View {
         }
     }
 
-    // MARK: - URL Display Field (non-editing)
+    // MARK: - Field
 
-    private var urlDisplayField: some View {
+    /// One NSTextField for both modes. The field editor owns mouse tracking, so a
+    /// drag selects text instead of moving the hidden-titlebar window.
+    private var field: some View {
         HStack(spacing: 8) {
-            // Security indicator
             ZStack {
-                if tab?.isLoading == true {
+                if tab?.isLoading == true, !isEditing {
                     ProgressView()
                         .tint(foregroundColor)
                         .scaleEffect(0.5)
                 } else {
-                    Image(systemName: securitySymbol)
+                    Image(systemName: isEditing ? editingSymbol : securitySymbol)
                         .font(.system(size: 12))
                         .foregroundColor(foregroundColor)
                 }
@@ -123,36 +122,35 @@ struct URLBarField: View {
                     startWheelAnimation: $startWheelAnimation
                 )
 
-                HStack(spacing: 0) {
-                    if let parts = displayParts {
-                        Text(parts.host)
-                            .font(.system(size: 14))
-                            .foregroundColor(foregroundColor)
-                        if let title = parts.title {
-                            Text(" / \(title)")
-                                .font(.system(size: 14))
-                                .foregroundColor(foregroundColor.opacity(0.6))
-                        }
-                    } else {
-                        Text("Search or enter address")
-                            .font(.system(size: 14))
-                            .foregroundColor(foregroundColor.opacity(0.6))
-                    }
-                    Spacer()
-                }
-                .lineLimit(1)
-                .truncationMode(.middle)
+                LauncherTextField(
+                    text: $launcherInput,
+                    font: NSFont.systemFont(ofSize: 14, weight: .regular),
+                    onTab: {},
+                    onSubmit: { launcherViewModel.executeCommand() },
+                    onDelete: { false },
+                    onMoveUp: { launcherViewModel.moveFocusedElement(.up) },
+                    onMoveDown: { launcherViewModel.moveFocusedElement(.down) },
+                    cursorColor: textColor.opacity(0.8),
+                    textColor: isEditing ? textColor.opacity(0.7) : foregroundColor,
+                    placeholder: isEditing ? "Search the web or enter URL..." : "Search or enter address",
+                    displayText: displayText,
+                    isEditing: isEditing,
+                    onBeginEditing: startEditing,
+                    onEndEditing: dismissEditing,
+                    onEscape: dismissEditing
+                )
                 .opacity(showCopiedAnimation ? 0 : 1)
                 .offset(y: showCopiedAnimation ? (startWheelAnimation ? -12 : 12) : 0)
                 .animation(.easeOut(duration: 0.15), value: showCopiedAnimation)
                 .animation(.easeOut(duration: 0.15), value: startWheelAnimation)
+                .onChange(of: launcherInput) { _, newValue in
+                    guard isEditing else { return }
+                    launcherViewModel.currentText = newValue
+                    guard !suppressInitialSearch else { return }
+                    launcherViewModel.searchHandler(newValue)
+                }
             }
-            .font(.system(size: 14))
-            .foregroundColor(foregroundColor)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Only the text area starts editing, so the copy button keeps its own hit area.
-            // Mouse-down (not tap) so a drag selects text instead of moving the window.
-            .overlay(MouseDownCatcher { startEditing() })
 
             Button {
                 if let activeTab = tabManager.activeTab {
@@ -169,8 +167,8 @@ struct URLBarField: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.interactive(cornerRadius: 6, tint: foregroundColor))
-            .disabled(tab == nil)
-            .opacity(tab == nil ? 0 : 1)
+            .disabled(tab == nil || isEditing)
+            .opacity(tab == nil || isEditing ? 0 : 1)
             .oraShortcutHelp("Copy URL", for: KeyboardShortcuts.Address.copyURL)
             .accessibilityLabel(Text("Copy URL"))
         }
@@ -185,64 +183,13 @@ struct URLBarField: View {
         return tab.url.scheme == "https" ? "shield.lefthalf.filled" : "globe"
     }
 
-    private var displayParts: URLDisplayParts? {
-        guard let tab else { return nil }
-        return URLDisplayUtils.displayParts(
-            url: tab.url,
-            title: tab.title,
-            showFull: toolbarManager.showFullURL
-        )
+    private var editingSymbol: String {
+        isValidURL(launcherInput) ? "globe" : "magnifyingglass"
     }
 
-    // MARK: - Inline Launcher Input (editing)
-
-    private var inlineLauncherInput: some View {
-        HStack(spacing: 8) {
-            Image(systemName: isValidURL(launcherInput) ? "globe" : "magnifyingglass")
-                .font(.system(size: 12))
-                .foregroundColor(foregroundColor)
-                .frame(width: 16, height: 16)
-
-            LauncherTextField(
-                text: $launcherInput,
-                font: NSFont.systemFont(ofSize: 14, weight: .regular),
-                onTab: {},
-                onSubmit: {
-                    launcherViewModel.executeCommand()
-                },
-                onDelete: { false },
-                onMoveUp: {
-                    launcherViewModel.moveFocusedElement(.up)
-                },
-                onMoveDown: {
-                    launcherViewModel.moveFocusedElement(.down)
-                },
-                cursorColor: textColor.opacity(0.8),
-                textColor: textColor.opacity(0.7),
-                placeholder: "Search the web or enter URL..."
-            )
-            .textFieldStyle(PlainTextFieldStyle())
-            .focused($isLauncherFocused)
-            .onChange(of: launcherInput) { _, newValue in
-                launcherViewModel.currentText = newValue
-                guard !suppressInitialSearch else { return }
-                launcherViewModel.searchHandler(newValue)
-            }
-            .onKeyPress(.escape) {
-                dismissEditing()
-                return .handled
-            }
-        }
-        .onAppear {
-            setupInlineLauncher()
-        }
-        .onDisappear {
-            cleanupInlineLauncher()
-        }
-        .frame(height: Self.height)
-        .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(pill)
+    private var displayText: String {
+        guard let tab else { return "" }
+        return URLDisplayUtils.displayString(url: tab.url, title: tab.title, showFull: toolbarManager.showFullURL)
     }
 
     // MARK: - Suggestions Overlay
@@ -277,12 +224,12 @@ struct URLBarField: View {
 // MARK: - Inline launcher
 
 extension URLBarField {
+    /// Called from the shortcut and from the text field becoming first responder.
     private func startEditing() {
         guard !isEditing else { return }
-        // Pre-fill input before animation so the text field isn't empty on appear
-        if let activeTab = tabManager.activeTab {
-            launcherInput = activeTab.url.absoluteString
-        }
+        // Pre-fill before flipping the flag so the field edits the URL, not the host.
+        suppressInitialSearch = true
+        launcherInput = tabManager.activeTab?.url.absoluteString ?? ""
         withAnimation(.easeOut(duration: 0.1)) {
             appState.isURLBarEditing = true
         }
@@ -290,9 +237,6 @@ extension URLBarField {
 
     private func setupInlineLauncher() {
         suppressInitialSearch = true
-        if launcherInput.isEmpty, let activeTab = tabManager.activeTab {
-            launcherInput = activeTab.url.absoluteString
-        }
         launcherViewModel.searchEngineService.setTheme(theme)
         launcherViewModel.configure(
             tabManager: tabManager,
@@ -305,9 +249,6 @@ extension URLBarField {
             navigateInCurrentTab: tabManager.activeTab != nil
         )
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            isLauncherFocused = true
-        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             suppressInitialSearch = false
         }
@@ -332,7 +273,6 @@ extension URLBarField {
         }
         DispatchQueue.main.async {
             guard !appState.isURLBarEditing else { return }
-            isLauncherFocused = false
             mouseHasMoved = false
             suppressInitialSearch = false
             launcherInput = ""

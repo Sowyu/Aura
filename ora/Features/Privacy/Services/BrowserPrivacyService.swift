@@ -256,7 +256,14 @@ struct FingerprintingProtectionProfile: Equatable {
             defineValue(Screen.prototype, 'availHeight', profile.availHeight);
             defineValue(Screen.prototype, 'colorDepth', profile.colorDepth);
             defineValue(Screen.prototype, 'pixelDepth', profile.pixelDepth);
-            defineValue(window, 'devicePixelRatio', profile.devicePixelRatio);
+            // Only ever clamp downwards. Reporting a higher ratio than the display has
+            // makes every canvas app allocate a backing store it does not need, which is
+            // a silent multiple of the real pixel work on a non-retina screen.
+            defineValue(
+                window,
+                'devicePixelRatio',
+                Math.min(window.devicePixelRatio || 1, profile.devicePixelRatio)
+            );
 
             if (navigator.permissions && typeof navigator.permissions.query === 'function') {
                 const originalQuery = navigator.permissions.query.bind(navigator.permissions);

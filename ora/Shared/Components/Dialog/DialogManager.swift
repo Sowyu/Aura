@@ -1,12 +1,16 @@
 import SwiftUI
 
 final class DialogManager: ObservableObject {
+    /// ⌘Q parks the terminate reply and puts a confirmation on screen. `AppDelegate`
+    /// sets this so a second ⌘Q quits outright; it clears when the stack empties.
+    static var isQuitConfirmationVisible = false
+
     @Published var dialogs: [Dialog] = []
 
     @discardableResult
     func show(@ViewBuilder content: @escaping (String) -> some View) -> String {
         let dialog = Dialog { id in content(id) }
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+        withAnimation(.easeOut(duration: 0.15)) {
             dialogs.append(dialog)
         }
         return dialog.id
@@ -16,9 +20,10 @@ final class DialogManager: ObservableObject {
         if let dialog = dialogs.first(where: { $0.id == id }) {
             dialog.onDismiss?()
         }
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+        withAnimation(.easeOut(duration: 0.15)) {
             dialogs.removeAll(where: { $0.id == id })
         }
+        clearQuitConfirmationIfEmpty()
     }
 
     func dismissTop() {
@@ -27,8 +32,15 @@ final class DialogManager: ObservableObject {
     }
 
     func dismissAll() {
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+        withAnimation(.easeOut(duration: 0.15)) {
             dialogs.removeAll()
+        }
+        clearQuitConfirmationIfEmpty()
+    }
+
+    private func clearQuitConfirmationIfEmpty() {
+        if dialogs.isEmpty {
+            Self.isQuitConfirmationVisible = false
         }
     }
 
@@ -68,7 +80,7 @@ final class DialogManager: ObservableObject {
         dialog.onDismiss = {
             if !state.confirmed { onCancel?() }
         }
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+        withAnimation(.easeOut(duration: 0.15)) {
             dialogs.append(dialog)
         }
     }

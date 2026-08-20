@@ -44,8 +44,13 @@ class SidebarManager: ObservableObject {
         sidebarPosition == .primary ? primaryFraction : secondaryFraction
     }
 
+    /// `@AppStorage` on a class writes the default but publishes nothing, so every
+    /// mutation of it has to nudge observers by hand.
     func updateSidebarHidden() {
-        isSidebarHidden = hiddenSidebar.side == .primary || hiddenSidebar.side == .secondary
+        let hidden = hiddenSidebar.side == .primary || hiddenSidebar.side == .secondary
+        guard isSidebarHidden != hidden else { return }
+        objectWillChange.send()
+        isSidebarHidden = hidden
     }
 
     func toggleSidebar() {
@@ -75,9 +80,19 @@ class SidebarManager: ObservableObject {
         applyCompactMode(toolbar: toolbar)
     }
 
+    /// Picking what compact mode takes away also turns it on: the submenu is the
+    /// only place these options appear, so a silent no-op reads as a broken menu.
     func setCompactHides(_ hides: CompactModeHides, toolbar: ToolbarManager) {
         objectWillChange.send()
         compactHides = hides
+        isCompactEnabled = true
+        applyCompactMode(toolbar: toolbar)
+    }
+
+    /// The hidden-sidebar and hidden-toolbar flags persist under their own keys and
+    /// drift from `compactHides` between launches, so the window re-applies on open.
+    func applyCompactModeIfEnabled(toolbar: ToolbarManager) {
+        guard isCompactEnabled else { return }
         applyCompactMode(toolbar: toolbar)
     }
 

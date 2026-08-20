@@ -8,6 +8,10 @@ struct WindowAccessor: NSViewRepresentable {
     /// move into the top toolbar row when it is visible.
     @AppStorage("ui.toolbar.hidden") private var isToolbarHidden: Bool = false
 
+    /// Compact mode hides the row but hover-reveals it; the buttons ride along so the
+    /// revealed row is identical to the pinned one.
+    @EnvironmentObject private var toolbarManager: ToolbarManager
+
     /// Matches `TopToolbar`'s row height and leading inset.
     private static let toolbarHeight: CGFloat = 44
     private static let trafficLightLeading: CGFloat = 12
@@ -101,10 +105,11 @@ struct WindowAccessor: NSViewRepresentable {
 
         // The toolbar hosts the real window buttons; without it the sidebar/URL bar
         // draws its own controls and the native ones stay hidden.
-        let showInToolbar = !isToolbarHidden && !isFullscreen
+        let rowIsUp = !isToolbarHidden || toolbarManager.isFloatingToolbarVisible
+        let showInToolbar = rowIsUp && !isFullscreen
 
         for (_, button) in buttons {
-            button.animator().isHidden = !(isFullscreen || showInToolbar)
+            button.isHidden = !(isFullscreen || showInToolbar)
         }
 
         for (type, button) in buttons where coordinator.defaultOrigins[type] == nil {
