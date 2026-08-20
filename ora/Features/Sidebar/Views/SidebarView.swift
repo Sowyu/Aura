@@ -79,7 +79,77 @@ struct SidebarView: View {
             // Swipe-to-dismiss gesture on the whole sidebar when downloads is showing
             .simultaneousGesture(downloadsNavigationGesture(width: width))
         }
+        // Tab rows carry their own menu, and the innermost one wins, so this only
+        // fires on empty sidebar background.
+        .contextMenu { sidebarContextMenu }
         .enableInjection()
+    }
+
+    // MARK: - Background context menu
+
+    private var favoritesItemTitle: String {
+        tabManager.activeTab?.type == .fav
+            ? "Remove Selected Tab from Favorites"
+            : "Add Selected Tab to Favorites"
+    }
+
+    @ViewBuilder
+    private var sidebarContextMenu: some View {
+        Menu("Compact Mode") {
+            Toggle("Enable compact mode", isOn: Binding(
+                get: { sidebarManager.isCompactEnabled },
+                set: { sidebarManager.setCompactEnabled($0, toolbar: toolbarManager) }
+            ))
+
+            Divider()
+
+            ForEach(CompactModeHides.allCases, id: \.self) { option in
+                Toggle(option.menuTitle, isOn: Binding(
+                    get: { sidebarManager.compactHides == option },
+                    set: { _ in sidebarManager.setCompactHides(option, toolbar: toolbarManager) }
+                ))
+            }
+        }
+
+        Divider()
+
+        Button("New Tab") { appState.showLauncher = true }
+            .keyboardShortcut(KeyboardShortcuts.Tabs.new.keyboardShortcut)
+
+        Button("New Folder") {
+            NotificationCenter.default.post(name: .newTabFolder, object: window)
+        }
+
+        Divider()
+
+        Button("Reload Selected Tab") { tabManager.activeTab?.reload() }
+            .keyboardShortcut(KeyboardShortcuts.Navigation.reload.keyboardShortcut)
+            .disabled(tabManager.activeTab == nil)
+
+        Button(favoritesItemTitle) {
+            if let tab = tabManager.activeTab { tabManager.toggleFavTab(tab) }
+        }
+        .disabled(tabManager.activeTab == nil)
+
+        Button("Reopen Closed Tab") {
+            NotificationCenter.default.post(name: .restoreLastTab, object: window)
+        }
+        .keyboardShortcut(KeyboardShortcuts.Tabs.restore.keyboardShortcut)
+
+        Divider()
+
+        Toggle("Tabs on the Right", isOn: Binding(
+            get: { sidebarManager.sidebarPosition == .secondary },
+            set: { _ in sidebarManager.toggleSidebarPosition() }
+        ))
+
+        Button("Edit Theme…") {
+            NotificationCenter.default.post(
+                name: .openSettingsTab,
+                object: window,
+                userInfo: ["tab": SettingsTab.general.rawValue]
+            )
+        }
     }
 
     /// Computes transition progress (0 = spaces visible, 1 = downloads visible)
@@ -148,12 +218,12 @@ struct SidebarView: View {
 
     private var spacesContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if sidebarManager.sidebarPosition == .secondary, !toolbarManager.isToolbarHidden {
-                Spacer().frame(height: 8)
-            } else if appState.isFullscreen, !toolbarManager.isToolbarHidden {
-                Spacer().frame(height: 8)
-            } else {
+            // The top toolbar owns the traffic lights and nav buttons, so while it is
+            // up the sidebar only keeps an 8pt breathing gap under it.
+            if toolbarManager.isToolbarHidden {
                 SidebarHeader()
+            } else {
+                Color.clear.frame(height: 8)
             }
             NSPageView(
                 selection: selectedContainerIndex,
@@ -195,7 +265,7 @@ struct SidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(
             EdgeInsets(
-                top: 4,
+                top: 0,
                 leading: 0,
                 bottom: 10,
                 trailing: 0

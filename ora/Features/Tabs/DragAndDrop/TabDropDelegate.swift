@@ -31,6 +31,12 @@ struct TabDropDelegate: DropDelegate {
                         from: from,
                         to: self.item
                     ) {
+                        // A tab dropped next to another one joins that tab's folder,
+                        // which is also how a child leaves a folder: the target is top level.
+                        if from.type == .normal, from.folder?.id != self.item.folder?.id {
+                            from.folder = self.item.folder
+                            self.item.folder?.isCollapsed = false
+                        }
                         withAnimation(
                             .spring(
                                 response: 0.18,
@@ -43,6 +49,7 @@ struct TabDropDelegate: DropDelegate {
                                     to: self.item
                                 )
                         }
+                        try? self.item.modelContext?.save()
                     } else {
                         moveTabBetweenSections(from: from, to: self.item)
                     }

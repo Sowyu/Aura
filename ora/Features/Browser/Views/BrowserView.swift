@@ -18,6 +18,7 @@ struct BrowserView: View {
     @State private var showFloatingURLBar = false
     @State private var isMouseOverSidebar = false
     @State private var showFloatingSidebar = false
+    @State private var showFloatingToolbar = false
 
     // MARK: - Sidebar mouse shield
 
@@ -96,7 +97,9 @@ struct BrowserView: View {
                 )
             }
 
-            if toolbarManager.isToolbarHidden, sidebarManager.sidebarPosition != .primary {
+            if toolbarManager.isToolbarHidden, sidebarManager.isCompactEnabled {
+                FloatingTopToolbar(isVisible: $showFloatingToolbar)
+            } else if toolbarManager.isToolbarHidden, sidebarManager.sidebarPosition != .primary {
                 FloatingURLBar(
                     showFloatingURLBar: $showFloatingURLBar,
                     isMouseOverURLBar: $isMouseOverURLBar
@@ -114,6 +117,9 @@ struct BrowserView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleSidebarPosition)) { _ in
             sidebarManager.toggleSidebarPosition()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleCompactMode)) { _ in
+            sidebarManager.setCompactEnabled(!sidebarManager.isCompactEnabled, toolbar: toolbarManager)
         }
         .onChange(of: downloadManager.isShowingDownloadsHistory) { _, isOpen in
             if sidebarManager.isSidebarHidden {
@@ -152,5 +158,56 @@ struct BrowserView: View {
                 }
             }
         }
+    }
+}
+
+/// Compact mode's top edge: a 4pt strip that slides the real toolbar in on hover
+/// and lets it go once the pointer leaves both the strip and the toolbar itself.
+private struct FloatingTopToolbar: View {
+    @Environment(\.theme) private var theme
+    @EnvironmentObject private var appState: AppState
+
+    @Binding var isVisible: Bool
+
+    /// While shown, the toolbar row is the hover target, so leaving it hides again.
+    private var stripHeight: CGFloat { isVisible ? TopToolbar.rowHeight : 4 }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            if isVisible {
+                TopToolbar()
+                    .background(theme.subtleWindowBackgroundColor)
+                    .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(theme.foreground.opacity(0.12))
+                            .frame(height: 0.5)
+                    }
+                    .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
+                    .transition(.move(edge: .top))
+                    .zIndex(1)
+            }
+
+            Color.clear
+                .frame(height: stripHeight)
+                .overlay(
+                    GlobalMouseTrackingArea(
+                        mouseEntered: Binding(
+                            get: { isVisible },
+                            set: { entered in
+                                // A live URL edit must not yank the row away. An open menu
+                                // swallows mouse-moved events, so it holds by itself.
+                                if !entered, appState.isURLBarEditing { return }
+                                isVisible = entered
+                            }
+                        ),
+                        edge: .top,
+                        padding: stripHeight,
+                        slack: 8
+                    )
+                    .id(stripHeight)
+                )
+        }
+        .animation(.easeOut(duration: 0.15), value: isVisible)
     }
 }

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ContainerView: View {
@@ -5,7 +6,10 @@ struct ContainerView: View {
     let selectedContainer: String
     let containers: [TabContainer]
 
+    @Environment(\.window) private var window
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var historyManager: HistoryManager
+    @EnvironmentObject var downloadManager: DownloadManager
     @EnvironmentObject var toolbarManager: ToolbarManager
     @EnvironmentObject var tabManager: TabManager
     @EnvironmentObject var privacyMode: PrivacyMode
@@ -20,17 +24,20 @@ struct ContainerView: View {
                 SidebarURLDisplay()
             }
             if !privacyMode.isPrivate {
-                FavTabsGrid(
-                    tabs: favoriteTabs,
-                    draggedItem: $draggedItem,
-                    onDrag: dragTab,
-                    selectedContainerId: selectedContainer,
-                    onSelect: selectTab,
-                    onFavoriteToggle: toggleFavorite,
-                    onClose: removeTab,
-                    onDuplicate: duplicateTab,
-                    onMoveToContainer: moveTab
-                )
+                // An empty grid still paid the VStack 16pt spacing, leaving a gap under the toolbar.
+                if !favoriteTabs.isEmpty {
+                    FavTabsGrid(
+                        tabs: favoriteTabs,
+                        draggedItem: $draggedItem,
+                        onDrag: dragTab,
+                        selectedContainerId: selectedContainer,
+                        onSelect: selectTab,
+                        onFavoriteToggle: toggleFavorite,
+                        onClose: removeTab,
+                        onDuplicate: duplicateTab,
+                        onMoveToContainer: moveTab
+                    )
+                }
             } else {
                 VStack(alignment: .center, spacing: 8) {
                     Text("Private Browsing")
@@ -73,6 +80,7 @@ struct ContainerView: View {
                     }
                     NormalTabsList(
                         tabs: normalTabs,
+                        folders: folders,
                         draggedItem: $draggedItem,
                         onDrag: dragTab,
                         onSelect: selectTab,
@@ -81,13 +89,21 @@ struct ContainerView: View {
                         onClose: removeTab,
                         onDuplicate: duplicateTab,
                         onMoveToContainer: moveTab,
-                        onAddNewTab: addNewTab
+                        onAddNewTab: addNewTab,
+                        onNewTabInFolder: addNewTab(in:)
                     )
                 }
                 .animation(.easeOut(duration: 0.12), value: draggedItem == nil)
             }
         }
         .modifier(OraWindowDragGesture(isDragging: $isDragging))
+        .onReceive(NotificationCenter.default.publisher(for: .newTabFolder)) { note in
+            // The page view keeps every space alive, so only the visible one may react,
+            // and only in the window the command came from.
+            guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
+            guard tabManager.activeContainer?.id == container.id else { return }
+            tabManager.createFolderForRenaming()
+        }
     }
 
     private var favoriteTabs: [Tab] {
@@ -102,14 +118,28 @@ struct ContainerView: View {
             .sorted(by: { $0.order > $1.order })
     }
 
+    /// Foldered tabs render inside their folder, so they are not top-level rows.
     private var normalTabs: [Tab] {
         return container.tabs
-            .filter { $0.type == .normal }
+            .filter { $0.type == .normal && $0.folder == nil }
             .sorted(by: { $0.order > $1.order })
+    }
+
+    private var folders: [Folder] {
+        return container.folders.sorted(by: { $0.order > $1.order })
     }
 
     private func addNewTab() {
         appState.showLauncher = true
+    }
+
+    private func addNewTab(in folder: Folder) {
+        tabManager.addTab(
+            in: folder,
+            historyManager: historyManager,
+            downloadManager: downloadManager,
+            isPrivate: privacyMode.isPrivate
+        )
     }
 
     private func removeTab(_ tab: Tab) {

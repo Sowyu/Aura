@@ -40,6 +40,8 @@ private struct ClosedTabSnapshot {
 class TabManager: ObservableObject {
     @Published var activeContainer: TabContainer?
     @Published var activeTab: Tab?
+    /// Sidebar folder currently showing its inline rename field, if any.
+    @Published var renamingFolderID: UUID?
     let modelContainer: ModelContainer
     let modelContext: ModelContext
     let mediaController: MediaController
@@ -115,6 +117,8 @@ class TabManager: ObservableObject {
         } else {
             tab.type = .pinned
             tab.savedURL = tab.url
+            // Only normal tabs live in folders.
+            tab.folder = nil
         }
 
         try? modelContext.save()
@@ -127,6 +131,7 @@ class TabManager: ObservableObject {
         } else {
             tab.type = .fav
             tab.savedURL = tab.url
+            tab.folder = nil
         }
 
         try? modelContext.save()

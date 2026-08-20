@@ -60,6 +60,8 @@ class Tab: ObservableObject, Identifiable {
     @Transient @Published var passwordTriggerOverlayState: PasswordAutofillOverlayState?
 
     @Relationship(inverse: \TabContainer.tabs) var container: TabContainer
+    /// Set when the tab lives inside a sidebar folder; nil means top level.
+    @Relationship var folder: Folder?
 
     /// Whether this tab is considered alive (recently accessed)
     var isAlive: Bool {

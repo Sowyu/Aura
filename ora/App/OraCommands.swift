@@ -6,6 +6,7 @@ struct OraCommands: Commands {
     @AppStorage("ui.sidebar.position") private var sidebarPosition: SidebarPosition = .primary
     @AppStorage("ui.toolbar.hidden") private var isToolbarHidden: Bool = false
     @AppStorage("ui.toolbar.showfullurl") private var showFullURL: Bool = false
+    @AppStorage("ui.compact.enabled") private var isCompactEnabled: Bool = false
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
@@ -86,6 +87,14 @@ struct OraCommands: Commands {
                 NotificationCenter.default.post(name: .toggleToolbar, object: NSApp.keyWindow)
             }
             .keyboardShortcut(KeyboardShortcuts.App.toggleToolbar.keyboardShortcut)
+
+            Toggle("Compact Mode", isOn: Binding(
+                get: { isCompactEnabled },
+                set: { _ in
+                    NotificationCenter.default.post(name: .toggleCompactMode, object: NSApp.keyWindow)
+                }
+            ))
+            .keyboardShortcut("c", modifiers: [.command, .option])
 
             Divider()
 

@@ -327,7 +327,7 @@ final class ExtensionManager: ObservableObject {
             displayVersion: manifest.version,
             isEnabled: !disabledIDs.contains(id),
             icon: nil,
-            loadError: nil
+            loadError: Self.compatibilityNote(at: directory)
         )
         installedExtensions.append(entry)
 
@@ -345,7 +345,13 @@ final class ExtensionManager: ObservableObject {
                     item.displayName = loaded.displayName ?? item.displayName
                     item.displayVersion = loaded.displayVersion ?? item.displayVersion
                     item.icon = loaded.icon(for: CGSize(width: 32, height: 32))
-                    item.loadError = nil
+                    item.loadError = Self.compatibilityNote(at: entry.directoryURL)
+                }
+                // Background scripts fail asynchronously; surface what WebKit collected.
+                try? await Task.sleep(for: .seconds(3))
+                if let errors = engine.context(for: entry.id)?.errors, !errors.isEmpty {
+                    let note = Self.compatibilityNote(at: entry.directoryURL).map { $0 + " " } ?? ""
+                    update(id: entry.id) { $0.loadError = note + "Runtime: " + errors[0].localizedDescription }
                 }
             } catch {
                 update(id: entry.id) { item in
@@ -372,6 +378,25 @@ final class ExtensionManager: ObservableObject {
         let rawName = json["name"] as? String
         let name = rawName?.hasPrefix("__MSG_") == true ? nil : rawName
         return (name, json["version"] as? String)
+    }
+
+    /// Permissions Firefox grants that WebKit has no implementation of. An extension
+    /// asking for one installs, but its background script will fail on first use.
+    private static let firefoxOnlyPermissions: Set<String> = [
+        "webRequestBlocking", "proxy", "dns", "browserSettings", "contextualIdentities",
+        "pkcs11", "captivePortal", "networkStatus", "geckoProfiler", "theme", "urlbar",
+    ]
+
+    static func compatibilityNote(at directory: URL) -> String? {
+        let url = directory.appendingPathComponent("manifest.json")
+        guard let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        let requested = ((json["permissions"] as? [String]) ?? [])
+            + ((json["optional_permissions"] as? [String]) ?? [])
+        let missing = requested.filter { firefoxOnlyPermissions.contains($0) }
+        guard !missing.isEmpty else { return nil }
+        return "Needs Firefox-only APIs WebKit lacks: " + missing.joined(separator: ", ") + "."
     }
 
     private static func sanitizedID(from name: String) -> String {
