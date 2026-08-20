@@ -90,6 +90,8 @@ targets:
           - NSUserActivityTypeBrowsingWeb
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.web-browser
+        NSCameraUsageDescription: "Websites you allow can use your camera for video calls and photos."
+        NSMicrophoneUsageDescription: "Websites you allow can use your microphone for calls and voice input."
 
     entitlements:
       path: ora/Info/ora.entitlements
