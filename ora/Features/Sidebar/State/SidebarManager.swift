@@ -24,7 +24,7 @@ class SidebarManager: ObservableObject {
 
     func toggleSidebar() {
         let targetSide = sidebarPosition == .primary ? SplitSide.primary : .secondary
-        withAnimation(.spring(response: 0.2, dampingFraction: 1.0)) {
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.9)) {
             hiddenSidebar.side = (hiddenSidebar.side == targetSide) ? nil : targetSide
             updateSidebarHidden()
         }

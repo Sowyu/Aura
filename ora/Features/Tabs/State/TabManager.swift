@@ -303,6 +303,38 @@ class TabManager: ObservableObject {
         return newTab
     }
 
+    /// Focuses the active space's `ora://settings` tab, or opens one. Settings render
+    /// natively in the tab, so the tab never gets a web view.
+    @discardableResult
+    func openSettingsTab(
+        section: SettingsTab? = nil,
+        historyManager: HistoryManager? = nil,
+        downloadManager: DownloadManager? = nil,
+        isPrivate: Bool
+    ) -> Tab? {
+        guard let container = activeContainer else { return nil }
+        let url = URL.oraSettings(section: section)
+
+        if let existing = container.tabs.first(where: { $0.url.isOraSettings }) {
+            existing.url = url
+            existing.urlString = url.absoluteString
+            activateTab(existing)
+            return existing
+        }
+
+        let tab = addTab(
+            url: url,
+            container: container,
+            historyManager: historyManager,
+            downloadManager: downloadManager,
+            isPrivate: isPrivate
+        )
+        tab.title = "Settings"
+        tab.favicon = nil
+        try? modelContext.save()
+        return tab
+    }
+
     @discardableResult
     func openTab(
         url: URL,

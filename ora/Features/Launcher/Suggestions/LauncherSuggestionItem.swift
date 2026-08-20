@@ -130,7 +130,7 @@ struct LauncherSuggestionItem: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(backgroundColor)
         .clipShape(ConditionallyConcentricRectangle(cornerRadius: 12, style: .continuous))
-        .onTapGesture {
+        .tapFlash(scale: 0.985) {
             suggestion.action()
             DispatchQueue.main.async {
                 appState.showLauncher = false

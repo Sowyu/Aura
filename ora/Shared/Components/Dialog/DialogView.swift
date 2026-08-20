@@ -112,7 +112,7 @@ private struct DialogsOverlay: View {
                     .transition(Self.transition)
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.82), value: dialogs.map(\.id))
+        .animation(.spring(response: 0.18, dampingFraction: 0.85), value: dialogs.map(\.id))
     }
 }
 

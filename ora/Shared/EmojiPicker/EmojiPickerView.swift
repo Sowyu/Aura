@@ -33,8 +33,9 @@ struct EmojiPickerView: View {
                             .frame(width: 32, height: 32)
                             .background(hoveredEmoji == item.emoji ? Color.gray.opacity(0.2) : Color.clear)
                             .cornerRadius(8)
+                            .animation(.easeOut(duration: 0.1), value: hoveredEmoji)
                             .onHover { hoveredEmoji = $0 ? item.emoji : nil }
-                            .onTapGesture { onSelect(item.emoji) }
+                            .tapFlash(scale: 0.9) { onSelect(item.emoji) }
                     }
                 }
             }
@@ -51,7 +52,7 @@ struct EmojiPickerView: View {
                             .font(.system(size: 16))
                             .foregroundColor(viewModel.selectedCategory == category.category ? .blue : .gray)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.interactive(cornerRadius: 6))
                     .padding(4)
 
                     Spacer()

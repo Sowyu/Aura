@@ -70,10 +70,12 @@ struct ContainerSwitcher: View {
             )
             .cornerRadius(8)
         }
-        .buttonStyle(.plain)
-        .animation(.easeOut(duration: 0.15), value: isActive || isHovered)
+        // Hover is already driven by `hoveredContainer` (it resizes the emoji), so the
+        // shared style only contributes the press feedback.
+        .buttonStyle(InteractiveButtonStyle(cornerRadius: 8, hoverOpacity: 0))
+        .animation(.easeOut(duration: 0.12), value: isActive || isHovered)
         .onHover { isHovering in
-            withAnimation(.easeOut(duration: 0.15)) {
+            withAnimation(.easeOut(duration: 0.12)) {
                 hoveredContainer = isHovering ? container.id : nil
             }
         }

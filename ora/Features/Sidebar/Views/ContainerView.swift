@@ -53,7 +53,9 @@ struct ContainerView: View {
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
-                    if !privacyMode.isPrivate {
+                    // An empty pinned section is pure clutter, so it only exists
+                    // while a tab is being dragged.
+                    if !privacyMode.isPrivate, !pinnedTabs.isEmpty || draggedItem != nil {
                         PinnedTabsList(
                             tabs: pinnedTabs,
                             draggedItem: $draggedItem,
@@ -66,6 +68,7 @@ struct ContainerView: View {
                             onMoveToContainer: moveTab,
                             containers: containers
                         )
+                        .transition(.opacity)
                         Divider()
                     }
                     NormalTabsList(
@@ -81,6 +84,7 @@ struct ContainerView: View {
                         onAddNewTab: addNewTab
                     )
                 }
+                .animation(.easeOut(duration: 0.12), value: draggedItem == nil)
             }
         }
         .modifier(OraWindowDragGesture(isDragging: $isDragging))
@@ -143,8 +147,10 @@ struct ContainerView: View {
         isDragging = true
         draggedItem = tabId
         let provider = TabItemProvider(object: tabId.uuidString as NSString)
+        // Fires when the drag session releases the provider: on drop and on cancel alike
+        // (macOS gives SwiftUI no cancel callback), so it doubles as the reset for both.
         provider.didEnd = {
-            draggedItem = nil
+            DispatchQueue.main.async { draggedItem = nil }
         }
         return provider
     }

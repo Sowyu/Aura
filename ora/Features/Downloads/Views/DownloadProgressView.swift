@@ -25,9 +25,9 @@ struct DownloadProgressView: View {
                         Button(action: onCancel) {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.secondary)
-                                .frame(width: 14, height: 14)
+                                .frame(width: 18, height: 18)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.interactive(cornerRadius: 5))
                     }
                 }
 

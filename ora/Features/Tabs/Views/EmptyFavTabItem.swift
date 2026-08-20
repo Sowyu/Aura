@@ -2,7 +2,6 @@ import SwiftUI
 
 struct EmptyFavTabItem: View {
     @Environment(\.theme) var theme
-    @State private var isTargeted = false
 
     let cornerRadius: CGFloat = 8
 
@@ -28,6 +27,5 @@ struct EmptyFavTabItem: View {
                     style: StrokeStyle(lineWidth: 1, dash: [5, 5])
                 )
         )
-        .onHover { isTargeted = $0 }
     }
 }

@@ -71,7 +71,7 @@ struct FloatingTabSwitcher: View {
             .ignoresSafeArea()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
-            .animation(.easeOut(duration: 0.3), value: appState.isFloatingTabSwitchVisible)
+            .animation(.easeOut(duration: 0.15), value: appState.isFloatingTabSwitchVisible)
             .onTapGesture {
                 closeFloatingTabSwitch()
             }
@@ -141,7 +141,7 @@ struct FloatingTabSwitcher: View {
                 focusedTab = tab.id
             }
         }
-        .onTapGesture {
+        .tapFlash(scale: 0.97) {
             activateTab(tab)
         }
     }

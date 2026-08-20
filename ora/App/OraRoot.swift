@@ -213,7 +213,7 @@ struct OraRoot: View {
                 }
                 observe(.toggleToolbar) { note in
                     guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.easeInOut(duration: 0.15)) {
                         toolbarManager.isToolbarHidden.toggle()
                     }
                 }
@@ -285,6 +285,20 @@ struct OraRoot: View {
                             historyManager: historyManager,
                             downloadManager: downloadManager,
                             focusAfterOpening: true,
+                            isPrivate: privacyMode.isPrivate
+                        )
+                    }
+                }
+
+                observe(.openSettingsTab) { note in
+                    Task { @MainActor in
+                        guard NSApp.keyWindow === window ?? NSApp.keyWindow else { return }
+                        let section = (note.userInfo?["tab"] as? String)
+                            .flatMap(SettingsTab.init(rawValue:))
+                        tabManager.openSettingsTab(
+                            section: section,
+                            historyManager: historyManager,
+                            downloadManager: downloadManager,
                             isPrivate: privacyMode.isPrivate
                         )
                     }

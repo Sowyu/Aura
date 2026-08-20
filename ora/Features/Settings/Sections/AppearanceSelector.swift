@@ -42,7 +42,7 @@ struct AppearanceSelector: View {
                                 .fill(isSelected ? Color(.controlColor) : Color.clear)
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.interactive(cornerRadius: 10))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

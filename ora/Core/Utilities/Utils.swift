@@ -14,6 +14,8 @@ func extractDomainOrIP(from text: String) -> String? {
 }
 
 func isValidURL(_ text: String) -> Bool {
+    if oraInternalURL(from: text) != nil { return true }
+
     guard let host = extractDomainOrIP(from: text) else { return false }
 
     if host == "localhost" {
@@ -31,8 +33,18 @@ func isValidURL(_ text: String) -> Bool {
     return host.range(of: domainPattern, options: .regularExpression) != nil
 }
 
+/// Internal `ora://` addresses are URLs, not search queries.
+func oraInternalURL(from text: String) -> URL? {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let url = URL(string: trimmed), url.isOraInternal, url.host != nil else { return nil }
+    return url
+}
+
 func constructURL(from text: String) -> URL? {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let internalURL = oraInternalURL(from: trimmed) {
+        return internalURL
+    }
     if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
         return URL(string: trimmed)
     }

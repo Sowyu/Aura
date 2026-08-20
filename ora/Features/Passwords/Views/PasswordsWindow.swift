@@ -356,10 +356,11 @@ private struct PasswordsWindowView: View {
                     toggleReveal(entry)
                 } label: {
                     Image(systemName: revealedPasswordIDs[entry.id] == nil ? "eye" : "eye.slash")
+                        .frame(width: 22, height: 22)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(theme.mutedForeground)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.interactive(cornerRadius: 5))
                 .help(revealedPasswordIDs[entry.id] == nil ? "Reveal password" : "Hide password")
 
                 copyActionButton(help: "Copy password") {
@@ -373,9 +374,10 @@ private struct PasswordsWindowView: View {
                     pendingDelete = entry
                 } label: {
                     Image(systemName: "trash")
+                        .frame(width: 22, height: 22)
                         .font(.system(size: 13, weight: .medium))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.interactive(cornerRadius: 5))
                 .help("Delete saved password")
             }
             .frame(width: actionsColumnWidth, alignment: .leading)
@@ -400,7 +402,7 @@ private struct PasswordsWindowView: View {
                 color: theme.mutedForeground
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.interactive(cornerRadius: 5))
         .help(help)
     }
 

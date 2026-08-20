@@ -44,7 +44,9 @@ struct FindView: View {
             DispatchQueue.main.async {
                 controller.injectMarkJS()
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            // Still deferred (SwiftUI needs the window's first responder to settle first),
+            // just not 150 ms of dead typing time.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isTextFieldFocused = true
             }
         }
@@ -255,8 +257,9 @@ struct FindView: View {
             Image(systemName: "xmark")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(theme.foreground.opacity(0.6))
+                .frame(width: 26, height: 26)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.interactive(cornerRadius: 6))
     }
 
     private var backgroundView: some View {

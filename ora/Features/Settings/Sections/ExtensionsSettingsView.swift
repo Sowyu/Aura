@@ -272,8 +272,9 @@ private struct ExtensionRow: View {
                 ExtensionManager.shared.removeExtension(item.id)
             } label: {
                 Image(systemName: "trash")
+                    .frame(width: 22, height: 22)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.interactive(cornerRadius: 5))
             .foregroundColor(.secondary)
             .help("Remove extension")
         }

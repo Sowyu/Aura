@@ -118,12 +118,12 @@ struct SidebarView: View {
                     if value.translation.width > threshold
                         || value.predictedEndTranslation.width > threshold * 2
                     {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.88)) {
+                        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
                             downloadManager.isShowingDownloadsHistory = false
                             dragOffset = 0
                         }
                     } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                        withAnimation(.spring(response: 0.18, dampingFraction: 0.9)) {
                             dragOffset = 0
                         }
                     }
@@ -131,12 +131,12 @@ struct SidebarView: View {
                     if -value.translation.width > threshold
                         || -value.predictedEndTranslation.width > threshold * 2
                     {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.88)) {
+                        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
                             downloadManager.isShowingDownloadsHistory = true
                             dragOffset = 0
                         }
                     } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                        withAnimation(.spring(response: 0.18, dampingFraction: 0.9)) {
                             dragOffset = 0
                         }
                     }

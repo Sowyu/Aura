@@ -6,7 +6,7 @@ final class DialogManager: ObservableObject {
     @discardableResult
     func show(@ViewBuilder content: @escaping (String) -> some View) -> String {
         let dialog = Dialog { id in content(id) }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
             dialogs.append(dialog)
         }
         return dialog.id
@@ -16,7 +16,7 @@ final class DialogManager: ObservableObject {
         if let dialog = dialogs.first(where: { $0.id == id }) {
             dialog.onDismiss?()
         }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
             dialogs.removeAll(where: { $0.id == id })
         }
     }
@@ -27,7 +27,7 @@ final class DialogManager: ObservableObject {
     }
 
     func dismissAll() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
             dialogs.removeAll()
         }
     }
@@ -68,7 +68,7 @@ final class DialogManager: ObservableObject {
         dialog.onDismiss = {
             if !state.confirmed { onCancel?() }
         }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
             dialogs.append(dialog)
         }
     }

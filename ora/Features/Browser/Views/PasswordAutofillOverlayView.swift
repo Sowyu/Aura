@@ -60,7 +60,7 @@ struct PasswordAutofillOverlayView: View {
             Button("Manage Passwords") {
                 tab.passwordCoordinator?.openPasswordsManager()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(InteractiveButtonStyle(cornerRadius: 8, hoverOpacity: 0))
             .font(.caption.weight(.medium))
             .foregroundStyle(Color(nsColor: .secondaryLabelColor))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -73,6 +73,7 @@ struct PasswordAutofillOverlayView: View {
             .onHover { isHovering in
                 isManagePasswordsHovered = isHovering
             }
+            .animation(.easeOut(duration: 0.1), value: isManagePasswordsHovered)
         }
         .padding(8)
     }
@@ -169,7 +170,7 @@ struct PasswordAutofillTriggerView: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(InteractiveButtonStyle(cornerRadius: cornerRadius, hoverOpacity: 0))
             .onHover { isHovering = $0 }
             .offset(
                 x: triggerX(in: proxy.size),
@@ -218,11 +219,12 @@ private struct PasswordSuggestionButton<Content: View>: View {
             .background(Color(nsColor: .controlBackgroundColor).opacity(isHovering || isSelected ? 1 : 0))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(InteractiveButtonStyle(cornerRadius: 12, hoverOpacity: 0))
         .onHover { isHovering in
             self.isHovering = isHovering
             onHoverChanged(isHovering)
         }
+        .animation(.easeOut(duration: 0.1), value: isHovering)
     }
 }
 

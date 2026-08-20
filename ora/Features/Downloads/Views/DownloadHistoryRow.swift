@@ -68,11 +68,11 @@ struct DownloadHistoryRow: View {
         )
         .contentShape(Rectangle())
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
+            withAnimation(.easeOut(duration: 0.1)) {
                 isHovered = hovering
             }
         }
-        .onTapGesture {
+        .tapFlash(scale: 0.98) {
             if download.status == .completed {
                 downloadManager.openFile(download)
             }
@@ -149,7 +149,7 @@ struct DownloadHistoryRow: View {
             Divider()
 
             Button(role: .destructive) {
-                withAnimation(.easeOut(duration: 0.2)) {
+                withAnimation(.easeOut(duration: 0.15)) {
                     downloadManager.moveToTrash(download)
                 }
             } label: {
@@ -177,7 +177,7 @@ struct DownloadHistoryRow: View {
             Divider()
 
             Button {
-                withAnimation(.easeOut(duration: 0.2)) {
+                withAnimation(.easeOut(duration: 0.15)) {
                     downloadManager.deleteDownload(download)
                 }
             } label: {

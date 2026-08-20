@@ -186,7 +186,7 @@ struct OraCommands: Commands {
 
         CommandGroup(replacing: .appSettings) {
             Button("Settings...") {
-                openWindow(id: "settings")
+                NotificationCenter.default.post(name: .openSettingsTab, object: nil)
             }
             .keyboardShortcut(",", modifiers: .command)
         }

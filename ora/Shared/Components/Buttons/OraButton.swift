@@ -160,9 +160,9 @@ struct OraButton: View {
                     .stroke(strokeColor, lineWidth: 1)
             }
             .clipShape(ConditionallyConcentricRectangle(cornerRadius: cornerRadius))
-            .animation(.easeInOut(duration: 0.12), value: isHovering)
+            .animation(.easeInOut(duration: 0.1), value: isHovering)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(InteractiveButtonStyle(cornerRadius: cornerRadius, hoverOpacity: 0, pressOpacity: 0))
         .disabled(isDisabled)
         .onHover { isHovering = $0 }
     }

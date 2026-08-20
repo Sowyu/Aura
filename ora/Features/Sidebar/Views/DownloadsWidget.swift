@@ -3,7 +3,6 @@ import SwiftUI
 struct DownloadsWidget: View {
     @EnvironmentObject var downloadManager: DownloadManager
     @Environment(\.theme) private var theme
-    @State private var isHovered = false
 
     /// Aggregate progress across all active downloads (0...1)
     private var totalProgress: Double {
@@ -19,7 +18,7 @@ struct DownloadsWidget: View {
 
     var body: some View {
         Button {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.88)) {
+            withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
                 downloadManager.isShowingDownloadsHistory.toggle()
             }
         } label: {
@@ -35,7 +34,7 @@ struct DownloadsWidget: View {
                         .stroke(theme.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                         .frame(width: 24, height: 24)
                         .rotationEffect(.degrees(-90))
-                        .animation(.easeOut(duration: 0.25), value: totalProgress)
+                        .animation(.easeOut(duration: 0.15), value: totalProgress)
                 }
 
                 if hasActiveDownloads {
@@ -47,14 +46,7 @@ struct DownloadsWidget: View {
                 }
             }
             .frame(width: 32, height: 32)
-            .background(isHovered ? theme.invertedSolidWindowBackgroundColor.opacity(0.1) : .clear)
-            .cornerRadius(8)
         }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
-                isHovered = hovering
-            }
-        }
+        .buttonStyle(.interactive(cornerRadius: 8, tint: theme.invertedSolidWindowBackgroundColor))
     }
 }

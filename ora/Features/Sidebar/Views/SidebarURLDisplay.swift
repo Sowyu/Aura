@@ -62,8 +62,8 @@ struct SidebarURLDisplay: View {
                         .truncationMode(.tail)
                         .opacity(showCopiedAnimation ? 0 : 1)
                         .offset(y: showCopiedAnimation ? (startWheelAnimation ? -12 : 12) : 0)
-                        .animation(.easeOut(duration: 0.3), value: showCopiedAnimation)
-                        .animation(.easeOut(duration: 0.3), value: startWheelAnimation)
+                        .animation(.easeOut(duration: 0.2), value: showCopiedAnimation)
+                        .animation(.easeOut(duration: 0.2), value: startWheelAnimation)
 
                         CopiedURLOverlay(
                             foregroundColor: theme.mutedForeground,
@@ -80,12 +80,13 @@ struct SidebarURLDisplay: View {
                     Image(systemName: "link")
                         .font(.system(size: 14))
                         .foregroundColor(isHoveringCopy ? theme.foreground.opacity(0.8) : theme.mutedForeground)
+                        .frame(width: 22, height: 22)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.interactive(cornerRadius: 6))
                 .onHover { hovering in
                     isHoveringCopy = hovering
                 }
-                .animation(.easeOut(duration: 0.15), value: isHoveringCopy)
+                .animation(.easeOut(duration: 0.1), value: isHoveringCopy)
             } else {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
@@ -122,7 +123,7 @@ struct SidebarURLDisplay: View {
             ConditionallyConcentricRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(theme.invertedSolidWindowBackgroundColor.opacity(0.05), lineWidth: 1)
         )
-        .animation(.easeOut(duration: 0.15), value: isHovering)
+        .animation(.easeOut(duration: 0.1), value: isHovering)
         .onReceive(NotificationCenter.default.publisher(for: .copyAddressURL)) { _ in
             guard toolbarManager.isToolbarHidden, sidebarManager.sidebarPosition == .primary else { return }
             if let activeTab = tabManager.activeTab {

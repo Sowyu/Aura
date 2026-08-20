@@ -55,10 +55,13 @@ struct DownloadsHistoryView: View {
                             .foregroundColor(isClearHovered ? theme.foreground : .secondary)
                     }
                     .frame(alignment: .center)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.interactive(cornerRadius: 6))
                 .onHover { isClearHovered = $0 }
+                .animation(.easeOut(duration: 0.1), value: isClearHovered)
             }
         }
         .padding(.horizontal, 18)
@@ -90,8 +93,10 @@ struct DownloadsHistoryView: View {
                         .font(.system(size: 12, weight: .medium))
                 }
                 .foregroundColor(theme.foreground.opacity(0.7))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.interactive(cornerRadius: 6))
 
             Spacer()
         }
@@ -261,7 +266,7 @@ struct DownloadsHistoryView: View {
     }
 
     private func dismissDownloads() {
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.88)) {
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
             downloadManager.isShowingDownloadsHistory = false
         }
     }

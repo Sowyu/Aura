@@ -65,7 +65,7 @@ struct GradientAnimatingBorder: ViewModifier {
                         // Hide border after animation completes
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                             guard generation == animationGeneration else { return }
-                            withAnimation(.easeOut(duration: 0.3)) {
+                            withAnimation(.easeOut(duration: 0.15)) {
                                 showBorder = false
                             }
                         }
@@ -84,7 +84,7 @@ struct GradientAnimatingBorder: ViewModifier {
                     // Hide border after animation completes
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         guard generation == animationGeneration else { return }
-                        withAnimation(.easeOut(duration: 0.3)) {
+                        withAnimation(.easeOut(duration: 0.15)) {
                             showBorder = false
                         }
                     }

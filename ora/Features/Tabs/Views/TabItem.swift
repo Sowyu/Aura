@@ -126,20 +126,6 @@ struct TabItem: View {
                     )
             }
         }
-        .onTapGesture {
-            onTap()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                if !tab.isWebViewReady {
-                    tab
-                        .restoreTransientState(
-                            historyManager: historyManager,
-                            downloadManager: downloadManager,
-                            tabManager: tabManager,
-                            isPrivate: privacyMode.isPrivate
-                        )
-                }
-            }
-        }
         .padding(8)
         .opacity(isDragging ? 0.0 : 1.0)
         .background(backgroundColor, in: .rect(cornerRadius: 10))
@@ -153,7 +139,7 @@ struct TabItem: View {
                 : nil
         )
         .contentShape(ConditionallyConcentricRectangle(cornerRadius: 10))
-        .onTapGesture {
+        .tapFlash {
             onTap()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
                 if !tab.isWebViewReady {
@@ -169,7 +155,8 @@ struct TabItem: View {
         }
         .onHover { isHovering = $0 }
         .contextMenu { contextMenuItems }
-        .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isDragging)
+        .animation(.easeOut(duration: 0.1), value: isHovering)
+        .animation(.spring(response: 0.18, dampingFraction: 0.85), value: isDragging)
         .geometryGroup()
     }
 
@@ -257,16 +244,14 @@ struct ActionButton: View {
     let icon: String
     let color: Color
     let action: () -> Void
-    @State private var isHovering = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .frame(width: 12, height: 12)
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(color)
-                .fontWeight(.semibold)
+                .frame(width: 20, height: 20)
         }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
+        .buttonStyle(InteractiveButtonStyle(cornerRadius: 5, hoverOpacity: 0.18, pressOpacity: 0.3, tint: color))
     }
 }

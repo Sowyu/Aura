@@ -3,7 +3,6 @@ import SwiftUI
 struct NewTabButton: View {
     let addNewTab: () -> Void
 
-    @State private var isHovering = false
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -18,11 +17,8 @@ struct NewTabButton: View {
             .foregroundColor(.secondary)
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isHovering ? theme.activeTabBackground.opacity(0.1) : .clear, in: .rect(cornerRadius: 10))
-            .contentShape(ConditionallyConcentricRectangle(cornerRadius: 10))
             .geometryGroup()
         }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
+        .buttonStyle(.interactive(cornerRadius: 10, tint: theme.activeTabBackground))
     }
 }

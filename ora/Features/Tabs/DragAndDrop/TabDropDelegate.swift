@@ -33,8 +33,8 @@ struct TabDropDelegate: DropDelegate {
                     ) {
                         withAnimation(
                             .spring(
-                                response: 0.3,
-                                dampingFraction: 0.8
+                                response: 0.18,
+                                dampingFraction: 0.85
                             )
                         ) {
                             self.item.container

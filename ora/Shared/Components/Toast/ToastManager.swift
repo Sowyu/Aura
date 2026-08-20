@@ -20,7 +20,7 @@ final class ToastManager: ObservableObject {
     ) -> String {
         let toast = Toast(message: message, type: type, icon: icon)
 
-        withAnimation(.spring(duration: 0.4, bounce: 0.2)) {
+        withAnimation(.spring(duration: 0.2, bounce: 0.15)) {
             toasts.append(toast)
         }
 
@@ -33,7 +33,7 @@ final class ToastManager: ObservableObject {
         dismissTimers[id]?.cancel()
         dismissTimers.removeValue(forKey: id)
 
-        withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
+        withAnimation(.spring(duration: 0.15, bounce: 0.15)) {
             toasts.removeAll { $0.id == id }
         }
     }
@@ -44,7 +44,7 @@ final class ToastManager: ObservableObject {
         }
         dismissTimers.removeAll()
 
-        withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
+        withAnimation(.spring(duration: 0.15, bounce: 0.15)) {
             toasts.removeAll()
         }
     }

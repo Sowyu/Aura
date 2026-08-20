@@ -51,13 +51,18 @@ enum SettingsTab: String, Hashable, CaseIterable {
 
 struct SettingsWindowRoot: View {
     var body: some View {
-        SettingsContentView()
+        SettingsContentView(initialTab: nil)
             .environmentObject(ToastManager.shared)
     }
 }
 
 struct SettingsContentView: View {
     static let selectedTabDefaultsKey = "settings.selectedTab"
+
+    /// Section to preselect, e.g. from a `ora://settings/<section>` tab URL.
+    let initialTab: SettingsTab?
+    /// A tab has no window toolbar to host the navigation title.
+    var showsNavigationTitle: Bool = true
 
     @AppStorage(Self.selectedTabDefaultsKey) private var selectionRawValue: String = SettingsTab.general.rawValue
 
@@ -81,11 +86,24 @@ struct SettingsContentView: View {
             .navigationSplitViewColumnWidth(200)
             .padding(.top, 8)
         } detail: {
-            detailView
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .navigationTitle(selectedTab.title)
-                .navigationSubtitle(selectedTab.subtitle)
+            // In a tab the title modifiers would rename the browser window, so skip them.
+            if showsNavigationTitle {
+                detailPane
+                    .navigationTitle(selectedTab.title)
+                    .navigationSubtitle(selectedTab.subtitle)
+            } else {
+                detailPane
+            }
         }
+        .onChange(of: initialTab, initial: true) { _, newValue in
+            guard let newValue else { return }
+            selectionRawValue = newValue.rawValue
+        }
+    }
+
+    private var detailPane: some View {
+        detailView
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder

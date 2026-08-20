@@ -128,7 +128,7 @@ private struct ToastsContainerView: View {
         .padding(isTop ? .top : .bottom, 20)
         .padding(.horizontal, 20)
         .onHover { hovering in
-            withAnimation(.smooth(duration: 0.25)) {
+            withAnimation(.smooth(duration: 0.15)) {
                 isExpanded = hovering
             }
             if hovering {
@@ -137,7 +137,7 @@ private struct ToastsContainerView: View {
                 manager.resumeTimers()
             }
         }
-        .animation(.spring(duration: 0.3, bounce: 0.5), value: manager.toasts.map(\.id))
+        .animation(.spring(duration: 0.15, bounce: 0.25), value: manager.toasts.map(\.id))
     }
 
     private func dragOffset(for toast: Toast) -> CGFloat {
@@ -170,7 +170,7 @@ private struct ToastsContainerView: View {
                             manager.dismiss(id: toast.id)
                         }
                     } else {
-                        withAnimation(.spring(duration: 0.3, bounce: 0.3)) {
+                        withAnimation(.spring(duration: 0.15, bounce: 0.2)) {
                             manager.toasts[idx].dragOffsetY = 0
                         }
                     }
@@ -204,8 +204,9 @@ struct ToastItemView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.foreground.opacity(0.4))
+                    .frame(width: 20, height: 20)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.interactive(cornerRadius: 5))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

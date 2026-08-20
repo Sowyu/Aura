@@ -20,7 +20,7 @@ struct DownloadsListView: View {
                     }
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.interactive(cornerRadius: 5))
                 }
             }
             .padding(.horizontal, 12)
@@ -129,18 +129,18 @@ struct DownloadListItem: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.secondary)
-                            .frame(width: 16, height: 16)
+                            .frame(width: 20, height: 20)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.interactive(cornerRadius: 5))
                 } else if download.status == .completed {
                     Button(action: {
                         downloadManager.openDownloadInFinder(download)
                     }) {
                         Image(systemName: "folder")
                             .foregroundColor(.secondary)
-                            .frame(width: 16, height: 16)
+                            .frame(width: 20, height: 20)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.interactive(cornerRadius: 5))
                 }
             }
         }
@@ -148,7 +148,7 @@ struct DownloadListItem: View {
         .padding(.vertical, 8)
         .background(download.status == .downloading ? theme.background.opacity(0.3) : Color.clear)
         .contentShape(Rectangle())
-        .onTapGesture {
+        .tapFlash(scale: 0.98) {
             if download.status == .completed {
                 downloadManager.openDownloadInFinder(download)
             }

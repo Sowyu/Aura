@@ -27,16 +27,20 @@ struct FavTabsGrid: View {
     var body: some View {
         LazyVGrid(columns: adaptiveColumns, spacing: 10) {
             if tabs.isEmpty {
-                EmptyFavTabItem()
-                    .onDrop(
-                        of: [.text],
-                        delegate: SectionDropDelegate(
-                            items: tabs,
-                            draggedItem: $draggedItem,
-                            targetSection: .fav,
-                            tabManager: tabManager
+                // Only a live tab drag reveals the drop zone; otherwise it is sidebar clutter.
+                if draggedItem != nil {
+                    EmptyFavTabItem()
+                        .onDrop(
+                            of: [.text],
+                            delegate: SectionDropDelegate(
+                                items: tabs,
+                                draggedItem: $draggedItem,
+                                targetSection: .fav,
+                                tabManager: tabManager
+                            )
                         )
-                    )
+                        .transition(.opacity)
+                }
             } else {
                 ForEach(tabs) { tab in
                     FavTabItem(
@@ -62,6 +66,7 @@ struct FavTabsGrid: View {
             }
         }
         .animation(.easeOut(duration: 0.1), value: adaptiveColumns.count)
+        .animation(.easeOut(duration: 0.12), value: draggedItem == nil)
         .onDrop(
             of: [.text],
             delegate: SectionDropDelegate(

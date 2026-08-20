@@ -46,7 +46,7 @@ struct BrowserContentContainer<Content: View>: View {
                             .side == .secondary ? 6 : 0
                     )
             )
-            .animation(.easeInOut(duration: 0.3), value: appState.isFullscreen)
+            .animation(.easeInOut(duration: 0.15), value: appState.isFullscreen)
             .shadow(color: .black.opacity(0.15), radius: isCompleteFullscreen ? 0 : cornerRadius, x: 0, y: 2)
             .ignoresSafeArea(.all)
     }

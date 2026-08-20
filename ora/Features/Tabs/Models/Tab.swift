@@ -203,6 +203,15 @@ class Tab: ObservableObject, Identifiable {
         tabManager: TabManager,
         isPrivate: Bool
     ) {
+        // ora:// pages render natively in SwiftUI, so they never get a web view.
+        if url.isOraInternal {
+            self.historyManager = historyManager
+            self.downloadManager = downloadManager
+            self.tabManager = tabManager
+            self.isPrivate = isPrivate
+            return
+        }
+
         // Avoid double initialization
         if browserPage != nil { return }
 
@@ -271,7 +280,7 @@ class Tab: ObservableObject, Identifiable {
 
         // 1) Try to construct a direct URL (has scheme or valid domain+TLD/IP)
         if let directURL = constructURL(from: input) {
-            browserPage?.load(URLRequest(url: directURL))
+            navigate(to: directURL)
             return
         }
 
@@ -280,7 +289,7 @@ class Tab: ObservableObject, Identifiable {
         if let engine = searchEngineService.getDefaultSearchEngine(for: self.container.id),
            let searchURL = searchEngineService.createSearchURL(for: engine, query: input)
         {
-            browserPage?.load(URLRequest(url: searchURL))
+            navigate(to: searchURL)
             return
         }
 
@@ -288,8 +297,27 @@ class Tab: ObservableObject, Identifiable {
         if let fallbackURL = URL(string: "https://www.google.com/search?client=safari&rls=en&ie=UTF-8&oe=UTF-8&q="
             + (input.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")
         ) {
-            browserPage?.load(URLRequest(url: fallbackURL))
+            navigate(to: fallbackURL)
         }
+    }
+
+    /// A tab showing an ora:// page has no web view, so navigating away from one has to
+    /// build it first; `restoreTransientState` loads `url` once the page exists.
+    private func navigate(to target: URL) {
+        guard let page = browserPage else {
+            url = target
+            urlString = target.absoluteString
+            if let historyManager, let downloadManager, let tabManager {
+                restoreTransientState(
+                    historyManager: historyManager,
+                    downloadManager: downloadManager,
+                    tabManager: tabManager,
+                    isPrivate: isPrivate
+                )
+            }
+            return
+        }
+        page.load(URLRequest(url: target))
     }
 
     func destroyWebView() {

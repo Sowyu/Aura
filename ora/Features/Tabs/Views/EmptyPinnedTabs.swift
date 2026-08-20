@@ -2,7 +2,6 @@ import SwiftUI
 
 struct EmptyPinnedTabs: View {
     @Environment(\.theme) var theme
-    @State private var isTargeted = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -25,6 +24,5 @@ struct EmptyPinnedTabs: View {
                     style: StrokeStyle(lineWidth: 1, dash: [5, 5])
                 )
         )
-        .onHover { isTargeted = $0 }
     }
 }

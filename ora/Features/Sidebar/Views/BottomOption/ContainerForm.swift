@@ -57,8 +57,9 @@ struct ContainerForm: View {
         }
         .frame(width: ContainerConstants.UI.emojiButtonSize, height: ContainerConstants.UI.emojiButtonSize)
         .cornerRadius(ContainerConstants.UI.cornerRadius)
-        .buttonStyle(.plain)
+        .buttonStyle(InteractiveButtonStyle(cornerRadius: ContainerConstants.UI.cornerRadius, hoverOpacity: 0))
         .onHover { isEmojiPickerHovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: isEmojiPickerHovering)
     }
 
     private var nameTextField: some View {

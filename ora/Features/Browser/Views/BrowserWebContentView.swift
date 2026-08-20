@@ -48,7 +48,13 @@ struct BrowserWebContentView: View {
 
     @ViewBuilder
     private var webContent: some View {
-        if tab.isWebViewReady {
+        if tab.url.isOraSettings {
+            SettingsContentView(
+                initialTab: tab.url.oraSettingsSection,
+                showsNavigationTitle: false
+            )
+            .id(tab.id)
+        } else if tab.isWebViewReady {
             if tab.hasNavigationError, let error = tab.navigationError {
                 StatusPageView(
                     error: error,
