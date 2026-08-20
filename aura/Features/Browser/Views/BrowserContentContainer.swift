@@ -45,10 +45,6 @@ struct BrowserContentContainer<Content: View>: View {
         content()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: isCompleteFullscreen ? 0 : cornerRadius, style: .continuous))
-            // Lets the window-wide launcher overlay centre itself on the pane rather than
-            // on the window, whichever side the sidebar is on and however wide it is.
-            // Read before the insets, so it is the visible pane and not the gap around it.
-            .anchorPreference(key: ContentPaneBoundsKey.self, value: .bounds) { $0 }
             .padding(.top, isCompleteFullscreen ? 0 : topInset)
             .padding(.horizontal, isCompleteFullscreen ? 0 : browserContentInset)
             .padding(.bottom, isCompleteFullscreen ? 0 : browserContentInset)

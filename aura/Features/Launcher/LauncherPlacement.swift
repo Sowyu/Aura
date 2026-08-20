@@ -1,29 +1,28 @@
 import SwiftUI
 
-/// Where the floating launcher sits.
-///
-/// It is presented as a window-wide overlay so the dimming covers the chrome too, but it
-/// has to read as centred in the *content* pane. Anchoring off the window instead pushes
-/// it sideways by half the sidebar width, and flips which way when the sidebar moves to
-/// the right, so the pane rect is measured and the panel placed inside it.
+/// Where the floating launcher sits: centred on the whole window, horizontally and 35%
+/// down from the window's top edge. It used to be anchored on the content pane so the
+/// sidebar could not push it sideways, which read as off-centre in the window itself.
 enum LauncherPlacement {
-    /// Distance from the top of the content pane to the centre of the panel.
+    /// Distance from the top of the window to the centre of the panel.
     static let verticalFraction: CGFloat = 0.35
 
-    /// Panel centre, in the same coordinate space as `contentPane`.
-    static func position(in contentPane: CGRect) -> CGPoint {
+    /// Fixed panel width, given up only when the window cannot fit it.
+    static let width: CGFloat = 640
+
+    /// Floor for narrow windows; below this the field stops being usable anyway.
+    static let minWidth: CGFloat = 320
+
+    /// Panel centre, in the window's own coordinate space.
+    static func position(in window: CGRect) -> CGPoint {
         CGPoint(
-            x: contentPane.midX,
-            y: contentPane.minY + contentPane.height * verticalFraction
+            x: window.midX,
+            y: window.minY + window.height * verticalFraction
         )
     }
-}
 
-/// Published by `BrowserContentContainer` so overlays can find the pane it draws.
-struct ContentPaneBoundsKey: PreferenceKey {
-    static let defaultValue: Anchor<CGRect>? = nil
-
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
-        value = nextValue() ?? value
+    /// Leaves a 16 pt gutter either side once the window drops under `width`.
+    static func width(forWindowWidth available: CGFloat) -> CGFloat {
+        min(width, max(minWidth, available - 32))
     }
 }

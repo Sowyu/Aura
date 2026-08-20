@@ -79,10 +79,12 @@ struct BrowserView: View {
                 BlurEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
                     .ignoresSafeArea(.all)
             )
-            .overlayPreferenceValue(ContentPaneBoundsKey.self) { paneAnchor in
-                GeometryReader { proxy in
+            // Window-wide, and mounted only while open: the launcher's backdrop covers
+            // the chrome as well as the page.
+            .overlay {
+                ZStack {
                     if appState.showLauncher, tabManager.activeTab != nil {
-                        LauncherView(contentPane: paneAnchor.map { proxy[$0] })
+                        LauncherView()
                     }
                     if appState.isFloatingTabSwitchVisible {
                         FloatingTabSwitcher()

@@ -25,11 +25,11 @@ struct HomePageView: View {
 
     /// Distance from the top of the pane to the centre of the column.
     private static let verticalFraction: CGFloat = 0.38
-    private static let fieldHeight: CGFloat = 44
-    private static let fieldMaxWidth: CGFloat = 680
+    /// Same width and row height as the floating launcher, from the same constants.
+    private static let fieldHeight = LauncherField.height
+    private static let fieldMaxWidth = LauncherPlacement.width
     /// Breathing room either side of the field at narrow pane widths.
     private static let horizontalInset: CGFloat = 48
-    private static let cornerRadius: CGFloat = 12
     private static let tileSize: CGFloat = 40
     private static let maxShortcuts = 8
 
@@ -80,38 +80,18 @@ struct HomePageView: View {
         }
     }
 
-    private var pill: some View {
-        ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-            .fill(theme.foreground.opacity(0.08))
-            .overlay(
-                ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                    .stroke(theme.foreground.opacity(0.06), lineWidth: 1)
-            )
-    }
-
+    /// The exact row the ⌘T launcher draws, so the two never drift apart.
     private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: isValidURL(input) ? "globe" : "magnifyingglass")
-                .font(.system(size: 14))
-                .foregroundColor(theme.foreground.opacity(0.55))
-                .frame(width: 18, height: 18)
-
-            LauncherTextField(
-                text: $input,
-                font: NSFont.systemFont(ofSize: 15, weight: .regular),
-                onTab: {},
-                onSubmit: { viewModel.executeCommand() },
-                onDelete: { false },
-                onMoveUp: { viewModel.moveFocusedElement(.up) },
-                onMoveDown: { viewModel.moveFocusedElement(.down) },
-                cursorColor: theme.foreground.opacity(0.8),
-                textColor: theme.foreground,
-                placeholder: "Search the web or enter URL...",
-                // `true` asks for focus, `nil` leaves focus alone. A permanent `true`
-                // would yank first responder back every time the view updated.
-                isEditing: focusRequest ? true : nil
-            )
-            .onChange(of: input) { _, newValue in
+        LauncherField(
+            text: $input,
+            onSubmit: { viewModel.executeCommand() },
+            onMoveUp: { viewModel.moveFocusedElement(.up) },
+            onMoveDown: { viewModel.moveFocusedElement(.down) },
+            placeholder: "Search the web or enter URL...",
+            // `true` asks for focus, `nil` leaves focus alone. A permanent `true`
+            // would yank first responder back every time the view updated.
+            isEditing: focusRequest ? true : nil,
+            onTextChange: { newValue in
                 viewModel.currentText = newValue
                 if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
                     viewModel.reset()
@@ -119,32 +99,33 @@ struct HomePageView: View {
                     viewModel.searchHandler(newValue)
                 }
             }
-        }
-        .padding(.horizontal, 14)
-        .background(pill)
+        )
     }
 
     @ViewBuilder
     private var suggestions: some View {
         if !viewModel.suggestions.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(viewModel.suggestions) { suggestion in
-                    LauncherSuggestionItem(
-                        suggestion: suggestion,
-                        focusedElement: $viewModel.focusedElement
-                    )
-                }
-            }
-            .padding(8)
+            LauncherSuggestionsView(
+                text: $input,
+                suggestions: $viewModel.suggestions,
+                focusedElement: $viewModel.focusedElement
+            )
+            .padding(6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.launcherMainBackground)
-            .clipShape(ConditionallyConcentricRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(ConditionallyConcentricRectangle(
+                cornerRadius: LauncherField.cornerRadius,
+                style: .continuous
+            ))
             .overlay(
-                ConditionallyConcentricRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(theme.foreground.opacity(0.05), lineWidth: 1)
-                    .padding(0.25)
+                ConditionallyConcentricRectangle(
+                    cornerRadius: LauncherField.cornerRadius,
+                    style: .continuous
+                )
+                .stroke(theme.foreground.opacity(LauncherField.hairline), lineWidth: 1)
+                .padding(0.25)
             )
-            .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
+            .shadow(color: .black.opacity(0.35), radius: 32, x: 0, y: 12)
         }
     }
 

@@ -5,32 +5,36 @@ import Testing
 
 @Suite("Launcher placement")
 struct LauncherPlacementTests {
-    /// The launcher must land in the middle of the content pane, not the window, so the
-    /// sidebar's width and side must not move it.
-    @Test("Centres on the pane, not the window")
-    func centresOnPane() {
-        let sidebarOnLeft = CGRect(x: 260, y: 44, width: 940, height: 756)
-        let sidebarOnRight = CGRect(x: 0, y: 44, width: 940, height: 756)
+    /// The floating launcher centres on the window, so neither the sidebar's width nor
+    /// the side it sits on may move it.
+    @Test("Centres on the window")
+    func centresOnWindow() {
+        let window = CGRect(x: 0, y: 0, width: 1200, height: 800)
 
-        #expect(LauncherPlacement.position(in: sidebarOnLeft).x == 730)
-        #expect(LauncherPlacement.position(in: sidebarOnRight).x == 470)
+        #expect(LauncherPlacement.position(in: window).x == 600)
     }
 
-    /// 35% down the pane, measured from the pane's own top edge, so the 44 pt toolbar
-    /// does not shift it.
-    @Test("Sits 35% down the pane regardless of the toolbar")
+    /// 35% down, measured from the window's own top edge.
+    @Test("Sits 35% down the window")
     func verticalFraction() {
-        let withToolbar = CGRect(x: 0, y: 44, width: 800, height: 400)
-        let withoutToolbar = CGRect(x: 0, y: 0, width: 800, height: 400)
+        let window = CGRect(x: 0, y: 0, width: 800, height: 400)
 
-        #expect(LauncherPlacement.position(in: withToolbar).y == 184)
-        #expect(LauncherPlacement.position(in: withoutToolbar).y == 140)
+        #expect(LauncherPlacement.position(in: window).y == 140)
     }
 
-    @Test("An empty pane produces a finite point")
-    func emptyPane() {
+    @Test("An empty window produces a finite point")
+    func emptyWindow() {
         let position = LauncherPlacement.position(in: .zero)
         #expect(position.x == 0)
         #expect(position.y == 0)
+    }
+
+    /// 640 wide until the window cannot hold it, then a gutter either side, and never
+    /// under 320 no matter how narrow the window gets.
+    @Test("Width gives way only to a narrow window")
+    func widthClamp() {
+        #expect(LauncherPlacement.width(forWindowWidth: 1400) == 640)
+        #expect(LauncherPlacement.width(forWindowWidth: 640) == 608)
+        #expect(LauncherPlacement.width(forWindowWidth: 300) == 320)
     }
 }

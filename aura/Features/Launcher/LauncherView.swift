@@ -18,11 +18,6 @@ struct LauncherView: View {
     @State private var mouseHasMoved = false
     @State private var mouseMonitor: Any?
 
-    var clearOverlay: Bool? = false
-    /// Pane to centre on, in this view's own coordinate space. `nil` means the launcher
-    /// already fills the content pane, so its own bounds are the pane.
-    var contentPane: CGRect?
-
     private func onTabPress() {
         guard !input.isEmpty else { return }
         if let searchEngine = viewModel.searchEngineService.findSearchEngine(for: input) {
@@ -67,38 +62,49 @@ struct LauncherView: View {
         appState.showLauncher = false
     }
 
+    private func dismiss() {
+        guard tabManager.activeTab != nil else { return }
+        isVisible = false
+        DispatchQueue.main.async {
+            appState.showLauncher = false
+        }
+    }
+
     var body: some View {
         GeometryReader { geo in
-            let pane = contentPane ?? CGRect(origin: .zero, size: geo.size)
-            ZStack(alignment: .top) {
-                Color.black.opacity(clearOverlay == true ? 0 : 0.3)
-                    .ignoresSafeArea()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .animation(.easeOut(duration: 0.1), value: isVisible)
-                    .onTapGesture {
-                        if tabManager.activeTab != nil {
-                            isVisible = false
-                            DispatchQueue.main.async {
-                                appState.showLauncher = false
-                            }
-                        }
-                    }
+            let window = CGRect(origin: .zero, size: geo.size)
+            ZStack(alignment: .topLeading) {
+                backdrop
+                    .frame(width: geo.size.width, height: geo.size.height)
 
                 panel
-                    .frame(width: pane.width)
-                    .position(LauncherPlacement.position(in: pane))
+                    .frame(width: LauncherPlacement.width(forWindowWidth: geo.size.width))
+                    .position(LauncherPlacement.position(in: window))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .environment(\.launcherMouseHasMoved, mouseHasMoved)
-        .onExitCommand {
-            if tabManager.activeTab != nil {
-                isVisible = false
-                DispatchQueue.main.async {
-                    appState.showLauncher = false
-                }
-            }
+        .onExitCommand(perform: dismiss)
+    }
+
+    /// Blurs and dims the whole window behind the panel. `withinWindow` blending is what
+    /// reaches the page: SwiftUI materials sit above the WKWebView's own layer and only
+    /// tint it. The view is mounted solely while the launcher is open and never hit-tests,
+    /// so the dim below it is what takes the dismissing click.
+    private var backdrop: some View {
+        ZStack {
+            BlurEffectView(
+                material: .hudWindow,
+                blendingMode: .withinWindow,
+                isClickThrough: true
+            )
+            Color.black.opacity(0.25)
         }
+        .ignoresSafeArea()
+        .opacity(isVisible ? 1 : 0)
+        .animation(.easeOut(duration: 0.12), value: isVisible)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: dismiss)
     }
 
     private var panel: some View {
@@ -107,17 +113,14 @@ struct LauncherView: View {
             match: $match,
             isFocused: $isTextFieldFocused,
             onTabPress: onTabPress,
-            onSubmit: onSubmit,
             viewModel: viewModel
         )
         .gradientAnimatingBorder(
             color: match?.color ?? .clear,
             trigger: match != nil
         )
-        .padding(.horizontal, 20)
         .opacity(isVisible ? 1.0 : 0.0)
-        .blur(radius: isVisible ? 0 : 2)
-        .animation(.easeOut(duration: 0.1), value: isVisible)
+        .animation(.easeOut(duration: 0.12), value: isVisible)
         .onAppear {
             isVisible = true
             isTextFieldFocused = true
