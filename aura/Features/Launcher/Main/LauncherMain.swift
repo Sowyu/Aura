@@ -61,9 +61,9 @@ struct LauncherMain: View {
             }
             .animation(nil, value: match?.color)
             // .animation(nil, value: viewModel.suggestions.count)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
 
             if match == nil, !viewModel.suggestions.isEmpty {
                 LauncherSuggestionsView(
@@ -78,9 +78,9 @@ struct LauncherMain: View {
         .frame(minWidth: 320, maxWidth: 814, alignment: .leading)
         .background(theme.launcherMainBackground)
         .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
-        .clipShape(ConditionallyConcentricRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(ConditionallyConcentricRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            ConditionallyConcentricRectangle(cornerRadius: 20, style: .continuous)
+            ConditionallyConcentricRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(
                     Color(match?.color ?? theme.foreground)
                         .opacity(0.05),
