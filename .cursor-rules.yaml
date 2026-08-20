@@ -30,7 +30,7 @@ folders:
       Organize resources (e.g., colors, fonts, strings), extensions, and data files in subfolders as needed.
 
 files:
-  - pattern: oraApp.swift
+  - pattern: OraApp.swift
     required: true
     description: "App file."
   - pattern: ContentView.swift

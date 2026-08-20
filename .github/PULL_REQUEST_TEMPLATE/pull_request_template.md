@@ -1,6 +1,6 @@
-### Pull Request – Ora Browser
+### Pull Request – Aura Browser
 
-Thank you for contributing to Ora. Please fill out this template to help us review your PR efficiently.
+Thank you for contributing to Aura. Please fill out this template to help us review your PR efficiently.
 
 ---
 
@@ -44,7 +44,7 @@ Example: “Used Claude Code for writing <this part of the code>.”
 Before submitting, ensure the following:
 	•	Code builds successfully on macOS 14+
 	•	All tests pass locally
-	•	Code follows Ora’s formatting and linting standards
+	•	Code follows Aura’s formatting and linting standards
 	•	No new warnings or errors
 	•	Descriptive title and summary provided
 	•	Screenshots attached if applicable

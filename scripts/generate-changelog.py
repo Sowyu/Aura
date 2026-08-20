@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate Ora release notes from merged pull requests between two tags.
+Generate Aura release notes from merged pull requests between two tags.
 
 Usage:
   ./scripts/generate-changelog.py <previous-tag> <new-tag> <owner/repo>
@@ -158,7 +158,7 @@ def collect_pull_requests(previous_tag: str, new_tag: str, repository: str) -> l
 
 def release_title_from_tag(tag: str) -> str:
     version = tag[1:] if tag.startswith("v") else tag
-    return f"Ora {version}"
+    return f"Aura {version}"
 
 
 def compare_url(repository: str, previous_tag: str, new_tag: str) -> str:

@@ -1,6 +1,6 @@
 # Security
 
-This document covers the repository-specific security expectations for Ora Browser contributors and maintainers.
+This document covers the repository-specific security expectations for Aura Browser contributors and maintainers.
 
 ## Secrets and Sensitive Data
 
@@ -11,7 +11,7 @@ This document covers the repository-specific security expectations for Ora Brows
 
 ## Update Signing
 
-Ora uses Sparkle update signing.
+Aura uses Sparkle update signing.
 
 - `ora_public_key.pem` is the public verification key and is safe to keep in the repository.
 - `ORA_PRIVATE_KEY` is the private signing key used when generating the Sparkle appcast and must never be committed or shared.

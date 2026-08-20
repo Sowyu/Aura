@@ -1,4 +1,4 @@
-You are generating release notes for the Ora browser.
+You are generating release notes for the Aura browser.
 
 Context:
 - Release title: ${release_title}

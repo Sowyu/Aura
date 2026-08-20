@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# release.sh — Single entry point to build and publish an Ora Browser release.
+# release.sh — Single entry point to build and publish an Aura Browser release.
 #
 # Usage:
 #   ./scripts/release.sh              # auto-increment patch (0.2.12 → 0.2.13)
@@ -39,7 +39,7 @@ done
 step "Preflight checks"
 
 [[ -f "project.yml" ]] || die "project.yml not found. Run from the project root."
-[[ -d "ora" ]]         || die "ora/ directory not found. Run from the project root."
+[[ -d "aura" ]]        || die "aura/ directory not found. Run from the project root."
 
 load_env APPLE_ID TEAM_ID SIGNING_IDENTITY DEVELOPER_ID_PROFILE APP_SPECIFIC_PASSWORD_KEYCHAIN ORA_PRIVATE_KEY
 
@@ -66,7 +66,7 @@ if [[ ${#MISSING_CASKS[@]} -gt 0 ]]; then
     setup_sparkle_tools || prime_sparkle_tools_from_xcode || die "generate_appcast not found after installing Sparkle or resolving package dependencies."
 fi
 
-[[ -f "ora_public_key.pem" ]] || die "ora_public_key.pem not found."
+[[ -f "aura_public_key.pem" ]] || die "aura_public_key.pem not found."
 # Check both unstaged and staged changes — staged WIP would otherwise be
 # silently swept into the release commit.
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || die "Uncommitted changes. Commit or stash first."
@@ -92,7 +92,7 @@ fi
 
 BUILD_VERSION=$(( ${CURRENT_BUILD:-0} + 1 ))
 
-bold "Ora Browser v${VERSION} (build ${BUILD_VERSION})"
+bold "Aura Browser v${VERSION} (build ${BUILD_VERSION})"
 echo "  Current: v${CURRENT_VERSION} (build ${CURRENT_BUILD})"
 
 # ---------------------------------------------------------------------------
@@ -138,7 +138,7 @@ sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD_VERSION
 # Done
 # ---------------------------------------------------------------------------
 
-DMG_NAME="Ora-Browser-${VERSION}.dmg"
+DMG_NAME="Aura-Browser-${VERSION}.dmg"
 echo ""
 green "========================================"
 green "  Release v${VERSION} published!"
@@ -146,5 +146,5 @@ green "========================================"
 echo ""
 echo "  DMG:     build/${DMG_NAME} ($(du -h "build/${DMG_NAME}" | cut -f1))"
 echo "  Release: https://github.com/the-ora/browser/releases/tag/v$VERSION"
-echo "  Appcast: https://the-ora.github.io/browser/appcast.xml"
+echo "  Appcast: https://the-aura.github.io/browser/appcast.xml"
 echo ""

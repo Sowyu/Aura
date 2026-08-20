@@ -66,8 +66,8 @@ appcast.xml.bak
 dsa_priv.pem
 dsa_pub.pem
 exportOptions.plist
-Ora-Browser.dmg
-rw.*.Ora-Browser.dmg
+Aura-Browser.dmg
+rw.*.Aura-Browser.dmg
 
 # Sparkle and signing (SECURITY: Never commit private keys!)
 *_private.pem

@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # Usage: ./scripts/publish.sh
 #
-# Expects build/Ora-Browser-<version>.dmg to exist (run build.sh first).
+# Expects build/Aura-Browser-<version>.dmg to exist (run build.sh first).
 # Reads version from project.yml. Expects .env with: ORA_PRIVATE_KEY
 # Optional changelog env vars:
 #   ORA_CHANGELOG_MODEL   Override the Codex model used for changelog rewriting
@@ -21,12 +21,12 @@ REPO="the-ora/browser"
 load_env ORA_PRIVATE_KEY
 
 VERSION=$(grep "MARKETING_VERSION:" project.yml | sed 's/.*MARKETING_VERSION: //' | tr -d ' ')
-DMG_NAME="Ora-Browser-${VERSION}.dmg"
+DMG_NAME="Aura-Browser-${VERSION}.dmg"
 DMG_FILE="build/${DMG_NAME}"
 SPARKLE_ARCHIVES_DIR="build/sparkle"
 CHANGELOG_DIR="build/release-notes"
-CHANGELOG_FILE="${CHANGELOG_DIR}/Ora-Browser-${VERSION}.md"
-RELEASE_NOTES_FILE="${SPARKLE_ARCHIVES_DIR}/Ora-Browser-${VERSION}.html"
+CHANGELOG_FILE="${CHANGELOG_DIR}/Aura-Browser-${VERSION}.md"
+RELEASE_NOTES_FILE="${SPARKLE_ARCHIVES_DIR}/Aura-Browser-${VERSION}.html"
 APPCAST_FILE="${SPARKLE_ARCHIVES_DIR}/appcast.xml"
 
 [[ -f "$DMG_FILE" ]] || die "DMG not found at $DMG_FILE. Run ./scripts/build.sh first."
@@ -108,7 +108,7 @@ echo "Release: https://github.com/$REPO/releases/tag/v$VERSION"
 
 step "Deploying appcast"
 
-cp appcast.xml /tmp/ora_appcast_deploy.xml
+cp appcast.xml /tmp/aura_appcast_deploy.xml
 CURRENT_BRANCH=$(git branch --show-current)
 
 STASH_CREATED=false
@@ -139,13 +139,13 @@ if git ls-remote --heads origin gh-pages | grep -q gh-pages; then
 else
     git checkout --orphan gh-pages
     git rm -rf .
-    echo "# Ora Browser Updates" > README.md
+    echo "# Aura Browser Updates" > README.md
     git add README.md
     git commit -m "chore(appcast): initialize gh-pages"
 fi
 
-cp /tmp/ora_appcast_deploy.xml appcast.xml
-rm -f /tmp/ora_appcast_deploy.xml
+cp /tmp/aura_appcast_deploy.xml appcast.xml
+rm -f /tmp/aura_appcast_deploy.xml
 git add -f appcast.xml
 git diff --staged --quiet || git commit -m "chore(appcast): deploy v$VERSION"
 git push origin gh-pages
@@ -153,4 +153,4 @@ git push origin gh-pages
 restore_worktree
 trap - EXIT
 
-green "Published! Appcast: https://the-ora.github.io/browser/appcast.xml"
+green "Published! Appcast: https://the-aura.github.io/browser/appcast.xml"

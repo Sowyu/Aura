@@ -1,6 +1,6 @@
-# Ora Browser Roadmap
+# Aura Browser Roadmap
 
-Ora Browser is in active development. This roadmap is intended to show current product direction, not to serve as an exhaustive issue tracker.
+Aura Browser is in active development. This roadmap is intended to show current product direction, not to serve as an exhaustive issue tracker.
 
 ## Available Today
 

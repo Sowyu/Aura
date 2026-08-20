@@ -1,6 +1,6 @@
 <div align="center">
-  <img width="150" height="150" src="/assets/icon.png" alt="Ora Browser logo">
-  <h1>Ora Browser</h1>
+  <img width="150" height="150" src="/assets/icon.png" alt="Aura Browser logo">
+  <h1>Aura Browser</h1>
   <p>Fast, native WebKit browser for macOS.</p>
   <a href="https://vercel.com/oss">
   <img alt="Vercel OSS Program" src="https://vercel.com/oss/program-badge.svg" />
@@ -16,11 +16,11 @@
 </p>
 
 > [!NOTE]
-> Ora is still in active development and is not ready for daily use yet.
+> Aura is still in active development and is not ready for daily use yet.
 
 ## Overview
 
-Ora is a macOS browser built with SwiftUI, AppKit, and WebKit. The project aims for a native, low-friction browsing experience without layering on unnecessary product surface area.
+Aura is a macOS browser built with SwiftUI, AppKit, and WebKit. The project aims for a native, low-friction browsing experience without layering on unnecessary product surface area.
 
 ## Highlights
 
@@ -37,17 +37,17 @@ Ora is a macOS browser built with SwiftUI, AppKit, and WebKit. The project aims 
 git clone https://github.com/the-ora/browser.git
 cd browser
 ./scripts/setup.sh
-open Ora.xcodeproj
+open Aura.xcodeproj
 ```
 
 The setup script installs required tooling, installs git hooks, and regenerates the Xcode project.
 
 ## Development
 
-- Main app target: `ora`
+- Main app target: `aura`
 - Project configuration is managed with `XcodeGen` in `project.yml`
 - Regenerate the project after config changes with `xcodegen`
-- Run tests in Xcode with `Product > Test` or via `xcodebuild test -scheme ora -destination "platform=macOS"`
+- Run tests in Xcode with `Product > Test` or via `xcodebuild test -scheme aura -destination "platform=macOS"`
 
 ## Docs
 
@@ -67,4 +67,4 @@ The setup script installs required tooling, installs git hooks, and regenerates 
 
 ## License
 
-Ora Browser is licensed under [GPL-3.0](LICENSE). Third-party libraries used by this project are licensed under their own open-source licenses.
+Aura Browser is licensed under [GPL-3.0](LICENSE). Third-party libraries used by this project are licensed under their own open-source licenses.

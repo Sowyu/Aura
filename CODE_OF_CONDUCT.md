@@ -2,7 +2,7 @@
 
 ## Our Commitment
 
-We are committed to providing a welcoming, respectful, and inclusive environment for everyone participating in the Ora community, regardless of experience level, background, or identity.
+We are committed to providing a welcoming, respectful, and inclusive environment for everyone participating in the Aura community, regardless of experience level, background, or identity.
 
 ## Expected Behavior
 
@@ -27,7 +27,7 @@ This Code of Conduct applies to all project spaces, including:
 
 - GitHub repository (issues, PRs, discussions)
 - Discord community
-- Any other official Ora communication channels
+- Any other official Aura communication channels
 
 ## Enforcement
 
@@ -51,4 +51,4 @@ This Code of Conduct is adapted from the [Contributor Covenant](https://www.cont
 
 ---
 
-By participating in the Ora community, you agree to abide by this Code of Conduct.
+By participating in the Aura community, you agree to abide by this Code of Conduct.

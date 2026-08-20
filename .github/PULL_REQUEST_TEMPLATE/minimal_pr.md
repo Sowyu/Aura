@@ -1,4 +1,4 @@
-### Minimal Pull Request – Ora Browser
+### Minimal Pull Request – Aura Browser
 
 For small fixes, dependency updates, or minor changes that do not require a full PR description.
 

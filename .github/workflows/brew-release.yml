@@ -19,7 +19,7 @@ on:
         type: string
         default: ''
       dmg_url:
-        description: 'Full DMG download URL (e.g., https://github.com/the-ora/browser/releases/download/v0.2.12/Ora-Browser-0.2.12.dmg)'
+        description: 'Full DMG download URL (e.g., https://github.com/the-ora/browser/releases/download/v0.2.12/Aura-Browser-0.2.12.dmg)'
         required: false
         type: string
         default: ''
@@ -60,7 +60,7 @@ jobs:
             fi
           else
             VERSION="${RELEASE_TAG#v}"
-            DOWNLOAD_URL="https://github.com/the-ora/browser/releases/download/${RELEASE_TAG}/Ora-Browser-${VERSION}.dmg"
+            DOWNLOAD_URL="https://github.com/the-ora/browser/releases/download/${RELEASE_TAG}/Aura-Browser-${VERSION}.dmg"
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> "$GITHUB_ENV"
@@ -71,7 +71,7 @@ jobs:
         run: |
           echo "Downloading DMG from $DOWNLOAD_URL ..."
           for attempt in 1 2 3; do
-            if curl -L --fail -o Ora.dmg "$DOWNLOAD_URL"; then
+            if curl -L --fail -o Aura.dmg "$DOWNLOAD_URL"; then
               echo "Download succeeded (attempt $attempt)."
               break
             fi
@@ -85,7 +85,7 @@ jobs:
 
       - name: Compute SHA256
         run: |
-          SHA256=$(shasum -a 256 Ora.dmg | awk '{print $1}')
+          SHA256=$(shasum -a 256 Aura.dmg | awk '{print $1}')
           echo "SHA256=$SHA256" >> "$GITHUB_ENV"
           echo "SHA256: $SHA256"
 

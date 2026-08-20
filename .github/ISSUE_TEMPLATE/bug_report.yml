@@ -1,5 +1,5 @@
 name: 🐛 Bug Report
-description: Report a reproducible issue or unexpected behavior in Ora Browser
+description: Report a reproducible issue or unexpected behavior in Aura Browser
 labels: ["bug", "triage"]
 body:
   - type: markdown
@@ -19,7 +19,7 @@ body:
   - type: input
     id: ora-version
     attributes:
-      label: Ora Browser Version
+      label: Aura Browser Version
       placeholder: e.g., 0.2.7
     validations:
       required: true
@@ -39,7 +39,7 @@ body:
       label: Steps to Reproduce
       description: List the exact steps to reproduce the issue.
       placeholder: |
-        1. Open Ora
+        1. Open Aura
         2. Go to example.com
         3. Click on ...
         4. See error
