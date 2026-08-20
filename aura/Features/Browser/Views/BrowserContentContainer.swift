@@ -18,8 +18,10 @@ struct BrowserContentContainer<Content: View>: View {
 
     let content: () -> Content
 
+    /// Edge-to-edge only in plain fullscreen. Compact mode keeps the inset and rounded
+    /// corners so the revealed chrome has somewhere to slide over.
     private var isCompleteFullscreen: Bool {
-        appState.isFullscreen && sidebarManager.isSidebarHidden
+        appState.isFullscreen && sidebarManager.isSidebarHidden && !sidebarManager.isCompactEnabled
     }
 
     private var cornerRadius: CGFloat {
