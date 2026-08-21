@@ -7,22 +7,23 @@ struct BrowserSplitView: View {
     @Environment(SidebarManager.self) private var sidebarManager
     @Environment(ToastManager.self) private var toastManager
 
-    private var targetSide: SplitSide {
-        sidebarManager.sidebarPosition == .primary ? .primary : .secondary
-    }
-
     private var splitFraction: FractionHolder {
         sidebarManager.sidebarPosition == .primary
             ? sidebarManager.currentFraction
             : sidebarManager.currentFraction.inverted()
     }
 
+    /// The same bounds the revealed sidebar clamps to, so dragging the pinned splitter
+    /// and dragging the revealed sidebar's handle land on the same widths.
+    private var minSidebar: CGFloat { FloatingSidebarOverlay.minFraction }
+    private var minContent: CGFloat { 1 - FloatingSidebarOverlay.maxFraction }
+
     private var minPF: CGFloat {
-        sidebarManager.sidebarPosition == .primary ? 0.10 : 0.7
+        sidebarManager.sidebarPosition == .primary ? minSidebar : minContent
     }
 
     private var minSF: CGFloat {
-        sidebarManager.sidebarPosition == .primary ? 0.7 : 0.10
+        sidebarManager.sidebarPosition == .primary ? minContent : minSidebar
     }
 
     private var prioritySide: SplitSide {

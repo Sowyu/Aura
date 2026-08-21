@@ -15,6 +15,8 @@ struct CopyIcon: Shape {
         return path
     }
 
+    // Traced vector path, one line per control point.
+    // swiftlint:disable:next function_body_length
     private func makeOutlinePath(in rect: CGRect) -> Path {
         let width = rect.size.width
         let height = rect.size.height

@@ -64,24 +64,6 @@ void AuraWebRequestChannelRefreshActive(void)
     if ([state isEqualToString:@"1"] != AuraActive) { AuraWebRequestChannelSetActive(state); }
 }
 
-#pragma mark - Types
-
-NSString *AuraWebRequestTypeName(uint32_t typeMask, BOOL isMainDocument, BOOL isSubframe)
-{
-    if (isMainDocument) { return @"main_frame"; }
-    if (typeMask & AuraResourceTypeSubdocument) { return @"sub_frame"; }
-    if (typeMask & AuraResourceTypeScript) { return @"script"; }
-    if (typeMask & AuraResourceTypeImage) { return @"image"; }
-    if (typeMask & AuraResourceTypeStylesheet) { return @"stylesheet"; }
-    if (typeMask & AuraResourceTypeFont) { return @"font"; }
-    if (typeMask & AuraResourceTypeMedia) { return @"media"; }
-    if (typeMask & AuraResourceTypeXHR) { return @"xmlhttprequest"; }
-    if (typeMask & AuraResourceTypeWebSocket) { return @"websocket"; }
-    if (typeMask & AuraResourceTypePing) { return @"ping"; }
-    if (typeMask & AuraResourceTypeDocument) { return isSubframe ? @"sub_frame" : @"main_frame"; }
-    return @"other";
-}
-
 #pragma mark - Synchronous ask
 
 NSString *AuraWebRequestChannelPostSync(NSString *name, NSString *body)

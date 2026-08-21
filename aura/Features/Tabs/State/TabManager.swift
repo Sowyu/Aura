@@ -3,36 +3,11 @@ import SwiftUI
 
 // MARK: - Tab Manager
 
-private struct ClosedTabSnapshot {
-    let id: UUID
-    let containerID: UUID
-    let url: URL
-    let savedURL: URL?
-    let title: String
-    let favicon: URL?
-    let faviconLocalFile: URL?
-    let createdAt: Date
-    let lastAccessedAt: Date?
-    let type: TabType
-    let order: Int
-    let backgroundColorHex: String
-    let isPrivate: Bool
-
-    init(tab: Tab) {
-        id = tab.id
-        containerID = tab.container.id
-        url = tab.url
-        savedURL = tab.savedURL
-        title = tab.title
-        favicon = tab.favicon
-        faviconLocalFile = tab.faviconLocalFile
-        createdAt = tab.createdAt
-        lastAccessedAt = tab.lastAccessedAt
-        type = tab.type
-        order = tab.order
-        backgroundColorHex = tab.backgroundColorHex
-        isPrivate = tab.isPrivate
-    }
+/// Weak box for the cross-window manager registry.
+@MainActor
+private final class WeakTabManager {
+    weak var value: TabManager?
+    init(value: TabManager) { self.value = value }
 }
 
 @Observable
@@ -58,13 +33,34 @@ final class TabManager {
     /// Note: Could be made injectable via init parameter if preferred
     let tabSearchingService: TabSearchingProviding
 
+    /// Every window builds its own `TabManager` over the same store, so "is this tab
+    /// active?" is a question about the whole app, not about one manager. Weak on
+    /// purpose: a closed window's manager drops out on its own.
+    @ObservationIgnored private static var registry: [WeakTabManager] = []
+
+    // ponytail: a manager only leaves the registry when it deallocates, and `Tab` holds
+    // its manager strongly, so a closed window's last active tab stays warm. Unregister
+    // explicitly if closing windows is ever shown to hold memory.
+    /// Ids of the tabs shown in any open window. Hibernation consults this instead of
+    /// its own `activeTab`, so a tab on screen in another window is never evicted.
+    static var activeTabIDsAcrossWindows: Set<UUID> {
+        registry.removeAll { $0.value == nil }
+        return Set(registry.compactMap { $0.value?.activeTab?.id })
+    }
+
     @ObservationIgnored private var cleanupTimer: Timer?
+    @ObservationIgnored private var settingsObserver: NSObjectProtocol?
+    /// Last live-tab cap this manager acted on, so a change to any other setting does
+    /// not trigger an eviction pass.
+    @ObservationIgnored private var appliedMaxLiveTabs: Int
     /// Tabs with an unsaved-input probe in flight. A second maintenance pass must not
     /// ask the same page again while the first answer is still on its way back.
     /// Internal only because `TabManager+Hibernation` needs it.
     @ObservationIgnored var hibernating: Set<UUID> = []
-    @ObservationIgnored private var recentlyClosedTabs: [ClosedTabSnapshot] = []
-    private let maxRecentlyClosedTabs = 5
+    /// Reopen stack, newest last. Lives here because an extension cannot add
+    /// stored properties; the behaviour is in `TabManager+RecentlyClosed`.
+    @ObservationIgnored var recentlyClosedTabs: [ClosedTabSnapshot] = []
+    let maxRecentlyClosedTabs = 5
 
     init(
         modelContainer: ModelContainer,
@@ -76,13 +72,36 @@ final class TabManager {
         self.modelContext = modelContext
         self.mediaController = mediaController
         self.tabSearchingService = tabSearchingService
+        self.appliedMaxLiveTabs = SettingsStore.shared.maxLiveTabs
 
         self.modelContext.undoManager = UndoManager()
+        Self.registry.append(WeakTabManager(value: self))
         applyLaunchTabPolicy()
         initializeActiveContainerAndTab()
 
         // Start automatic cleanup timer (every minute)
         startCleanupTimer()
+        observeLiveTabLimitChanges()
+    }
+
+    /// The cap is a stored default, so lowering it in Settings has to bite now rather
+    /// than at the next minute tick.
+    private func observeLiveTabLimitChanges() {
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // `OperationQueue.main` is not the main actor's executor, so this hops
+            // rather than asserting its way onto it.
+            Task { @MainActor in
+                guard let self else { return }
+                let limit = SettingsStore.shared.maxLiveTabs
+                guard limit != self.appliedMaxLiveTabs else { return }
+                self.appliedMaxLiveTabs = limit
+                self.enforceLiveTabLimit()
+            }
+        }
     }
 
     // MARK: - Public API's
@@ -145,8 +164,27 @@ final class TabManager {
 
     // MARK: - Container Public API's
 
+    /// Folders belong to one space, so a tab that leaves its space leaves its folder,
+    /// and it takes a fresh `order` so it cannot collide with a row already there.
     func moveTabToContainer(_ tab: Tab, toContainer: TabContainer) {
+        guard tab.container.id != toContainer.id else { return }
+        let wasActive = activeTab?.id == tab.id
+        let replacement = wasActive ? neighbour(after: tab) : nil
+
+        tab.folder = nil
+        tab.order = nextTabOrder(in: toContainer)
         tab.container = toContainer
+
+        // The moved tab is no longer in this window's space, so the selection follows
+        // the space, not the tab.
+        if wasActive {
+            if let replacement {
+                activateTab(replacement)
+            } else {
+                activeTab?.maybeIsActive = false
+                activeTab = nil
+            }
+        }
         try? modelContext.save()
     }
 
@@ -186,9 +224,9 @@ final class TabManager {
         )
         modelContext.insert(newContainer)
         activeContainer = newContainer
-        self.activeTab = nil
+        activeTab?.maybeIsActive = false
+        activeTab = nil
         try? modelContext.save()
-        //        _ = fetchContainers() // Refresh containers
         return newContainer
     }
 
@@ -251,20 +289,20 @@ final class TabManager {
         }
     }
 
-    func activateContainer(_ container: TabContainer, activateLastAccessedTab: Bool = true) {
+    /// Switching spaces selects the space's most recently used tab. Hibernated tabs are
+    /// eligible: requiring a live web view here left a space full of unloaded tabs
+    /// showing aura://home instead of the tab the user last had open.
+    func activateContainer(_ container: TabContainer) {
         activeContainer = container
         container.lastAccessedAt = Date()
 
-        // Set the most recently accessed tab in the container
         if let lastAccessedTab = container.tabs
-            .sorted(by: { $0.lastAccessedAt ?? Date() > $1.lastAccessedAt ?? Date() }).first,
-            lastAccessedTab.isWebViewReady
+            .sorted(by: { ($0.lastAccessedAt ?? .distantPast) > ($1.lastAccessedAt ?? .distantPast) })
+            .first
         {
-            activeTab?.maybeIsActive = false
-            activeTab = lastAccessedTab
-            activeTab?.maybeIsActive = true
-            lastAccessedTab.lastAccessedAt = Date()
+            activateTab(lastAccessedTab)
         } else {
+            activeTab?.maybeIsActive = false
             activeTab = nil
         }
 
@@ -276,7 +314,9 @@ final class TabManager {
     /// The sidebar sorts by `order` descending, so the top of the list is the highest
     /// order and the bottom is one below the lowest.
     func nextTabOrder(in container: TabContainer) -> Int {
-        let orders = container.tabs.map(\.order)
+        // Folders sit on the same scale as top-level tabs, so ignoring them here handed
+        // a new tab the order a folder already had.
+        let orders = container.tabs.map(\.order) + container.folders.map(\.order)
         switch SettingsStore.shared.newTabPosition {
         case .top: return (orders.max() ?? 0) + 1
         case .bottom: return (orders.min() ?? 1) - 1
@@ -316,26 +356,11 @@ final class TabManager {
         container.lastAccessedAt = Date()
         ExtensionManager.shared.tabDidOpen(newTab)
 
+        // Through `activateTab`, so a tab added to another space brings the sidebar with
+        // it: the hand-rolled version here set `activeTab` and left `activeContainer`
+        // pointing at the space the user was looking at before.
         if activateAfterAdding {
-            let previousTab = activeTab
-            activeTab?.maybeIsActive  = false
-            activeTab = newTab
-            activeTab?.maybeIsActive  = true
-            ExtensionManager.shared.tabDidActivate(newTab, previous: previousTab)
-
-            // Initialize the WebView for the new active tab
-            newTab.restoreTransientState(
-                historyManager: historyManager ?? HistoryManager(
-                    modelContainer: modelContainer,
-                    modelContext: modelContext
-                ),
-                downloadManager: downloadManager ?? DownloadManager(
-                    modelContainer: modelContainer,
-                    modelContext: modelContext
-                ),
-                tabManager: self,
-                isPrivate: isPrivate
-            )
+            activateTab(newTab)
         }
 
         try? modelContext.save()
@@ -486,36 +511,33 @@ final class TabManager {
         try? modelContext.save()
     }
 
+    /// The row the selection falls to when `tab` goes. The sidebar sorts descending, so
+    /// the neighbour below is the next lower `order` in the same section and folder;
+    /// closing the last row of a folder falls back to the space's most recent tab.
+    /// Hibernated tabs count: `activateTab` rebuilds the web view on the way in.
+    func neighbour(after tab: Tab) -> Tab? {
+        let remaining = tab.container.tabs.filter { $0.id != tab.id }
+        let siblings = remaining
+            .filter { $0.type == tab.type && $0.folder?.id == tab.folder?.id }
+            .sorted { $0.order > $1.order }
+        if let below = siblings.first(where: { $0.order < tab.order }) { return below }
+        if let above = siblings.last(where: { $0.order > tab.order }) { return above }
+        return remaining
+            .sorted { ($0.lastAccessedAt ?? .distantPast) > ($1.lastAccessedAt ?? .distantPast) }
+            .first
+    }
+
     func closeTab(tab: Tab, shouldTrackForRestore: Bool = true) {
         ExtensionManager.shared.tabDidClose(tab)
-        // If the closed tab was active, select another tab
+        // If the closed tab was active, select another tab. No tabs left in the space
+        // means no active tab, which is what puts aura://home back on screen.
         if self.activeTab?.id == tab.id {
-            if let nextTab = tab.container.tabs
-                .filter({ $0.id != tab.id && $0.isWebViewReady })
-                .sorted(by: { $0.lastAccessedAt ?? Date.distantPast > $1.lastAccessedAt ?? Date.distantPast })
-                .first
-            {
+            tab.maybeIsActive = false
+            if let nextTab = neighbour(after: tab) {
                 self.activateTab(nextTab)
-
-                //            } else if let nextContainer = containers.first(where: { $0.id != tab.container.id }) {
-                //                self.activateContainer(nextContainer)
-                //
             } else {
                 self.activeTab = nil
             }
-        } else {
-            self.activeTab = activeTab
-        }
-        if activeTab?.isWebViewReady != nil, let historyManager = tab.historyManager,
-           let downloadManager = tab.downloadManager, let tabManager = tab.tabManager
-        {
-            activeTab?
-                .restoreTransientState(
-                    historyManager: historyManager,
-                    downloadManager: downloadManager,
-                    tabManager: tabManager,
-                    isPrivate: tab.isPrivate
-                )
         }
         if shouldTrackForRestore, tab.type == .normal {
             trackRecentlyClosedTab(tab)
@@ -533,7 +555,6 @@ final class TabManager {
                 try? self.modelContext.save()
             }
         }
-        self.activeTab?.maybeIsActive = true
     }
 
     func closeActiveTab() {
@@ -542,36 +563,6 @@ final class TabManager {
         } else {
             NSApp.keyWindow?.close()
         }
-    }
-
-    func restoreLastTab() {
-        guard let snapshot = recentlyClosedTabs.popLast() else { return }
-        let container = fetchContainers()
-            .first(where: { $0.id == snapshot.containerID }) ?? activeContainer ?? createContainer()
-
-        shiftRestoredTabOrders(in: container, restoring: snapshot)
-
-        let restoredTab = Tab(
-            id: snapshot.id,
-            url: snapshot.url,
-            title: snapshot.title,
-            favicon: snapshot.favicon,
-            container: container,
-            type: snapshot.type,
-            order: snapshot.order,
-            tabManager: self,
-            isPrivate: snapshot.isPrivate
-        )
-        restoredTab.savedURL = snapshot.savedURL
-        restoredTab.faviconLocalFile = snapshot.faviconLocalFile
-        restoredTab.createdAt = snapshot.createdAt
-        restoredTab.lastAccessedAt = snapshot.lastAccessedAt
-        restoredTab.backgroundColorHex = snapshot.backgroundColorHex
-
-        modelContext.insert(restoredTab)
-        container.tabs.append(restoredTab)
-        activateTab(restoredTab)
-        try? modelContext.save()
     }
 
     func togglePiP(_ currentTab: Tab?, _ oldTab: Tab?) {
@@ -625,15 +616,16 @@ final class TabManager {
 
     deinit {
         cleanupTimer?.invalidate()
+        if let settingsObserver {
+            NotificationCenter.default.removeObserver(settingsObserver)
+        }
     }
 
-    /// Activate a tab by its persistent id. If the tab is in a
-    /// different container, also activate that container.
+    /// Activate a tab by its persistent id. `activateTab` follows the tab into its own
+    /// space, so the container needs no separate switch.
     func activateTab(id: UUID) {
-        let allContainers = fetchContainers()
-        for container in allContainers {
+        for container in fetchContainers() {
             if let tab = container.tabs.first(where: { $0.id == id }) {
-                activateContainer(container)
                 activateTab(tab)
                 return
             }
@@ -680,18 +672,43 @@ final class TabManager {
         return []
     }
 
-    func duplicateTab(_ tab: Tab) {
-        // Create a new tab using the existing openTab method
-        guard let historyManager = tab.historyManager else { return }
-        guard let newTab = openTab(
+    /// The copy lands next to the original, in the same folder. `openTab` is not used
+    /// here: it needs a host, so it silently dropped aura:// tabs on the floor, and it
+    /// always opens in the active space rather than the source tab's.
+    @discardableResult
+    func duplicateTab(_ tab: Tab) -> Tab {
+        let copy = Tab(
             url: tab.url,
-            historyManager: historyManager,
+            title: tab.title,
+            favicon: tab.favicon,
+            container: tab.container,
+            type: .normal,
+            order: nextTabOrder(in: tab.container),
+            historyManager: tab.historyManager,
             downloadManager: tab.downloadManager,
-            focusAfterOpening: false,
-            isPrivate: tab.isPrivate,
-            loadSilently: true
-        ) else { return }
-        self.reorderTabs(from: tab, toTab: newTab)
+            tabManager: self,
+            isPrivate: tab.isPrivate
+        )
+        copy.faviconLocalFile = tab.faviconLocalFile
+        modelContext.insert(copy)
+        tab.container.tabs.append(copy)
+        copy.folder = tab.folder
+        ExtensionManager.shared.tabDidOpen(copy)
+        tab.container.reorderTabs(from: copy, to: tab)
+
+        if !tab.url.isOraInternal, let historyManager = tab.historyManager {
+            copy.restoreTransientState(
+                historyManager: historyManager,
+                downloadManager: tab.downloadManager ?? DownloadManager(
+                    modelContainer: modelContainer,
+                    modelContext: modelContext
+                ),
+                tabManager: self,
+                isPrivate: tab.isPrivate
+            )
+        }
+        try? modelContext.save()
+        return copy
     }
 
     func refreshPrivacySettings(for containerId: UUID) {
@@ -705,18 +722,6 @@ final class TabManager {
         }
     }
 
-    private func trackRecentlyClosedTab(_ tab: Tab) {
-        recentlyClosedTabs.append(ClosedTabSnapshot(tab: tab))
-        if recentlyClosedTabs.count > maxRecentlyClosedTabs {
-            recentlyClosedTabs.removeFirst(recentlyClosedTabs.count - maxRecentlyClosedTabs)
-        }
-    }
-
-    private func shiftRestoredTabOrders(in container: TabContainer, restoring snapshot: ClosedTabSnapshot) {
-        for tab in container.tabs where tab.type == snapshot.type && tab.order >= snapshot.order {
-            tab.order += 1
-        }
-    }
 }
 
 private extension TabManager {

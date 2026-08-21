@@ -20,7 +20,7 @@ struct ContainerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if toolbarManager.isToolbarHidden {
+            if toolbarManager.isToolbarHidden, !toolbarManager.isFloatingToolbarVisible {
                 SidebarURLDisplay()
             }
             if !privacyMode.isPrivate {
@@ -190,11 +190,6 @@ struct ContainerView: View {
             DispatchQueue.main.async { draggedItem = nil }
         }
         return provider
-    }
-
-    private func dropTab(_ tabId: String) {
-        isDragging = false
-        draggedItem = nil
     }
 
     private func duplicateTab(_ tab: Tab) {

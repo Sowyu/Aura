@@ -1,173 +1,17 @@
-import AppKit
 import Foundation
-import SwiftUI
 
-struct SitePermissionSettings: Codable, Hashable, Identifiable {
-    var id: String {
-        host
-    }
-
-    let host: String
-    var camera: Bool
-    var microphone: Bool
-    var location: Bool
-    var notifications: Bool
-}
-
-enum AutoClearTabsAfter: String, CaseIterable, Identifiable, Codable {
-    case never = "Never"
-    case oneHour = "1 Hour"
-    case oneDay = "1 Day"
-    case oneWeek = "1 Week"
-    var id: String {
-        rawValue
-    }
-
-    var seconds: TimeInterval? {
-        switch self {
-        case .never: return nil
-        case .oneHour: return 3600
-        case .oneDay: return 86400
-        case .oneWeek: return 604_800
-        }
-    }
-}
-
-/// Where a freshly opened tab lands in the sidebar list.
-enum NewTabPosition: String, CaseIterable, Identifiable, Codable {
-    case top
-    case bottom
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .top: return "Top of the list"
-        case .bottom: return "Bottom of the list"
-        }
-    }
-}
-
-/// What happens to a link handed to Aura by another app.
-enum ExternalLinkTarget: String, CaseIterable, Identifiable, Codable {
-    case currentSpace
-    case newWindow
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .currentSpace: return "The current space"
-        case .newWindow: return "A new window"
-        }
-    }
-}
-
-struct CustomSearchEngine: Codable, Identifiable, Hashable {
-    let id: String
-    let name: String
-    let searchURL: String
-    let aliases: [String]
-    let faviconData: Data?
-    let faviconBackgroundColorData: Data?
-    let isAIChat: Bool
-
-    init(
-        id: String = UUID().uuidString,
-        name: String,
-        searchURL: String,
-        aliases: [String] = [],
-        faviconData: Data? = nil,
-        faviconBackgroundColorData: Data? = nil,
-        isAIChat: Bool = false
-    ) {
-        self.id = id
-        self.name = name
-        self.searchURL = searchURL
-        self.aliases = aliases
-        self.faviconData = faviconData
-        self.faviconBackgroundColorData = faviconBackgroundColorData
-        self.isAIChat = isAIChat
-    }
-
-    var favicon: NSImage? {
-        guard let data = faviconData else { return nil }
-        return NSImage(data: data)
-    }
-
-    var faviconBackgroundColor: Color? {
-        guard let data = faviconBackgroundColorData else { return nil }
-        do {
-            let nsColor = try NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self, from: data)
-            return nsColor.map(Color.init)
-        } catch {
-            return nil
-        }
-    }
-
-    static func createWithFavicon(
-        id: String = UUID().uuidString,
-        name: String,
-        searchURL: String,
-        aliases: [String] = [],
-        isAIChat: Bool = false,
-        completion: @escaping (CustomSearchEngine) -> Void
-    ) {
-        let faviconService = FaviconService.shared
-
-        // Try to fetch favicon synchronously first (from cache)
-        if let favicon = faviconService.getFavicon(for: searchURL) {
-            let faviconData = favicon.tiffRepresentation
-            let backgroundColor = Color(favicon.averageColor())
-            let colorData = try? NSKeyedArchiver.archivedData(
-                withRootObject: NSColor(backgroundColor),
-                requiringSecureCoding: false
-            )
-
-            let engine = CustomSearchEngine(
-                id: id,
-                name: name,
-                searchURL: searchURL,
-                aliases: aliases,
-                faviconData: faviconData,
-                faviconBackgroundColorData: colorData,
-                isAIChat: isAIChat
-            )
-            completion(engine)
-        } else {
-            // Fetch async and update
-            faviconService.fetchFaviconSync(for: searchURL) { favicon in
-                DispatchQueue.main.async {
-                    var faviconData: Data?
-                    var colorData: Data?
-
-                    if let favicon {
-                        faviconData = favicon.tiffRepresentation
-                        let backgroundColor = Color(favicon.averageColor())
-                        colorData = try? NSKeyedArchiver.archivedData(
-                            withRootObject: NSColor(backgroundColor),
-                            requiringSecureCoding: false
-                        )
-                    }
-
-                    let engine = CustomSearchEngine(
-                        id: id,
-                        name: name,
-                        searchURL: searchURL,
-                        aliases: aliases,
-                        faviconData: faviconData,
-                        faviconBackgroundColorData: colorData,
-                        isAIChat: isAIChat
-                    )
-                    completion(engine)
-                }
-            }
-        }
-    }
-}
-
+/// Every user-facing preference that is not per-space, cached in memory and written
+/// back through `didSet`. Nothing here reads `UserDefaults` after `init`, so a view
+/// body can touch any of these without hitting the preferences store.
+///
+/// Domain-specific behaviour lives in extensions: `SettingsStore+Spaces` for the
+/// per-container keys, `SettingsStore+Collections` for the JSON-blob mutators.
 @Observable
 class SettingsStore {
     static let shared = SettingsStore()
-    @ObservationIgnored private let defaults = UserDefaults.standard
+
+    /// Internal rather than private: the extensions in the sibling files write through it.
+    @ObservationIgnored let defaults = UserDefaults.standard
 
     // MARK: - Global keys
 
@@ -217,23 +61,7 @@ class SettingsStore {
     /// scroll bars visible in Aura without touching the system-wide setting.
     static let appleShowScrollBarsKey = "AppleShowScrollBars"
 
-    // MARK: - Per-Container
-
-    private func keyForDefaultSearch(for containerId: UUID) -> String {
-        "settings.container.\(containerId.uuidString).defaultSearch"
-    }
-
-    private func keyForDefaultAI(for containerId: UUID) -> String {
-        "settings.container.\(containerId.uuidString).defaultAI"
-    }
-
-    private func keyForAutoClear(for containerId: UUID) -> String {
-        "settings.container.\(containerId.uuidString).autoClearTabsAfter"
-    }
-
-    private func keyForPrivacySettings(for containerId: UUID) -> String {
-        "settings.container.\(containerId.uuidString).privacy"
-    }
+    // MARK: - Privacy and updates
 
     var autoUpdateEnabled: Bool {
         didSet { defaults.set(autoUpdateEnabled, forKey: autoUpdateKey) }
@@ -251,11 +79,6 @@ class SettingsStore {
         didSet { defaults.set(cookiesPolicy.rawValue, forKey: cookiesPolicyKey) }
     }
 
-    /// The floating launcher sits mid-window and slides up when suggestions appear.
-    var launcherRisesForSuggestions: Bool {
-        didSet { defaults.set(launcherRisesForSuggestions, forKey: launcherRisesForSuggestionsKey) }
-    }
-
     /// Global default for page JavaScript. Per-site rules in `SiteJavaScriptRule` override it.
     var blockJavaScriptByDefault: Bool {
         didSet { defaults.set(blockJavaScriptByDefault, forKey: blockJavaScriptByDefaultKey) }
@@ -263,6 +86,13 @@ class SettingsStore {
 
     var sitePermissions: [String: SitePermissionSettings] {
         didSet { saveCodable(sitePermissions, forKey: sitePermissionsKey) }
+    }
+
+    // MARK: - Search
+
+    /// The floating launcher sits mid-window and slides up when suggestions appear.
+    var launcherRisesForSuggestions: Bool {
+        didSet { defaults.set(launcherRisesForSuggestions, forKey: launcherRisesForSuggestionsKey) }
     }
 
     var customSearchEngines: [CustomSearchEngine] {
@@ -276,6 +106,8 @@ class SettingsStore {
     var customKeyboardShortcuts: [String: KeyChord] {
         didSet { saveCodable(customKeyboardShortcuts, forKey: customKeyboardShortcutsKey) }
     }
+
+    // MARK: - Tab lifetime
 
     var tabAliveTimeout: TimeInterval {
         didSet { defaults.set(tabAliveTimeout, forKey: tabAliveTimeoutKey) }
@@ -299,6 +131,8 @@ class SettingsStore {
     var autoPiPEnabled: Bool {
         didSet { defaults.set(autoPiPEnabled, forKey: autoPiPEnabledKey) }
     }
+
+    // MARK: - Passwords
 
     var passwordsEnabled: Bool {
         didSet { defaults.set(passwordsEnabled, forKey: passwordsEnabledKey) }
@@ -379,8 +213,13 @@ class SettingsStore {
 
     // MARK: - Accessibility and languages
 
+    /// `AnimationSettings` reads this from view bodies dozens of times a frame, so the
+    /// setter pushes the new value into its cache instead of leaving it to re-read.
     var reduceMotion: Bool {
-        didSet { defaults.set(reduceMotion, forKey: Self.reduceMotionKey) }
+        didSet {
+            defaults.set(reduceMotion, forKey: Self.reduceMotionKey)
+            AnimationSettings.reduceMotionDidChange(to: reduceMotion)
+        }
     }
 
     /// Points. 0 leaves WebKit's own minimum in place. Applies to web views made after
@@ -403,75 +242,50 @@ class SettingsStore {
         }
     }
 
+    // MARK: - Per-space storage
+
+    /// Bumped by every per-space setter so the getters in `SettingsStore+Spaces` have
+    /// something observable to read. Internal because those live in another file.
+    var containerSettingsRevision = 0
+
+    /// Decoded per-space privacy blobs, owned by `SettingsStore+Spaces`.
+    @ObservationIgnored var privacySettingsCache: [UUID: SpacePrivacySettings] = [:]
+
     init() {
         autoUpdateEnabled = defaults.object(forKey: autoUpdateKey) as? Bool ?? true
         blockThirdPartyTrackers = defaults.bool(forKey: trackingThirdPartyKey)
         blockFingerprinting = defaults.object(forKey: fingerprintingKey) as? Bool ?? true
-        if let raw = defaults.string(forKey: cookiesPolicyKey),
-           let policy = CookiesPolicy(rawValue: raw)
-        {
-            cookiesPolicy = policy
-        } else {
-            cookiesPolicy = .allowAll
-        }
-
+        cookiesPolicy = defaults.string(forKey: cookiesPolicyKey)
+            .flatMap(CookiesPolicy.init(rawValue:)) ?? .allowAll
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
         launcherRisesForSuggestions = defaults.object(forKey: launcherRisesForSuggestionsKey) as? Bool ?? true
-        sitePermissions =
-            Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]
-
-        customSearchEngines =
-            Self.loadCodable([CustomSearchEngine].self, key: customSearchEnginesKey) ?? []
-
+        sitePermissions = Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]
+        customSearchEngines = Self.loadCodable([CustomSearchEngine].self, key: customSearchEnginesKey) ?? []
         globalDefaultSearchEngine = defaults.string(forKey: globalDefaultSearchEngineKey)
+        customKeyboardShortcuts = Self.loadCodable([String: KeyChord].self, key: customKeyboardShortcutsKey) ?? [:]
 
-        customKeyboardShortcuts =
-            Self.loadCodable([String: KeyChord].self, key: customKeyboardShortcutsKey) ?? [:]
-
-        let aliveTimeoutValue = defaults.double(forKey: tabAliveTimeoutKey)
-        let supportedTimeouts: [TimeInterval] = [
-            60 * 60,           // 1 hour
-            6 * 60 * 60,       // 6 hours
-            12 * 60 * 60,      // 12 hours
-            24 * 60 * 60,      // 1 day
-            2 * 24 * 60 * 60,  // 2 days
-            365 * 24 * 60 * 60 // "Never" sentinel
-        ]
-        let normalizedAlive = Self.normalizeTimeout(
-            aliveTimeoutValue,
-            defaultSeconds: 60 * 60,
-            supported: supportedTimeouts
+        let timeouts = Self.normalizedTimeouts(
+            defaults: defaults,
+            aliveKey: tabAliveTimeoutKey,
+            removalKey: tabRemovalTimeoutKey
         )
-        defaults.set(normalizedAlive, forKey: tabAliveTimeoutKey)
-        tabAliveTimeout = normalizedAlive
-
-        let removalTimeoutValue = defaults.double(forKey: tabRemovalTimeoutKey)
-        let normalizedRemoval = Self.normalizeTimeout(
-            removalTimeoutValue,
-            defaultSeconds: 24 * 60 * 60,
-            supported: supportedTimeouts
-        )
-        defaults.set(normalizedRemoval, forKey: tabRemovalTimeoutKey)
-        tabRemovalTimeout = normalizedRemoval
+        tabAliveTimeout = timeouts.alive
+        tabRemovalTimeout = timeouts.removal
 
         let maxRecentTabsValue = defaults.integer(forKey: maxRecentTabsKey)
         maxRecentTabs = maxRecentTabsValue == 0 ? 5 : maxRecentTabsValue
         maxLiveTabs = defaults.object(forKey: maxLiveTabsKey) as? Int ?? 12
-
         autoPiPEnabled = defaults.object(forKey: autoPiPEnabledKey) as? Bool ?? true
+
         passwordsEnabled = defaults.object(forKey: passwordsEnabledKey) as? Bool ?? true
-        if let raw = defaults.string(forKey: passwordManagerProviderKey),
-           let provider = PasswordManagerProviderKind(rawValue: raw)
-        {
-            passwordManagerProvider = provider
-        } else {
-            passwordManagerProvider = .ora
-        }
+        passwordManagerProvider = defaults.string(forKey: passwordManagerProviderKey)
+            .flatMap(PasswordManagerProviderKind.init(rawValue:)) ?? .ora
         passwordAutofillEnabled = defaults.object(forKey: passwordAutofillEnabledKey) as? Bool ?? true
         passwordAutofillSubmitEnabled = defaults.object(forKey: passwordAutofillSubmitEnabledKey) as? Bool ?? true
         passwordSavePromptsEnabled = defaults.object(forKey: passwordSavePromptsEnabledKey) as? Bool ?? true
-        suppressedPasswordSavePromptHosts = Set(defaults
-            .stringArray(forKey: suppressedPasswordSavePromptHostsKey) ?? [])
+        suppressedPasswordSavePromptHosts = Set(
+            defaults.stringArray(forKey: suppressedPasswordSavePromptHostsKey) ?? []
+        )
 
         newTabPosition = defaults.string(forKey: newTabPositionKey)
             .flatMap(NewTabPosition.init(rawValue:)) ?? .top
@@ -495,75 +309,7 @@ class SettingsStore {
         defaults.set(spellCheckEnabled, forKey: Self.webKitSpellCheckKey)
     }
 
-    // MARK: - Per-container helpers
-
-    /// Per-container settings live only in `UserDefaults`, so no stored property
-    /// changes when one is written. Observation has no `objectWillChange`, so the
-    /// getters read this counter and the setters bump it: same invalidation, same
-    /// granularity as the hand-rolled sends it replaces.
-    private var containerSettingsRevision = 0
-
-    func defaultSearchEngineId(for containerId: UUID) -> String? {
-        _ = containerSettingsRevision
-        return defaults.string(forKey: keyForDefaultSearch(for: containerId))
-    }
-
-    func setDefaultSearchEngineId(_ id: String?, for containerId: UUID) {
-        defaults.set(id, forKey: keyForDefaultSearch(for: containerId))
-        containerSettingsRevision &+= 1
-    }
-
-    func defaultAIEngineId(for containerId: UUID) -> String? {
-        _ = containerSettingsRevision
-        return defaults.string(forKey: keyForDefaultAI(for: containerId))
-    }
-
-    func setDefaultAIEngineId(_ id: String?, for containerId: UUID) {
-        defaults.set(id, forKey: keyForDefaultAI(for: containerId))
-        containerSettingsRevision &+= 1
-    }
-
-    func autoClearTabsAfter(for containerId: UUID) -> AutoClearTabsAfter {
-        _ = containerSettingsRevision
-        if let raw = defaults.string(forKey: keyForAutoClear(for: containerId)),
-           let value = AutoClearTabsAfter(rawValue: raw)
-        {
-            return value
-        }
-        return .never
-    }
-
-    func setAutoClearTabsAfter(_ value: AutoClearTabsAfter, for containerId: UUID) {
-        defaults.set(value.rawValue, forKey: keyForAutoClear(for: containerId))
-        containerSettingsRevision &+= 1
-    }
-
-    func privacySettings(for containerId: UUID) -> SpacePrivacySettings {
-        _ = containerSettingsRevision
-        return Self.loadCodable(SpacePrivacySettings.self, key: keyForPrivacySettings(for: containerId))
-            ?? legacyPrivacySettings
-    }
-
-    func setPrivacySettings(_ value: SpacePrivacySettings, for containerId: UUID) {
-        saveCodable(value, forKey: keyForPrivacySettings(for: containerId))
-        containerSettingsRevision &+= 1
-    }
-
-    func notifySpacePrivacySettingsChanged(for containerId: UUID) {
-        NotificationCenter.default.post(
-            name: .spacePrivacySettingsChanged,
-            object: nil,
-            userInfo: ["containerId": containerId]
-        )
-    }
-
-    func removeContainerSettings(for containerId: UUID) {
-        defaults.removeObject(forKey: keyForDefaultSearch(for: containerId))
-        defaults.removeObject(forKey: keyForDefaultAI(for: containerId))
-        defaults.removeObject(forKey: keyForAutoClear(for: containerId))
-        defaults.removeObject(forKey: keyForPrivacySettings(for: containerId))
-        containerSettingsRevision &+= 1
-    }
+    // MARK: - Browsing helpers
 
     /// The Home button's target. A bare host gets `https://`, and anything that does not
     /// parse falls back to the built-in page rather than navigating nowhere.
@@ -572,6 +318,15 @@ class SettingsStore {
         guard !trimmed.isEmpty else { return .oraHome }
         if let url = URL(string: trimmed), url.scheme != nil { return url }
         return URL(string: "https://\(trimmed)") ?? .oraHome
+    }
+
+    /// What a space with no stored privacy blob of its own inherits.
+    var legacyPrivacySettings: SpacePrivacySettings {
+        SpacePrivacySettings(
+            blockThirdPartyTrackers: blockThirdPartyTrackers,
+            blockFingerprinting: blockFingerprinting,
+            cookiesPolicy: cookiesPolicy
+        )
     }
 
     // MARK: - Download folder
@@ -616,84 +371,57 @@ class SettingsStore {
         )
     }
 
-    // MARK: - Permissions
-
-    func upsertSitePermission(_ permission: SitePermissionSettings) {
-        var copy = sitePermissions
-        copy[permission.host] = permission
-        sitePermissions = copy
-    }
-
-    func removeSitePermission(host: String) {
-        var copy = sitePermissions
-        copy.removeValue(forKey: host)
-        sitePermissions = copy
-    }
-
-    // MARK: - Custom Search Engines
-
-    func addCustomSearchEngine(_ engine: CustomSearchEngine) {
-        var engines = customSearchEngines
-        engines.append(engine)
-        customSearchEngines = engines
-    }
-
-    func removeCustomSearchEngine(withId id: String) {
-        customSearchEngines = customSearchEngines.filter { $0.id != id }
-    }
-
-    func updateCustomSearchEngine(_ engine: CustomSearchEngine) {
-        var engines = customSearchEngines
-        if let index = engines.firstIndex(where: { $0.id == engine.id }) {
-            engines[index] = engine
-            customSearchEngines = engines
-        }
-    }
-
-    // MARK: - Custom Keyboard Shortcuts
-
-    func setCustomKeyboardShortcut(id: String, keyChord: KeyChord) {
-        var shortcuts = customKeyboardShortcuts
-        shortcuts[id] = keyChord
-        customKeyboardShortcuts = shortcuts
-    }
-
-    func removeCustomKeyboardShortcut(id: String) {
-        var shortcuts = customKeyboardShortcuts
-        shortcuts.removeValue(forKey: id)
-        customKeyboardShortcuts = shortcuts
-    }
-
     // MARK: - Password prompts
 
+    /// Writes to a `private(set)` property, so it stays in this file.
     func suppressPasswordSavePrompts(for host: String) {
         let normalizedHost = PasswordManagerService.normalizeHost(host)
         guard !normalizedHost.isEmpty else { return }
         suppressedPasswordSavePromptHosts.insert(normalizedHost)
     }
 
-    func allowsPasswordSavePrompts(for host: String) -> Bool {
-        let normalizedHost = PasswordManagerService.normalizeHost(host)
-        guard !normalizedHost.isEmpty else { return true }
-        return !suppressedPasswordSavePromptHosts.contains(normalizedHost)
-    }
-
     // MARK: - Codable helpers
 
-    private func saveCodable(_ value: some Encodable, forKey key: String) {
-        let encoder = JSONEncoder()
-        if let data = try? encoder.encode(value) {
+    /// Internal rather than private: the extensions in the sibling files use both.
+    func saveCodable(_ value: some Encodable, forKey key: String) {
+        if let data = try? JSONEncoder().encode(value) {
             defaults.set(data, forKey: key)
         }
     }
 
-    private static func loadCodable<T: Decodable>(_ type: T.Type, key: String) -> T? {
-        let defaults = UserDefaults.standard
-        guard let data = defaults.data(forKey: key) else { return nil }
+    static func loadCodable<T: Decodable>(_ type: T.Type, key: String) -> T? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)
     }
 
     // MARK: - Normalization helpers
+
+    /// The two hibernation timeouts are stored as raw seconds but the UI only offers a
+    /// fixed set, so a value from an older build (or a hand-edited plist) is snapped to
+    /// the nearest offered one and written straight back.
+    private static func normalizedTimeouts(
+        defaults: UserDefaults,
+        aliveKey: String,
+        removalKey: String
+    ) -> (alive: TimeInterval, removal: TimeInterval) {
+        let supported: [TimeInterval] = [
+            60 * 60,           // 1 hour
+            6 * 60 * 60,       // 6 hours
+            12 * 60 * 60,      // 12 hours
+            24 * 60 * 60,      // 1 day
+            2 * 24 * 60 * 60,  // 2 days
+            365 * 24 * 60 * 60 // "Never" sentinel
+        ]
+        let alive = normalizeTimeout(
+            defaults.double(forKey: aliveKey), defaultSeconds: 60 * 60, supported: supported
+        )
+        let removal = normalizeTimeout(
+            defaults.double(forKey: removalKey), defaultSeconds: 24 * 60 * 60, supported: supported
+        )
+        defaults.set(alive, forKey: aliveKey)
+        defaults.set(removal, forKey: removalKey)
+        return (alive, removal)
+    }
 
     private static func normalizeTimeout(
         _ raw: TimeInterval,
@@ -701,21 +429,7 @@ class SettingsStore {
         supported: [TimeInterval]
     ) -> TimeInterval {
         let value: TimeInterval = raw == 0 ? defaultSeconds : raw
-
-        if supported.contains(value) {
-            return value
-        }
-
-        return supported.min { lhs, rhs in
-            abs(lhs - value) < abs(rhs - value)
-        } ?? defaultSeconds
-    }
-
-    private var legacyPrivacySettings: SpacePrivacySettings {
-        SpacePrivacySettings(
-            blockThirdPartyTrackers: blockThirdPartyTrackers,
-            blockFingerprinting: blockFingerprinting,
-            cookiesPolicy: cookiesPolicy
-        )
+        if supported.contains(value) { return value }
+        return supported.min { abs($0 - value) < abs($1 - value) } ?? defaultSeconds
     }
 }

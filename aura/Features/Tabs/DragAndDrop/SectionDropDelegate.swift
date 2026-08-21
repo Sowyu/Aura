@@ -30,22 +30,15 @@ struct SectionDropDelegate: DropDelegate {
                     switch newType {
                     case .pinned, .fav:
                         from.savedURL = from.url
+                        // Only normal tabs live in folders.
+                        from.folder = nil
                     case .normal:
                         from.savedURL = nil
                     }
-                    let maxOrder = container.tabs.max(by: { $0.order < $1.order })?.order ?? 0
-                    from.order = maxOrder + 1
+                    let orders = container.tabs.map(\.order) + container.folders.map(\.order)
+                    from.order = (orders.max() ?? 0) + 1
                     try? self.tabManager.modelContext.save()
                 }
-                // else if let to = self.items.last {
-                // if isInSameSection(from: from, to: to) {
-                // withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                //   container.reorderTabs(from: from, to: to)
-                // }
-                // } else {
-                // moveTabBetweenSections(from: from, to: to)
-                // }
-                // }
             }
         }
     }

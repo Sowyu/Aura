@@ -9,6 +9,15 @@ let browserContentInset: CGFloat = 8
 /// the pane.
 let browserContentTopInset: CGFloat = 0
 
+/// Radius of every card the window draws: the content pane and the revealed sidebar.
+let browserContentCornerRadius: CGFloat = {
+    if #available(macOS 26, *) {
+        return 13
+    } else {
+        return 6
+    }
+}()
+
 struct BrowserContentContainer<Content: View>: View {
     @Environment(TabManager.self) private var tabManager
     @Environment(AppState.self) private var appState
@@ -17,23 +26,23 @@ struct BrowserContentContainer<Content: View>: View {
 
     let content: () -> Content
 
-    /// Edge-to-edge only in plain fullscreen. Compact mode keeps the inset and rounded
-    /// corners so the revealed chrome has somewhere to slide over.
-    private var isCompleteFullscreen: Bool {
-        appState.isFullscreen && sidebarManager.isSidebarHidden && !sidebarManager.isCompactEnabled
+    /// A revealed row counts as up: it occupies the same 38pt the pinned one does, so
+    /// the pane sits under it exactly as it does in the pinned layout.
+    private var isToolbarRowUp: Bool {
+        !toolbarManager.isToolbarHidden || toolbarManager.isFloatingToolbarVisible
     }
 
-    private var cornerRadius: CGFloat {
-        if #available(macOS 26, *) {
-            return 13
-        } else {
-            return 6
-        }
+    /// Edge-to-edge only when nothing is on screen above it. Whether the chrome went away
+    /// through compact mode or by hand makes no difference to the pane.
+    private var isCompleteFullscreen: Bool {
+        appState.isFullscreen && sidebarManager.isSidebarHidden && !isToolbarRowUp
     }
+
+    private var cornerRadius: CGFloat { browserContentCornerRadius }
 
     /// Without the row above, the pane owns the whole gap again.
     private var topInset: CGFloat {
-        toolbarManager.isToolbarHidden ? browserContentInset : browserContentTopInset
+        isToolbarRowUp ? browserContentTopInset : browserContentInset
     }
 
     init(
@@ -50,6 +59,7 @@ struct BrowserContentContainer<Content: View>: View {
             .padding(.horizontal, isCompleteFullscreen ? 0 : browserContentInset)
             .padding(.bottom, isCompleteFullscreen ? 0 : browserContentInset)
             .animation(AnimationSettings.easeOut(0.15), value: appState.isFullscreen)
+            .animation(AnimationSettings.easeOut(0.15), value: isToolbarRowUp)
             .shadow(color: .black.opacity(0.15), radius: isCompleteFullscreen ? 0 : cornerRadius, x: 0, y: 2)
             .ignoresSafeArea(.all)
     }

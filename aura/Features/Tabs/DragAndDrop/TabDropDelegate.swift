@@ -3,10 +3,9 @@ import SwiftData
 import SwiftUI
 
 struct TabDropDelegate: DropDelegate {
-    let item: Tab  // to
+    /// The row being dropped on.
+    let item: Tab
     @Binding var draggedItem: UUID?
-
-    let targetSection: TabSection
 
     func dropEntered(info: DropInfo) {
         guard let provider = info.itemProviders(for: [.text]).first else { return }
@@ -25,7 +24,14 @@ struct TabDropDelegate: DropDelegate {
                         from = try? context.fetch(descriptor).first
                     }
 
-                    guard let from else { return }
+                    guard let from, from.id != self.item.id else { return }
+
+                    // A tab dragged in from another space has to change space first,
+                    // otherwise it kept rendering in the one it came from.
+                    if from.container.id != self.item.container.id {
+                        from.folder = nil
+                        from.container = self.item.container
+                    }
 
                     if isInSameSection(
                         from: from,

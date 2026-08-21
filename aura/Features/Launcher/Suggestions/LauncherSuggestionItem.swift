@@ -1,10 +1,24 @@
 import SwiftUI
 
+/// Row geometry for the suggestion list. A row lines its title up with the text of the
+/// field it hangs under, so the title column does not step sideways between the two.
+enum LauncherRowMetrics {
+    static let spacing: CGFloat = 8
+
+    /// Pad before the icon that puts the title `textInset` from the panel's leading edge.
+    static func leadingInset(textInset: CGFloat, panelPadding: CGFloat, iconWidth: CGFloat) -> CGFloat {
+        max(0, textInset - panelPadding - iconWidth - spacing)
+    }
+}
+
 struct LauncherSuggestionItem: View {
     let suggestion: LauncherSuggestion
     @Binding var focusedElement: UUID
+    /// Pad before the icon; see `LauncherRowMetrics.leadingInset`.
+    var leadingInset: CGFloat = 8
+    /// Fixed icon column, so a 16pt favicon and a 14pt glyph start their titles alike.
+    var iconWidth: CGFloat = 16
 
-    @State private var isHovered = false
     @Environment(\.theme) private var theme
     @Environment(\.launcherMouseHasMoved) private var mouseHasMoved
     @Environment(AppState.self) private var appState
@@ -23,19 +37,18 @@ struct LauncherSuggestionItem: View {
         return true
     }
 
-    private var isFocusedOrHovered: Bool {
-        focusedElement == suggestion.id || isHovered
+    /// Hovering a row moves the keyboard focus onto it, so focus is the only highlight
+    /// state a row needs.
+    private var isFocused: Bool {
+        focusedElement == suggestion.id
     }
 
     private var foregroundColor: Color {
-        if focusedElement == suggestion.id {
-            return theme.foreground
-        }
-        return .secondary
+        isFocused ? theme.foreground : .secondary
     }
 
     private var backgroundColor: Color {
-        if focusedElement != suggestion.id || isHovered { return .clear }
+        guard isFocused else { return .clear }
         return isAIChat ? theme.background : theme.foreground.opacity(0.1)
     }
 
@@ -56,10 +69,7 @@ struct LauncherSuggestionItem: View {
             Image(systemName: suggestion.type == .suggestedLink ? "globe" : "magnifyingglass")
                 .resizable()
                 .frame(width: 14, height: 14)
-                .foregroundStyle(
-                    focusedElement == suggestion.id
-                        ? theme.foreground : .secondary
-                )
+                .foregroundStyle(isFocused ? theme.foreground : .secondary)
         }
     }
 
@@ -70,7 +80,7 @@ struct LauncherSuggestionItem: View {
                 Text("Ask \(suggestion.name ?? "")  ↩")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(
-                        isFocusedOrHovered ? theme.foreground : .secondary
+                        isFocused ? theme.foreground : .secondary
                     )
             }
             .padding(.horizontal, 8)
@@ -82,7 +92,7 @@ struct LauncherSuggestionItem: View {
                 Text("Switch to tab ")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(
-                        isFocusedOrHovered ? theme.foreground : .secondary
+                        isFocused ? theme.foreground : .secondary
                     )
 
                 Image(systemName: "arrow.right")
@@ -92,12 +102,12 @@ struct LauncherSuggestionItem: View {
                     .background(
                         ConditionallyConcentricRectangle(cornerRadius: 8, style: .continuous)
                             .fill(
-                                isFocusedOrHovered
+                                isFocused
                                     ? theme.foreground : theme.foreground.opacity(0.07)
                             )
                     )
                     .foregroundStyle(
-                        isFocusedOrHovered ? theme.background : .secondary
+                        isFocused ? theme.background : .secondary
                     )
             }
             .clipShape(ConditionallyConcentricRectangle(cornerRadius: 8, style: .continuous))
@@ -105,8 +115,9 @@ struct LauncherSuggestionItem: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: LauncherRowMetrics.spacing) {
             icon
+                .frame(width: iconWidth)
             HStack(alignment: .center, spacing: 4) {
                 Text(suggestion.title)
                     .font(.system(size: 14, weight: .medium))
@@ -125,7 +136,8 @@ struct LauncherSuggestionItem: View {
             Spacer()
             actionLabel
         }
-        .padding(.horizontal, 8)
+        .padding(.leading, leadingInset)
+        .padding(.trailing, 8)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(backgroundColor)

@@ -4,6 +4,7 @@
 // willSendRequestForFrame returns before the network request exists.
 
 #import <Foundation/Foundation.h>
+#import <os/lock.h>
 #import <os/log.h>
 
 #import "AuraResourceTypes.h"
@@ -27,12 +28,43 @@ static os_log_t AuraBundleLog(void)
 /// just before `willSendRequestForFrame` runs for the same identifier, which is
 /// the only reliable way to tell a top-level navigation from a subresource:
 /// the resource load client carries no resource type.
+///
+/// Guarded: resource loads are main-thread work for a document, but a worker or
+/// a service worker starts its own from another thread, and NSMutableDictionary
+/// would tear under that.
+static os_unfair_lock AuraMainDocumentLock = OS_UNFAIR_LOCK_INIT;
+
 static NSMutableDictionary<NSValue *, NSNumber *> *AuraMainDocumentIdentifiers(void)
 {
     static NSMutableDictionary<NSValue *, NSNumber *> *identifiers;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ identifiers = [NSMutableDictionary dictionary]; });
     return identifiers;
+}
+
+static void AuraSetMainDocumentIdentifier(WKBundlePageRef page, uint64_t resourceIdentifier)
+{
+    NSValue *key = [NSValue valueWithPointer:page];
+    os_unfair_lock_lock(&AuraMainDocumentLock);
+    AuraMainDocumentIdentifiers()[key] = @(resourceIdentifier);
+    os_unfair_lock_unlock(&AuraMainDocumentLock);
+}
+
+static BOOL AuraIsMainDocumentIdentifier(WKBundlePageRef page, uint64_t resourceIdentifier)
+{
+    NSValue *key = [NSValue valueWithPointer:page];
+    os_unfair_lock_lock(&AuraMainDocumentLock);
+    NSNumber *known = AuraMainDocumentIdentifiers()[key];
+    os_unfair_lock_unlock(&AuraMainDocumentLock);
+    return known != nil && known.unsignedLongLongValue == resourceIdentifier;
+}
+
+static void AuraForgetMainDocumentIdentifier(WKBundlePageRef page)
+{
+    NSValue *key = [NSValue valueWithPointer:page];
+    os_unfair_lock_lock(&AuraMainDocumentLock);
+    [AuraMainDocumentIdentifiers() removeObjectForKey:key];
+    os_unfair_lock_unlock(&AuraMainDocumentLock);
 }
 
 static NSURL *AuraURLFromWKURL(WKURLRef wkURL)
@@ -112,6 +144,43 @@ static AuraBlockDecision AuraExtensionDecision(
     return AuraBlockDecisionAllow;
 }
 
+/// Best available resource type for a request. The C resource-load client
+/// carries none and offers no header accessor, so the request is bridged to
+/// NSURLRequest once and two headers are read off it.
+///
+/// `Sec-Fetch-Dest` names the kind outright and is preferred. `Accept` is the
+/// fallback: it separates documents, images and stylesheets cleanly and says
+/// nothing about the rest, which is what the URL's extension is for.
+static uint32_t AuraRequestTypeMask(WKURLRequestRef request, NSURL *url, BOOL isMainFrame)
+{
+    NSURLRequest *bridged = nil;
+    if (request) {
+        id object = CFBridgingRelease(WKURLRequestCopyNSURLRequest(request));
+        if ([object isKindOfClass:NSURLRequest.class]) { bridged = object; }
+    }
+    const uint32_t fromDestination =
+        AuraResourceTypeForFetchDestination([bridged valueForHTTPHeaderField:@"Sec-Fetch-Dest"]);
+    if (fromDestination != 0) { return fromDestination; }
+    return AuraResourceTypeMaskForURL(url, [bridged valueForHTTPHeaderField:@"Accept"], isMainFrame);
+}
+
+/// True when `url` is the document `frame` is navigating to rather than a
+/// subresource inside it.
+///
+/// The identifier `didInitiateLoadForResource` reports covers a main-frame
+/// navigation the web process started, but a navigation handed down from the UI
+/// process never gets that callback, and a subframe never gets it at all. The
+/// provisional URL covers both, and it is set before this runs.
+static BOOL AuraIsFrameDocumentRequest(WKBundleFrameRef frame, NSURL *url)
+{
+    if (!frame) { return NO; }
+    WKURLRef wkURL = WKBundleFrameCopyProvisionalURL(frame);
+    if (!wkURL) { return NO; }
+    NSURL *provisional = AuraURLFromWKURL(wkURL);
+    WKRelease((WKTypeRef)wkURL);
+    return provisional != nil && [provisional.absoluteString isEqualToString:url.absoluteString];
+}
+
 /// A retained request pointing at `url`, or NULL if WebKit refuses the URL.
 static WKURLRequestRef AuraCreateRequest(NSURL *url)
 {
@@ -133,7 +202,7 @@ static void AuraDidInitiateLoadForResource(
     const void *clientInfo)
 {
     if (!pageIsProvisionallyLoading || frame != WKBundlePageGetMainFrame(page)) { return; }
-    AuraMainDocumentIdentifiers()[[NSValue valueWithPointer:page]] = @(resourceIdentifier);
+    AuraSetMainDocumentIdentifier(page, resourceIdentifier);
 }
 
 static WKURLRequestRef AuraWillSendRequestForFrame(
@@ -154,31 +223,50 @@ static WKURLRequestRef AuraWillSendRequestForFrame(
             return request;
         }
 
-        NSNumber *mainDocumentIdentifier = AuraMainDocumentIdentifiers()[[NSValue valueWithPointer:page]];
         const BOOL isMainFrame = frame == WKBundlePageGetMainFrame(page);
-        const BOOL isMainDocument = isMainFrame
-            && mainDocumentIdentifier != nil
-            && mainDocumentIdentifier.unsignedLongLongValue == resourceIdentifier;
 
         // Blocking is an extension's job now: uBlock Origin registers a blocking
         // webRequest listener and Aura keeps no rule set of its own. Nothing is
         // sent unless the host says some listener is actually registered.
         if (AuraWebRequestChannelIsActive()) {
-            const uint32_t typeMask = AuraResourceTypeMaskForURL(url, nil, isMainFrame);
+            // Three ways to recognise a frame's own document, and any one is
+            // enough. Getting this wrong on the main frame is what blanks a tab,
+            // so it is deliberately generous.
+            const BOOL isDocument = AuraIsFrameDocumentRequest(frame, url)
+                || (isMainFrame && AuraIsMainDocumentIdentifier(page, resourceIdentifier));
+            uint32_t typeMask = AuraRequestTypeMask(request, url, isMainFrame);
+            if (isDocument) {
+                typeMask = isMainFrame ? AuraResourceTypeDocument : AuraResourceTypeSubdocument;
+            }
+            const BOOL isMainDocument = isMainFrame
+                && (isDocument || typeMask == AuraResourceTypeDocument);
             NSURL *replacement = nil;
             AuraBlockDecision decision = AuraExtensionDecision(page, frame, resourceIdentifier, request, url,
                                                               typeMask, isMainFrame, isMainDocument, &replacement);
+            // Extensions may cancel subresources and subframes, never the top
+            // document: WebKit reports a blanked main resource as a failed
+            // navigation and the tab goes blank. A navigation the UI process
+            // started reaches the web process with no Sec-Fetch-Dest, no Accept
+            // and no provisional URL yet, so a main-frame request nothing could
+            // identify is protected as well.
+            // ponytail: that costs main-frame "other" requests their blocking.
+            // Drop the second clause if the bundle ever gets a real type.
+            const BOOL protectDocument = isMainDocument
+                || (isMainFrame && typeMask == AuraResourceTypeAny);
             if (decision == AuraBlockDecisionBlock) {
                 os_log_debug(AuraBundleLog(), "block id=%llu url=%{private}@", resourceIdentifier, url);
-                if (isMainDocument) {
-                    // Extensions may cancel subresources and subframes, never the top
-                    // document: WebKit would report a failed navigation and the tab
-                    // would go blank. Log and let it through.
+                if (protectDocument) {
                     os_log_debug(AuraBundleLog(), "extension asked to cancel a main document; allowing");
                     if (request) { WKRetain((WKTypeRef)request); }
                     return request;
                 }
                 return NULL;
+            }
+            if (decision == AuraBlockDecisionRedirect && protectDocument && !isMainDocument) {
+                // Same reasoning: a rewritten top-level URL is a navigation the
+                // user did not ask for.
+                if (request) { WKRetain((WKTypeRef)request); }
+                return request;
             }
             if (decision == AuraBlockDecisionRedirect && replacement) {
                 WKURLRequestRef rewritten = AuraCreateRequest(replacement);
@@ -215,7 +303,7 @@ static void AuraDidCreatePage(WKBundleRef bundle, WKBundlePageRef page, const vo
 
 static void AuraWillDestroyPage(WKBundleRef bundle, WKBundlePageRef page, const void *clientInfo)
 {
-    [AuraMainDocumentIdentifiers() removeObjectForKey:[NSValue valueWithPointer:page]];
+    AuraForgetMainDocumentIdentifier(page);
 }
 
 static void AuraDidReceiveMessage(WKBundleRef bundle, WKStringRef name, WKTypeRef body, const void *clientInfo)

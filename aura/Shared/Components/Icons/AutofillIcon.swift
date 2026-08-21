@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct AutofillIcon: Shape {
+    // Traced vector path, one line per control point.
+    // swiftlint:disable:next function_body_length
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let width = rect.size.width

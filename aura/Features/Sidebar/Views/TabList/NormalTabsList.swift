@@ -99,8 +99,7 @@ struct NormalTabsList: View {
             of: [.text],
             delegate: TabDropDelegate(
                 item: tab,
-                draggedItem: $draggedItem,
-                targetSection: .normal
+                draggedItem: $draggedItem
             )
         )
         .transition(.asymmetric(
@@ -121,6 +120,7 @@ struct NormalTabsList: View {
                 onCloseTabs: { tabManager.closeAllTabs(in: folder) },
                 onDelete: { tabManager.delete(folder: folder, closeTabs: $0) }
             )
+            .onDrag { onDrag(folder.id) }
             .onDrop(
                 of: [.text],
                 delegate: FolderDropDelegate(

@@ -44,9 +44,6 @@ NSString *_Nullable AuraWebRequestChannelPostSync(NSString *name, NSString *body
 /// (`cancel`, `redirectUrl`), or nil for "allow, unchanged".
 NSDictionary *_Nullable AuraWebRequestChannelDecide(NSDictionary *request);
 
-/// webRequest's `type` string for one of `AuraResourceType`'s mask bits.
-NSString *AuraWebRequestTypeName(uint32_t typeMask, BOOL isMainDocument, BOOL isSubframe);
-
 NS_ASSUME_NONNULL_END
 
 #endif /* AuraWebRequestChannel_h */

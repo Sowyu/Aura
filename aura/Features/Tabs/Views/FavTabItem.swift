@@ -99,18 +99,8 @@ struct FavTabItem: View {
                 )
                 : nil
         )
-        .onTapGesture {
-            onTap()
-            if !tab.isWebViewReady {
-                tab
-                    .restoreTransientState(
-                        historyManager: historyManager,
-                        downloadManager: downloadManager,
-                        tabManager: tabManager,
-                        isPrivate: privacyMode.isPrivate
-                    )
-            }
-        }
+        // `activateTab` rebuilds the web view for a hibernated tab on the way in.
+        .onTapGesture { onTap() }
         .onHover { isHovering = $0 }
         .auraContextMenu { contextMenuItems }
     }

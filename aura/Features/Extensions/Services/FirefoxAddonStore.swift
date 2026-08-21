@@ -44,6 +44,9 @@ struct FirefoxAddon: Identifiable, Equatable {
     let id: Int
     let slug: String
     let name: String
+    /// The add-on's WebExtension id, the only field that survives a rename or a
+    /// locale-translated name. Nil on payloads that predate it.
+    var guid: String?
     var summary: String?
     var version: String?
     var iconURL: URL?
@@ -199,6 +202,7 @@ struct FirefoxAddonStore {
             id: id,
             slug: slug,
             name: name,
+            guid: json["guid"] as? String,
             summary: localizedString(json["summary"]),
             version: currentVersion?["version"] as? String,
             iconURL: (json["icon_url"] as? String).flatMap(URL.init(string:)),

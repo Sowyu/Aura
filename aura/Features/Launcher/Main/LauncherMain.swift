@@ -5,6 +5,7 @@ struct LauncherMain: View {
     @Binding var match: LauncherMatch?
     var isFocused: FocusState<Bool>.Binding
     let onTabPress: () -> Void
+    let onEscape: () -> Void
     @ObservedObject var viewModel: LauncherViewModel
 
     @Environment(\.theme) private var theme
@@ -18,7 +19,9 @@ struct LauncherMain: View {
                 text: $text,
                 match: match,
                 onTab: onTabPress,
-                onSubmit: { viewModel.executeCommand() },
+                // With an engine capsule showing there is no visible list, so Enter runs
+                // the search rather than whichever row focus was left on.
+                onSubmit: { match == nil ? viewModel.executeCommand() : viewModel.submitTypedText() },
                 onDelete: {
                     if text.isEmpty, let currentMatch = match {
                         text = currentMatch.originalAlias
@@ -29,6 +32,7 @@ struct LauncherMain: View {
                 },
                 onMoveUp: { viewModel.moveFocusedElement(.up) },
                 onMoveDown: { viewModel.moveFocusedElement(.down) },
+                onEscape: onEscape,
                 placeholder: getPlaceholder(match: match),
                 isFocused: isFocused,
                 onTextChange: { newValue in
@@ -42,9 +46,14 @@ struct LauncherMain: View {
             if match == nil, !viewModel.suggestions.isEmpty {
                 Divider().overlay(theme.foreground.opacity(0.08))
                 LauncherSuggestionsView(
-                    text: $text,
                     suggestions: $viewModel.suggestions,
-                    focusedElement: $viewModel.focusedElement
+                    focusedElement: $viewModel.focusedElement,
+                    leadingInset: LauncherRowMetrics.leadingInset(
+                        textInset: LauncherField.textInset,
+                        panelPadding: Self.panelPadding,
+                        iconWidth: LauncherField.iconWidth
+                    ),
+                    iconWidth: LauncherField.iconWidth
                 )
                 .padding(Self.panelPadding)
             }
@@ -62,7 +71,7 @@ struct LauncherMain: View {
 
     private func getPlaceholder(match: LauncherMatch?) -> String {
         guard let match else {
-            return "Search the web or enter url..."
+            return "Search the web or enter URL..."
         }
 
         if let engine = viewModel.searchEngineService.getSearchEngine(byName: match.text) {

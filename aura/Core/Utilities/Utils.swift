@@ -44,8 +44,16 @@ func registrableDomain(from url: URL) -> String? {
     return domain.isEmpty ? nil : domain
 }
 
+/// `[::1]`, `[::1]:3000`, `[2001:db8::1]/path` and the scheme-prefixed forms.
+private func isIPv6Literal(_ text: String) -> Bool {
+    var host = text
+    if let range = host.range(of: "://") { host = String(host[range.upperBound...]) }
+    return host.hasPrefix("[") && host.contains("]") && host.contains(":")
+}
+
 func isValidURL(_ text: String) -> Bool {
     if oraInternalURL(from: text) != nil { return true }
+    if isIPv6Literal(text.trimmingCharacters(in: .whitespacesAndNewlines)) { return true }
 
     guard let host = extractDomainOrIP(from: text) else { return false }
 
@@ -81,7 +89,10 @@ func constructURL(from text: String) -> URL? {
         return URL(string: trimmed)
     }
     guard isValidURL(trimmed) else { return nil }
-    let host = extractDomainOrIP(from: trimmed)
-    let scheme = (host == "localhost") ? "http" : "https"
+    let host = extractDomainOrIP(from: trimmed) ?? ""
+    // Loopback and link-local dev servers are plain http; everything else defaults to https.
+    let isLoopback = host == "localhost" || host.hasPrefix("127.") || host == "0.0.0.0"
+        || trimmed.hasPrefix("[::1]") || host.hasSuffix(".localhost")
+    let scheme = isLoopback ? "http" : "https"
     return URL(string: "\(scheme)://\(trimmed)")
 }

@@ -160,7 +160,7 @@ struct AuraColorPicker: View {
     private var hexRow: some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(current)
+                .fill(preview)
                 .frame(width: 20, height: 20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
@@ -177,6 +177,25 @@ struct AuraColorPicker: View {
 
     private func isSelected(_ preset: String) -> Bool {
         preset.caseInsensitiveCompare(hexField) == .orderedSame
+    }
+
+    /// The typed hex shows in the swatch as it is typed; committing it still waits for
+    /// Return, so a half-typed value never reaches the binding.
+    private var preview: Color {
+        Self.normalizedHex(hexField).map { Color(hex: $0) } ?? current
+    }
+
+    /// `#RGB`, `#RRGGBB` or `#AARRGGBB`, the forms `Color(hex:)` reads. Anything else is
+    /// rejected: `Scanner` stops at the first bad character, so "#GG00ZZ" used to scan as
+    /// zero and paint the swatch black without a word.
+    static func normalizedHex(_ input: String) -> String? {
+        let digits = input.trimmingCharacters(in: .whitespacesAndNewlines).drop { $0 == "#" }
+        guard [3, 6, 8].contains(digits.count),
+              digits.allSatisfy({ $0.isASCII && $0.isHexDigit })
+        else {
+            return nil
+        }
+        return "#" + digits.uppercased()
     }
 
     private func clamped(_ input: Double) -> Double {
@@ -199,12 +218,11 @@ struct AuraColorPicker: View {
     }
 
     private func applyHexField() {
-        let trimmed = hexField.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        guard [3, 6, 8].contains(trimmed.count) else {
+        guard let normalized = Self.normalizedHex(hexField) else {
             hexField = hex.uppercased()
             return
         }
-        hex = "#" + trimmed.uppercased()
+        hex = normalized
         load()
     }
 

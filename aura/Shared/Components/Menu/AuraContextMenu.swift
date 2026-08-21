@@ -51,8 +51,8 @@ struct RightClickCatcher: NSViewRepresentable {
             guard isContextClick, let window = event.window else { return event }
             let point = event.locationInWindow
             let candidates = views.allObjects.filter { $0.window === window && $0.contains(windowPoint: point) }
-            guard let target = candidates.min(by: { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height })
-            else { return event }
+            let area = { (view: CatcherView) in view.bounds.width * view.bounds.height }
+            guard let target = candidates.min(by: { area($0) < area($1) }) else { return event }
             target.onRightClick?(point, window)
             return nil
         }

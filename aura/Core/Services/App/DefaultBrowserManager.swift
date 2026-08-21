@@ -48,7 +48,7 @@ class DefaultBrowserManager: ObservableObject {
     }
 
     static func requestSetAsDefault() {
-        let bundleID = Bundle.main.bundleIdentifier! as CFString
+        guard let bundleID = Bundle.main.bundleIdentifier as CFString? else { return }
         LSSetDefaultHandlerForURLScheme("http" as CFString, bundleID)
         LSSetDefaultHandlerForURLScheme("https" as CFString, bundleID)
     }

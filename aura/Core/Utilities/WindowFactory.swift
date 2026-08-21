@@ -12,6 +12,10 @@ enum WindowFactory {
             defer: false
         )
         window.titleVisibility = .hidden
+        // Matches the SwiftUI scenes' `.frame(minWidth:minHeight:)` plus
+        // `.windowResizability(.contentMinSize)`; without it this window resizes
+        // smaller than any window the scene made.
+        window.contentMinSize = NSSize(width: 500, height: 360)
         AuraGlass.applyWindowTransparency(
             to: window,
             enabled: UserDefaults.standard.bool(forKey: AuraGlass.enabledKey)
@@ -30,13 +34,11 @@ enum WindowFactory {
 
     /// Opens a fresh browser window already pointed at `url`.
     ///
-    /// ponytail: the URL is delivered by notification after a beat, because the new
-    /// window's root installs its observers on the next run loop turn. Swap this for a
-    /// real initial-URL parameter on `OraRoot` if the delay ever shows.
-    static func openWindow(with url: URL) {
-        let window = makeMainWindow(rootView: OraRoot())
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            NotificationCenter.default.post(name: .openURL, object: window, userInfo: ["url": url])
-        }
+    /// The URL is handed to the root directly rather than posted at it: a notification
+    /// only lands once the new window's observers are up, which cost a fixed delay
+    /// before the page started loading.
+    @discardableResult
+    static func openWindow(with url: URL) -> NSWindow {
+        makeMainWindow(rootView: OraRoot(initialURL: url))
     }
 }

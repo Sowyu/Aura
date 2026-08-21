@@ -27,6 +27,89 @@ struct WebBundleTests {
     }
 }
 
+/// What an extension is told a request is. The classifier is shared verbatim
+/// with the injected bundle, so it can be exercised here without a web process.
+///
+/// The bug these pin down: `AuraResourceTypeAny` has every bit set, so walking
+/// the mask answered with whichever bit was tested first. Every request whose
+/// type could not be inferred came back as `sub_frame`, and uBlock Origin then
+/// judged a page's own JSON API by its `$subdocument` filters.
+@Suite
+struct ResourceTypeNameTests {
+    private func name(
+        _ path: String,
+        accept: String? = nil,
+        isMainFrame: Bool = true,
+        isMainDocument: Bool = false
+    ) -> String {
+        guard let url = URL(string: path.hasPrefix("ws") ? path : "https://example.com" + path) else { return "" }
+        let mask = AuraResourceTypeMaskForURL(url, accept, isMainFrame)
+        return AuraWebRequestTypeName(mask, isMainDocument, !isMainFrame)
+    }
+
+    /// The headers WebCore actually sets before `willSendRequest` runs.
+    private static let htmlAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    private static let imageAccept = "image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"
+    private static let cssAccept = "text/css,*/*;q=0.1"
+
+    @Test
+    func secFetchDestNamesTheKindOutright() {
+        let mask = { AuraResourceTypeForFetchDestination($0) }
+        #expect(mask("document") == AuraResourceType.document.rawValue)
+        #expect(mask("iframe") == AuraResourceType.subdocument.rawValue)
+        #expect(mask("script") == AuraResourceType.script.rawValue)
+        #expect(mask("style") == AuraResourceType.stylesheet.rawValue)
+        #expect(mask("image") == AuraResourceType.image.rawValue)
+        #expect(mask("font") == AuraResourceType.font.rawValue)
+        #expect(mask("video") == AuraResourceType.media.rawValue)
+        #expect(mask("websocket") == AuraResourceType.webSocket.rawValue)
+        // What fetch() and XMLHttpRequest send, and the case the URL alone
+        // could never answer.
+        #expect(AuraWebRequestTypeName(mask("empty"), false, false) == "xmlhttprequest")
+        // Unknown or absent means "keep guessing", not "other".
+        #expect(mask("") == 0)
+        #expect(mask("audioworklet") == 0)
+    }
+
+    @Test
+    func theAcceptHeaderDecidesWhatItCan() {
+        #expect(name("/hero", accept: Self.imageAccept) == "image")
+        #expect(name("/theme", accept: Self.cssAccept) == "stylesheet")
+        #expect(name("/", accept: Self.htmlAccept, isMainDocument: true) == "main_frame")
+        // Same header, inside an iframe: WebCore uses the document accept for a
+        // subframe's own document too, which is the only signal that says so.
+        #expect(name("/embed", accept: Self.htmlAccept, isMainFrame: false) == "sub_frame")
+        // Scripts and fetches share `*/*`, so it has to decide nothing.
+        #expect(name("/bundle", accept: "*/*") == "other")
+    }
+
+    @Test
+    func thePathExtensionCoversWhatTheHeaderDoesNot() {
+        #expect(name("/app.js") == "script")
+        #expect(name("/app.mjs") == "script")
+        #expect(name("/logo.png") == "image")
+        #expect(name("/theme.css") == "stylesheet")
+        #expect(name("/inter.woff2") == "font")
+        #expect(name("/clip.mp4") == "media")
+        #expect(name("/data.json") == "xmlhttprequest")
+        #expect(name("wss://example.com/socket") == "websocket")
+    }
+
+    @Test
+    func anUninferrableRequestIsOtherRatherThanASubframe() {
+        #expect(name("/api/data") == "other")
+        #expect(name("/api/data", isMainFrame: false) == "other")
+        // A .html path with no document accept is a fetch, not a frame.
+        #expect(name("/partials/menu.html") == "other")
+    }
+
+    @Test
+    func theTopDocumentOutranksEveryOtherSignal() {
+        #expect(AuraWebRequestTypeName(AuraResourceType.image.rawValue, true, false) == "main_frame")
+        #expect(AuraWebRequestTypeName(AuraResourceType.any.rawValue, true, false) == "main_frame")
+    }
+}
+
 /// Polls the fixture page's four load flags until none of them is still
 /// pending. Shared with WebRequestBrokerTests, which serves the same page.
 @MainActor
@@ -70,6 +153,7 @@ final class LocalHTTPServer {
     private let queue = DispatchQueue(label: "com.aurabrowser.test.httpserver")
     private let lock = NSLock()
     private var requested: [String] = []
+    private var headers: [String: [String: String]] = [:]
 
     private static let pixel = Data(
         base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQ"
@@ -105,6 +189,15 @@ final class LocalHTTPServer {
         lock.lock()
         defer { lock.unlock() }
         return requested
+    }
+
+    /// Request headers keyed by path. The resource-type classifier reads
+    /// `Accept`, so seeing what actually arrives is how its mapping is checked
+    /// against a real WebKit load rather than against an assumption.
+    var servedHeaders: [String: [String: String]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return headers
     }
 
     func start() async throws -> UInt16 {
@@ -151,8 +244,16 @@ final class LocalHTTPServer {
                 .map { $0.split(separator: " ") }
                 .flatMap { $0.count > 1 ? String($0[1]) : nil } ?? "/"
 
+            var fields: [String: String] = [:]
+            for line in request.split(separator: "\r\n").dropFirst() {
+                guard let colon = line.firstIndex(of: ":") else { continue }
+                let name = line[line.startIndex ..< colon].lowercased()
+                fields[name] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            }
+
             self.lock.lock()
             self.requested.append(path)
+            self.headers[path] = fields
             self.lock.unlock()
 
             connection.send(content: self.response(for: path), completion: .contentProcessed { _ in

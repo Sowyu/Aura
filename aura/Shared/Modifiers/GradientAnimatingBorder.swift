@@ -16,82 +16,50 @@ struct GradientAnimatingBorder: ViewModifier {
             .overlay {
                 if showBorder {
                     ZStack {
-                        // Glow effect - outer blur
-                        RoundedRectangle(cornerRadius: 16.0, style: .continuous)
-                            .stroke(
-                                AngularGradient(
-                                    gradient: Gradient(colors: [
-                                        color,
-                                        color.opacity(0.8),
-                                        color.opacity(0.4),
-                                        color.opacity(0.1),
-                                        color.opacity(0.0),
-                                        color.opacity(0.0),
-                                        color.opacity(0.0),
-                                        color.opacity(0.0)
-                                    ]),
-                                    center: .center,
-                                    angle: .degrees(isAnimating ? 360 : 0)
-                                ),
-                                lineWidth: 8.0
-                            )
+                        ring(lineWidth: 8, falloff: [0.8, 0.4, 0.1])
                             .blur(radius: 40)
                             .opacity(0.9)
-
-                        // Main border
-                        RoundedRectangle(cornerRadius: 16.0, style: .continuous)
-                            .stroke(
-                                AngularGradient(
-                                    gradient: Gradient(colors: [
-                                        color,
-                                        color.opacity(0.9),
-                                        color.opacity(0.6),
-                                        color.opacity(0.3),
-                                        color.opacity(0.1),
-                                        color.opacity(0.0),
-                                        color.opacity(0.0),
-                                        color.opacity(0.0)
-                                    ]),
-                                    center: .center,
-                                    angle: .degrees(isAnimating ? 360 : 0)
-                                ),
-                                lineWidth: 2.0
-                            )
+                        ring(lineWidth: 2, falloff: [0.9, 0.6, 0.3, 0.1])
                     }
-                    .onAppear {
-                        showBorder = true
-                        animationGeneration += 1
-                        let generation = animationGeneration
-                        withAnimation(.linear(duration: Self.sweepDuration).repeatCount(1, autoreverses: false)) {
-                            isAnimating = true
-                        }
-                        // Hide border after animation completes
-                        DispatchQueue.main.asyncAfter(deadline: .now() + Self.sweepDuration) {
-                            guard generation == animationGeneration else { return }
-                            withAnimation(AnimationSettings.easeOut(0.15)) {
-                                showBorder = false
-                            }
-                        }
-                    }
+                    .onAppear(perform: startSweep)
                 }
             }
             .onChange(of: trigger) { _, newTrigger in
-                if newTrigger {
-                    showBorder = true
-                    isAnimating = false
-                    animationGeneration += 1
-                    let generation = animationGeneration
-                    withAnimation(.linear(duration: Self.sweepDuration).repeatCount(1, autoreverses: false)) {
-                        isAnimating = true
-                    }
-                    // Hide border after animation completes
-                    DispatchQueue.main.asyncAfter(deadline: .now() + Self.sweepDuration) {
-                        guard generation == animationGeneration else { return }
-                        withAnimation(AnimationSettings.easeOut(0.15)) {
-                            showBorder = false
-                        }
-                    }
-                }
+                guard newTrigger else { return }
+                isAnimating = false
+                startSweep()
             }
+    }
+
+    /// One turn of the gradient. `falloff` is the trailing opacity ramp; the tail is
+    /// padded with transparent stops so the sweep has a visible head and a clean gap.
+    private func ring(lineWidth: CGFloat, falloff: [Double]) -> some View {
+        let stops = [color] + falloff.map { color.opacity($0) }
+        let colors = stops + Array(repeating: color.opacity(0), count: 8 - stops.count)
+        return RoundedRectangle(cornerRadius: 16.0, style: .continuous)
+            .stroke(
+                AngularGradient(
+                    gradient: Gradient(colors: colors),
+                    center: .center,
+                    angle: .degrees(isAnimating ? 360 : 0)
+                ),
+                lineWidth: lineWidth
+            )
+    }
+
+    private func startSweep() {
+        showBorder = true
+        animationGeneration += 1
+        let generation = animationGeneration
+        withAnimation(.linear(duration: Self.sweepDuration).repeatCount(1, autoreverses: false)) {
+            isAnimating = true
+        }
+        // Hide border after animation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.sweepDuration) {
+            guard generation == animationGeneration else { return }
+            withAnimation(AnimationSettings.easeOut(0.15)) {
+                showBorder = false
+            }
+        }
     }
 }

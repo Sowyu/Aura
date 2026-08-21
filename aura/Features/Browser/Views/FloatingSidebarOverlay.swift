@@ -69,6 +69,8 @@ struct FloatingSidebarOverlay: View {
     private func hoverStrip(revealedWidth: CGFloat) -> some View {
         Color.clear
             .frame(width: GlobalMouseTrackingArea.hotZone)
+            // The band only reads the pointer; a click in it belongs to the page.
+            .allowsHitTesting(false)
             .overlay(
                 GlobalMouseTrackingArea(
                     mouseEntered: Binding(

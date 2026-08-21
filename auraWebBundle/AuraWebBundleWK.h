@@ -98,6 +98,10 @@ extern void WKBundlePageSetResourceLoadClient(WKBundlePageRef page, WKBundlePage
 
 extern WKBundleFrameRef WKBundlePageGetMainFrame(WKBundlePageRef page);
 extern WKURLRef WKBundleFrameCopyURL(WKBundleFrameRef frame);
+/// The document a frame is navigating to. Set before the main resource's
+/// willSendRequest runs, which is the only way to tell a frame's own document
+/// load from a subresource loading inside it.
+extern WKURLRef WKBundleFrameCopyProvisionalURL(WKBundleFrameRef frame);
 
 #pragma mark - Injected-bundle messaging
 
@@ -117,6 +121,11 @@ extern WKTypeID WKGetTypeID(WKTypeRef object);
 
 extern WKURLRef WKURLRequestCopyURL(WKURLRequestRef request);
 extern CFStringRef WKURLRequestCopyHTTPMethod(WKURLRequestRef request) CF_RETURNS_RETAINED;
+/// Source/WebKit/Shared/API/c/cocoa/WKURLRequestNS.h. Declared as CFTypeRef so
+/// this header stays Foundation-free; the real return type is a +1 NSURLRequest,
+/// and it is the only way to read the `Accept` header the resource type is
+/// inferred from.
+extern CFTypeRef WKURLRequestCopyNSURLRequest(WKURLRequestRef request) CF_RETURNS_RETAINED;
 extern WKURLRequestRef WKURLRequestCreateWithWKURL(WKURLRef url);
 extern CFURLRef WKURLCopyCFURL(CFAllocatorRef allocator, WKURLRef url) CF_RETURNS_RETAINED;
 extern WKURLRef WKURLCreateWithCFURL(CFURLRef url);

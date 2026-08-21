@@ -44,5 +44,11 @@ final class ExtensionEngine: NSObject {
     func unload(id: String) {
         guard let context = contexts.removeValue(forKey: id) else { return }
         try? controller.unload(context)
+        // The native ports the extension's shim opened outlive the context.
+        // A blocking listener left registered against a port nobody answers on
+        // keeps the injected bundle asking, and every ask then costs the broker
+        // its full timeout, so a disabled extension would slow every page down.
+        WebRequestBroker.shared.detach(extensionID: id)
+        ExtensionMessageRelay.shared.detach(extensionID: id)
     }
 }

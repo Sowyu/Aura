@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Where the floating launcher sits: centred on the whole window, horizontally and
-/// vertically; it slides up to `raisedFraction` while suggestions are listed. It used to be anchored on the content pane so the
-/// sidebar could not push it sideways, which read as off-centre in the window itself.
+/// vertically; it slides up to `raisedFraction` while suggestions are listed. It used to
+/// be anchored on the content pane so the sidebar could not push it sideways, which read
+/// as off-centre in the window itself.
 enum LauncherPlacement {
     /// Distance from the top of the window to the centre of the panel when idle.
     static let verticalFraction: CGFloat = 0.5
@@ -15,12 +16,19 @@ enum LauncherPlacement {
     /// Floor for narrow windows; below this the field stops being usable anyway.
     static let minWidth: CGFloat = 320
 
-    /// Panel centre, in the window's own coordinate space.
+    /// Where the field's centre sits, in the window's own coordinate space.
     static func position(in window: CGRect, raised: Bool = false) -> CGPoint {
         CGPoint(
             x: window.midX,
             y: window.minY + window.height * (raised ? raisedFraction : verticalFraction)
         )
+    }
+
+    /// Top edge of the panel, so the field lands on `position` and the suggestions hang
+    /// below it. Centring the whole panel instead moved the field every time a row
+    /// arrived, and a long list pushed it off the top of the window entirely.
+    static func panelTop(in window: CGRect, raised: Bool = false, fieldHeight: CGFloat) -> CGFloat {
+        position(in: window, raised: raised).y - fieldHeight / 2
     }
 
     /// Leaves a 16 pt gutter either side once the window drops under `width`.

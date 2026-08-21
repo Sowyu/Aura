@@ -37,9 +37,6 @@ extension TabManager {
             isPrivate: isPrivate,
             activateAfterAdding: focusAfterOpening
         )
-        if focusAfterOpening {
-            activateTab(tab)
-        }
         return tab
     }
 }

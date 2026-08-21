@@ -8,9 +8,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Disable automatic window tabbing for all NSWindow instances
         NSWindow.allowsAutomaticWindowTabbing = false
         AppearanceManager.shared.updateAppearance()
+        StartupProfiler.mark("didFinishLaunching")
         #if DEBUG
-            Bundle(path: "/Applications/InjectionIII.app/Contents/Resources/macOSInjection.bundle")?.load()
-            Bundle(path: "/Applications/InjectionIII.app/Contents/Resources/macOSSwiftUISupport.bundle")?.load()
+            // Two dylibs off disk, only ever used after the app is up. Loading them
+            // inline pushed first paint out by the time it takes to mmap them.
+            DispatchQueue.main.async {
+                StartupProfiler.measure("injectionBundles") {
+                    let resources = "/Applications/InjectionIII.app/Contents/Resources"
+                    Bundle(path: "\(resources)/macOSInjection.bundle")?.load()
+                    Bundle(path: "\(resources)/macOSSwiftUISupport.bundle")?.load()
+                }
+            }
         #endif
     }
 
@@ -102,14 +110,17 @@ struct OraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     /// The rename moved the data folder, so this has to run before anything opens the
-    /// store. `OraRoot` makes its own container per window.
-    private let didMigrateLegacyData: Void = LegacyDataMigrator.runIfNeeded()
+    /// store. `OraRoot` makes its own container per window. It cannot be deferred for
+    /// that reason; after the first launch it costs four `stat` calls and one
+    /// `UserDefaults` read, which the startup log confirms as 0 ms.
+    private let didMigrateLegacyData: Void = StartupProfiler.measure("legacyDataMigration") {
+        LegacyDataMigrator.runIfNeeded()
+    }
 
     var body: some Scene {
         WindowGroup(id: "normal") {
             OraRoot()
                 .frame(minWidth: 500, minHeight: 360)
-                .environmentObject(DefaultBrowserManager.shared)
         }
         .defaultSize(width: 1440, height: 900)
         .windowStyle(.hiddenTitleBar)
@@ -119,7 +130,6 @@ struct OraApp: App {
         WindowGroup("Private", id: "private") {
             OraRoot(isPrivate: true)
                 .frame(minWidth: 500, minHeight: 360)
-                .environmentObject(DefaultBrowserManager.shared)
         }
         .defaultSize(width: 1440, height: 900)
         .windowStyle(.hiddenTitleBar)

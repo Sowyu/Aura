@@ -84,7 +84,9 @@ struct SidebarHeader: View {
                 }
             }
         }
-        .padding(.horizontal, 18)
-        .frame(height: 38)
+        // Lines the stand-in controls up with the native traffic lights the revealed row
+        // brings back, so swapping one for the other does not slide them sideways.
+        .padding(.horizontal, 12)
+        .frame(height: TopToolbar.rowHeight)
     }
 }

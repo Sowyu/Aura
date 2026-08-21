@@ -43,35 +43,35 @@ struct KeyChord: Equatable, Codable {
         self.characterString = String(keyEquivalent.character)
     }
 
-    init?(fromEvent event: NSEvent) {
-        var mods: SwiftUI.EventModifiers = []
-        let flags = event.modifierFlags
-        if flags.contains(.command) { mods.insert(.command) }
-        if flags.contains(.option) { mods.insert(.option) }
-        if flags.contains(.shift) { mods.insert(.shift) }
-        if flags.contains(.control) { mods.insert(.control) }
+    /// AppKit's flags to SwiftUI's, in the order the chord is spelled.
+    private static let modifierPairs: [(NSEvent.ModifierFlags, SwiftUI.EventModifiers)] = [
+        (.command, .command), (.option, .option), (.shift, .shift), (.control, .control)
+    ]
 
-        // Convert NSEvent to KeyEquivalent directly
-        let keyEquivalent: KeyEquivalent
-        switch event.keyCode {
-        case UInt16(kVK_Tab): keyEquivalent = .tab
-        case UInt16(kVK_LeftArrow): keyEquivalent = .leftArrow
-        case UInt16(kVK_RightArrow): keyEquivalent = .rightArrow
-        case UInt16(kVK_DownArrow): keyEquivalent = .downArrow
-        case UInt16(kVK_UpArrow): keyEquivalent = .upArrow
-        case UInt16(kVK_Escape): keyEquivalent = .escape
-        case UInt16(kVK_Return): keyEquivalent = .return
-        case UInt16(kVK_Space): keyEquivalent = .space
-        case UInt16(kVK_Delete): keyEquivalent = .delete
-        case UInt16(kVK_ForwardDelete): keyEquivalent = .deleteForward
-        default:
-            // For character keys, use the character directly
-            if let chars = event.charactersIgnoringModifiers, let first = chars.first {
-                keyEquivalent = KeyEquivalent(first)
-            } else {
-                return nil
-            }
+    /// Keys with a `KeyEquivalent` of their own. Everything else comes through as a
+    /// character.
+    private static let namedKeys: [UInt16: KeyEquivalent] = [
+        UInt16(kVK_Tab): .tab,
+        UInt16(kVK_LeftArrow): .leftArrow,
+        UInt16(kVK_RightArrow): .rightArrow,
+        UInt16(kVK_DownArrow): .downArrow,
+        UInt16(kVK_UpArrow): .upArrow,
+        UInt16(kVK_Escape): .escape,
+        UInt16(kVK_Return): .return,
+        UInt16(kVK_Space): .space,
+        UInt16(kVK_Delete): .delete,
+        UInt16(kVK_ForwardDelete): .deleteForward
+    ]
+
+    init?(fromEvent event: NSEvent) {
+        let flags = event.modifierFlags
+        var mods: SwiftUI.EventModifiers = []
+        for (flag, modifier) in Self.modifierPairs where flags.contains(flag) {
+            mods.insert(modifier)
         }
+
+        let typed = event.charactersIgnoringModifiers?.first.map { KeyEquivalent($0) }
+        guard let keyEquivalent = Self.namedKeys[event.keyCode] ?? typed else { return nil }
 
         self.keyEquivalent = keyEquivalent
         self.modifiers = mods

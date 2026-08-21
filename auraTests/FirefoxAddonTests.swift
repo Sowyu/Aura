@@ -64,6 +64,70 @@ struct FirefoxAddonTests {
         #expect(ExtensionCompatibility.evaluate(addon) == .supported)
     }
 
+    @Test func decodesAddonGUID() throws {
+        let json = #"""
+        {
+          "results": [
+            {
+              "id": 607454,
+              "slug": "ublock-origin",
+              "guid": "uBlock0@raymondhill.net",
+              "name": {"en-US": "uBlock Origin"}
+            },
+            {
+              "id": 1,
+              "slug": "no-guid",
+              "name": {"en-US": "Old Payload"}
+            }
+          ]
+        }
+        """#
+
+        let page = FirefoxAddonStore.parsePage(Data(json.utf8))
+        #expect(page.addons.count == 2)
+        #expect(page.addons[0].guid == "uBlock0@raymondhill.net")
+        #expect(page.addons[1].guid == nil)
+    }
+
+    @Test func matchesOnGUIDBeforeDisplayName() {
+        let addon = FirefoxAddon(id: 1, slug: "ublock-origin", name: "uBlock Origin",
+                                 guid: "uBlock0@raymondhill.net")
+
+        // AMO serves the name in the user's locale and add-ons get renamed, so the
+        // guid has to win over a name that no longer lines up.
+        #expect(ExtensionManager.matches(addon, installed(name: "uBlock Origin (Bloqueur)",
+                                                          geckoID: "uBlock0@raymondhill.net")))
+
+        // Two unrelated add-ons are free to ship the same name.
+        #expect(!ExtensionManager.matches(addon, installed(name: "uBlock Origin",
+                                                           geckoID: "impostor@example.com")))
+    }
+
+    @Test func matchesFallsBackToNameWithoutAGUID() {
+        let withGUID = FirefoxAddon(id: 1, slug: "dark", name: "Dark Reader", guid: "addon@darkreader.org")
+        let withoutGUID = FirefoxAddon(id: 1, slug: "dark", name: "Dark Reader")
+
+        // A Chrome-shaped manifest declares no gecko id, and an older AMO payload
+        // carries no guid. Either gap drops both sides back to the name.
+        #expect(ExtensionManager.matches(withGUID, installed(name: "dark reader", geckoID: nil)))
+        #expect(ExtensionManager.matches(withoutGUID, installed(name: "Dark Reader",
+                                                               geckoID: "addon@darkreader.org")))
+        #expect(!ExtensionManager.matches(withoutGUID, installed(name: "Something Else", geckoID: nil)))
+    }
+
+    private func installed(name: String, geckoID: String?) -> InstalledExtension {
+        InstalledExtension(
+            id: name,
+            directoryURL: URL(fileURLWithPath: "/tmp/\(name)"),
+            displayName: name,
+            displayVersion: nil,
+            geckoID: geckoID,
+            isEnabled: true,
+            icon: nil,
+            loadError: nil
+        )
+    }
+
     @Test func compatibilityBadgeFollowsRequestedPermissions() {
         #expect(ExtensionCompatibility.evaluate(permissions: ["storage", "tabs"]) == .supported)
         #expect(ExtensionCompatibility.evaluate(permissions: ["proxy", "storage"]) == .partial(["proxy"]))

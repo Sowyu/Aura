@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let logger = Logger(subsystem: "com.aurabrowser.app", category: "LegacyDataMigrator")
+private let logger = AuraLog.category("LegacyDataMigrator")
 
 /// One-shot copy of the pre-rename data folder into the renamed one.
 ///

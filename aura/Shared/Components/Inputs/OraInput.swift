@@ -72,7 +72,7 @@ struct OraInput: View {
     }
 
     private var borderColor: Color {
-        if let _ = error { return theme.destructive }
+        if error != nil { return theme.destructive }
         guard !isDisabled else { return theme.border.opacity(0.4) }
 
         switch variant {

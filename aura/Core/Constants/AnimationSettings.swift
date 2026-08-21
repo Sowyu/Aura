@@ -6,9 +6,20 @@ import SwiftUI
 ///
 /// The flag is read from `UserDefaults` rather than observed: a view picks the new value
 /// up on its next redraw, which for chrome is the same frame the user toggles anything.
+///
+/// It is read once and cached, because `duration`/`easeOut`/`spring` are called from
+/// view bodies at 84 sites; a `UserDefaults` lookup per animated modifier per frame is
+/// pure overhead. `SettingsStore.reduceMotion`'s `didSet` pushes changes back in here.
 enum AnimationSettings {
-    static var reduceMotion: Bool {
+    /// Written only from the main actor (the settings toggle), read from wherever a view
+    /// body runs. A `Bool` word is not worth a lock.
+    nonisolated(unsafe) private static var cachedReduceMotion =
         UserDefaults.standard.bool(forKey: SettingsStore.reduceMotionKey)
+
+    static var reduceMotion: Bool { cachedReduceMotion }
+
+    static func reduceMotionDidChange(to value: Bool) {
+        cachedReduceMotion = value
     }
 
     static func duration(_ seconds: Double) -> Double {

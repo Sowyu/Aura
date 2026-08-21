@@ -42,6 +42,10 @@ struct TabHibernationTests {
         // Oldest first: index 0 is the least recently touched, so it goes first.
         tab.lastAccessedAt = Date(timeIntervalSince1970: 1_000_000 + Double(index))
         manager.modelContext.insert(tab)
+        // Both sides, like `addTab` does: setting only `Tab.container` leaves the
+        // relationship array stale once anything re-fetches the space.
+        space.tabs.append(tab)
+        try manager.modelContext.save()
         return tab
     }
 
@@ -104,6 +108,113 @@ struct TabHibernationTests {
         #expect(victim.url.absoluteString == "https://example.com/1", "the URL survives")
         #expect(victim.title == "tab 1")
         #expect(victim.backgroundColorHex == "#000000", "the header colour survives")
+    }
+
+    /// One `TabManager` per window, one store between them. Evicting on this manager's
+    /// `activeTab` alone blanked the page the other window was showing.
+    @Test func aTabActiveInAnotherWindowIsNeverEvicted() throws {
+        let (manager, space) = try makeManager()
+        let store = SettingsStore.shared
+        let previousLimit = store.maxLiveTabs
+        defer { store.maxLiveTabs = previousLimit }
+        store.maxLiveTabs = 1
+
+        let mine = try makeTab(manager, space, index: 0)
+        let theirs = try makeTab(manager, space, index: 1)
+        let spare = try makeTab(manager, space, index: 2)
+        for tab in [mine, theirs, spare] { tab.isWebViewReady = true }
+
+        let secondWindow = TabManager(
+            modelContainer: manager.modelContainer,
+            modelContext: manager.modelContext,
+            mediaController: MediaController()
+        )
+        manager.activateTab(mine)
+        secondWindow.activateTab(theirs)
+        for tab in [mine, theirs, spare] { tab.isWebViewReady = true }
+
+        manager.enforceLiveTabLimit()
+
+        // Reading the second manager here also keeps it alive across the eviction pass;
+        // the registry only holds it weakly.
+        #expect(secondWindow.activeTab?.id == theirs.id)
+        #expect(mine.isWebViewReady, "this window's tab stays")
+        #expect(theirs.isWebViewReady, "the other window's tab stays too")
+        #expect(!spare.isWebViewReady, "the tab no window is showing goes")
+    }
+
+    @Test func loweringTheCapInSettingsTakesEffectImmediately() async throws {
+        let (manager, space) = try makeManager()
+        let store = SettingsStore.shared
+        let previousLimit = store.maxLiveTabs
+        defer { store.maxLiveTabs = previousLimit }
+        store.maxLiveTabs = 8
+
+        var tabs: [Tab] = []
+        for index in 0 ..< 4 {
+            let tab = try makeTab(manager, space, index: index)
+            tab.isWebViewReady = true
+            tabs.append(tab)
+        }
+        manager.activateTab(tabs[3])
+        for tab in tabs { tab.isWebViewReady = true }
+        #expect(manager.liveWebViewCount() == 4)
+
+        // No timer tick, no window event: only the settings write.
+        store.maxLiveTabs = 1
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(manager.liveWebViewCount() == 1)
+        #expect(tabs[3].isWebViewReady)
+    }
+
+    @Test func mediaVetoesEvictionUnlessTheSettingSaysOtherwise() throws {
+        let (manager, space) = try makeManager()
+        let store = SettingsStore.shared
+        let previousLimit = store.maxLiveTabs
+        let previousUnload = store.unloadMediaTabs
+        defer {
+            store.maxLiveTabs = previousLimit
+            store.unloadMediaTabs = previousUnload
+        }
+        store.maxLiveTabs = 1
+        store.unloadMediaTabs = false
+
+        let keeper = try makeTab(manager, space, index: 0)
+        let playing = try makeTab(manager, space, index: 1)
+        keeper.isWebViewReady = true
+        playing.isWebViewReady = true
+        playing.isPlayingMedia = true
+        manager.activateTab(keeper)
+        keeper.isWebViewReady = true
+
+        manager.enforceLiveTabLimit()
+        #expect(playing.isWebViewReady, "playback vetoes the unload")
+
+        store.unloadMediaTabs = true
+        manager.enforceLiveTabLimit()
+        #expect(!playing.isWebViewReady, "unless the user opted in")
+    }
+
+    /// The offset is re-applied once, and only to the page it was taken from.
+    @Test func scrollIsRestoredOnlyForTheSamePage() throws {
+        let (manager, space) = try makeManager()
+        let tab = try makeTab(manager, space, index: 0)
+        tab.hibernatedScrollOffset = CGPoint(x: 0, y: 640)
+        tab.hibernatedScrollURL = tab.url
+
+        tab.restoreScrollOffsetIfNeeded()
+
+        #expect(tab.hibernatedScrollOffset == nil, "the offset is consumed")
+        #expect(tab.hibernatedScrollURL == nil)
+
+        let other = try makeTab(manager, space, index: 1)
+        other.hibernatedScrollOffset = CGPoint(x: 0, y: 640)
+        other.hibernatedScrollURL = try #require(URL(string: "https://example.com/elsewhere"))
+
+        other.restoreScrollOffsetIfNeeded()
+
+        #expect(other.hibernatedScrollOffset != nil, "a different page keeps its own offset")
     }
 
     // MARK: - Memory benchmark

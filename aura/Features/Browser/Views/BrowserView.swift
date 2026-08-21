@@ -13,8 +13,6 @@ struct BrowserView: View {
 
     @ObserveInjection var inject
 
-    @State private var isMouseOverURLBar = false
-    @State private var showFloatingURLBar = false
     @State private var isMouseOverSidebar = false
     @State private var showFloatingSidebar = false
 
@@ -96,13 +94,18 @@ struct BrowserView: View {
 
     private static let holeRadius: CGFloat = 15
 
+    /// Pinned or hover-revealed, the row is the same 38pt of chrome in the same place.
+    private var isToolbarRowUp: Bool {
+        !toolbarManager.isToolbarHidden || toolbarManager.isFloatingToolbarVisible
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
-                // In compact mode the revealed bar joins the stack instead of floating over
-                // the page, so it sits flush on the pane and the pane's rounded corners
-                // flare into the bar's colour exactly as they do when the bar is pinned.
-                if !toolbarManager.isToolbarHidden || toolbarManager.isFloatingToolbarVisible {
+                // The revealed bar joins the stack instead of floating over the page, so it
+                // sits flush on the pane and the pane's rounded corners flare into the bar's
+                // colour exactly as they do when the bar is pinned.
+                if isToolbarRowUp {
                     TopToolbar()
                         .background(WindowDragHandle())
                         .transition(.move(edge: .top))
@@ -129,6 +132,8 @@ struct BrowserView: View {
                 }
             }
 
+            // Inset by the row when the row is up, so the revealed sidebar starts under it
+            // exactly where the pinned sidebar does instead of covering its buttons.
             if sidebarManager.isSidebarHidden {
                 FloatingSidebarOverlay(
                     showFloatingSidebar: $showFloatingSidebar,
@@ -136,15 +141,12 @@ struct BrowserView: View {
                     sidebarFraction: sidebarManager.currentFraction,
                     isDownloadsOpen: downloadManager.isShowingDownloadsHistory
                 )
+                .padding(.top, isToolbarRowUp ? TopToolbar.rowHeight : 0)
             }
 
-            if toolbarManager.isToolbarHidden, sidebarManager.isCompactEnabled {
+            // One hidden-toolbar behaviour, compact or not: the real row hover-reveals.
+            if toolbarManager.isToolbarHidden {
                 FloatingTopToolbar()
-            } else if toolbarManager.isToolbarHidden, sidebarManager.sidebarPosition != .primary {
-                FloatingURLBar(
-                    showFloatingURLBar: $showFloatingURLBar,
-                    isMouseOverURLBar: $isMouseOverURLBar
-                )
             }
 
             // Last in the stack so every menu draws over the chrome and the page. Renders
@@ -209,8 +211,8 @@ struct BrowserView: View {
     }
 }
 
-/// Compact mode's top edge: a 12pt band at the window edge slides the real toolbar in,
-/// and the whole row stays hot while it is up so the pointer can use it.
+/// The top edge while the row is hidden: a 12pt band at the window edge slides the real
+/// toolbar in, and the whole row stays hot while it is up so the pointer can use it.
 private struct FloatingTopToolbar: View {
     @Environment(\.theme) private var theme
     @Environment(AppState.self) private var appState
@@ -232,6 +234,8 @@ private struct FloatingTopToolbar: View {
         ZStack(alignment: .top) {
             Color.clear
                 .frame(height: GlobalMouseTrackingArea.hotZone)
+                // The band only reads the pointer; a click in it belongs to the page.
+                .allowsHitTesting(false)
                 .overlay(
                     GlobalMouseTrackingArea(
                         mouseEntered: Binding(

@@ -1,0 +1,493 @@
+import Foundation
+@testable import Aura
+import SwiftData
+import Testing
+
+/// Closing, reopening, duplicating and moving tabs: which row the selection falls to,
+/// what comes back, and what a tab loses when it changes space.
+@MainActor
+struct TabLifecycleTests {
+    private func makeManager() throws -> (TabManager, TabContainer) {
+        let modelContainer = try ModelContainer(
+            for: TabContainer.self, History.self, Download.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(modelContainer)
+        let manager = TabManager(
+            modelContainer: modelContainer,
+            modelContext: context,
+            mediaController: MediaController()
+        )
+        return (manager, manager.createContainer(name: "Lifecycle Space"))
+    }
+
+    @discardableResult
+    private func makeTab(
+        _ manager: TabManager,
+        _ space: TabContainer,
+        order: Int,
+        type: TabType = .normal
+    ) throws -> Tab {
+        let tab = try Tab(
+            url: #require(URL(string: "https://example.com/\(order)")),
+            title: "tab \(order)",
+            container: space,
+            type: type,
+            order: order,
+            tabManager: manager,
+            isPrivate: false
+        )
+        manager.modelContext.insert(tab)
+        // Both sides, like `addTab` does: setting only `Tab.container` leaves the
+        // relationship array stale once anything re-fetches the space.
+        space.tabs.append(tab)
+        try manager.modelContext.save()
+        return tab
+    }
+
+    /// `closeTab` deletes the row from a main-queue block, so anything asserting on the
+    /// tab list has to let that block run first.
+    private func settle() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+    }
+
+    // MARK: - Closing
+
+    @Test func closingTheActiveTabSelectsTheRowBelowIt() throws {
+        let (manager, space) = try makeManager()
+        let top = try makeTab(manager, space, order: 3)
+        let middle = try makeTab(manager, space, order: 2)
+        let bottom = try makeTab(manager, space, order: 1)
+        manager.activateTab(middle)
+
+        manager.closeTab(tab: middle)
+
+        // The sidebar sorts descending, so "below" is the next lower order.
+        #expect(manager.activeTab?.id == bottom.id)
+        #expect(top.id != bottom.id)
+    }
+
+    @Test func closingTheBottomTabFallsBackUpwards() throws {
+        let (manager, space) = try makeManager()
+        let above = try makeTab(manager, space, order: 2)
+        let bottom = try makeTab(manager, space, order: 1)
+        manager.activateTab(bottom)
+
+        manager.closeTab(tab: bottom)
+
+        #expect(manager.activeTab?.id == above.id)
+    }
+
+    /// A hibernated tab has no web view. Requiring one here left the window on
+    /// aura://home with a sidebar full of tabs.
+    @Test func closingPicksAHibernatedNeighbour() throws {
+        let (manager, space) = try makeManager()
+        let neighbour = try makeTab(manager, space, order: 1)
+        let active = try makeTab(manager, space, order: 2)
+        manager.activateTab(active)
+        neighbour.isWebViewReady = false
+
+        manager.closeTab(tab: active)
+
+        #expect(manager.activeTab?.id == neighbour.id)
+    }
+
+    @Test func closingInsideAFolderStaysInTheFolder() throws {
+        let (manager, space) = try makeManager()
+        let outside = try makeTab(manager, space, order: 9)
+        let folder = try #require(manager.createFolder(name: "Work", in: space))
+        let upper = try makeTab(manager, space, order: 3)
+        let lower = try makeTab(manager, space, order: 2)
+        manager.move(tab: upper, to: folder)
+        manager.move(tab: lower, to: folder)
+        manager.activateTab(upper)
+
+        manager.closeTab(tab: upper)
+
+        #expect(manager.activeTab?.id == lower.id)
+        #expect(manager.activeTab?.id != outside.id)
+    }
+
+    @Test func closingTheLastTabInAFolderLeavesTheFolder() throws {
+        let (manager, space) = try makeManager()
+        let outside = try makeTab(manager, space, order: 9)
+        let folder = try #require(manager.createFolder(name: "Work", in: space))
+        let only = try makeTab(manager, space, order: 3)
+        manager.move(tab: only, to: folder)
+        manager.activateTab(only)
+
+        manager.closeTab(tab: only)
+
+        #expect(manager.activeTab?.id == outside.id)
+    }
+
+    @Test func closingTheActiveTabCanLandOnAPinnedTab() throws {
+        let (manager, space) = try makeManager()
+        let pinned = try makeTab(manager, space, order: 5, type: .pinned)
+        let normal = try makeTab(manager, space, order: 1)
+        manager.activateTab(normal)
+
+        manager.closeTab(tab: normal)
+
+        // No normal sibling is left, so the fallback is the space's other tab.
+        #expect(manager.activeTab?.id == pinned.id)
+    }
+
+    /// No active tab is what puts `aura://home` back on screen; `BrowserSplitView`
+    /// renders `HomePageView` whenever `activeTab` is nil.
+    @Test func closingTheLastTabInASpaceClearsTheSelection() throws {
+        let (manager, space) = try makeManager()
+        let only = try makeTab(manager, space, order: 1)
+        manager.activateTab(only)
+
+        manager.closeTab(tab: only)
+
+        #expect(manager.activeTab == nil)
+    }
+
+    // MARK: - Reopening
+
+    @Test func reopeningRestoresURLFolderAndPosition() async throws {
+        let (manager, space) = try makeManager()
+        let folder = try #require(manager.createFolder(name: "Work", in: space))
+        try makeTab(manager, space, order: 3)
+        let closed = try makeTab(manager, space, order: 2)
+        try makeTab(manager, space, order: 1)
+        manager.move(tab: closed, to: folder)
+        let closedURL = closed.url
+        let closedOrder = closed.order
+
+        manager.closeTab(tab: closed)
+        await settle()
+        #expect(!space.tabs.contains { $0.url == closedURL })
+
+        manager.restoreLastTab()
+
+        let restored = try #require(space.tabs.first { $0.url == closedURL })
+        #expect(restored.folder?.id == folder.id)
+        #expect(restored.order == closedOrder)
+        #expect(manager.activeTab?.id == restored.id)
+        #expect(Set(space.tabs.map(\.order)).count == space.tabs.count, "orders stay unique")
+    }
+
+    @Test func onlyTheLastFiveClosedTabsComeBack() async throws {
+        let (manager, space) = try makeManager()
+        for order in 1 ... 6 {
+            try makeTab(manager, space, order: order)
+        }
+        for tab in Array(space.tabs) {
+            manager.closeTab(tab: tab)
+        }
+        await settle()
+        #expect(space.tabs.isEmpty)
+
+        for _ in 0 ..< 8 {
+            manager.restoreLastTab()
+        }
+
+        #expect(space.tabs.count == 5, "the recently closed list is capped at five")
+    }
+
+    // MARK: - Duplicating and moving
+
+    @Test func duplicatingKeepsTheFolderAndWorksForInternalPages() throws {
+        let (manager, space) = try makeManager()
+        let folder = try #require(manager.createFolder(name: "Work", in: space))
+        let home = manager.addTab(container: space, isPrivate: false)
+        manager.move(tab: home, to: folder)
+
+        let copy = manager.duplicateTab(home)
+
+        #expect(copy.url == home.url)
+        #expect(copy.url.isOraHome)
+        #expect(copy.folder?.id == folder.id, "the copy stays in the folder")
+        #expect(copy.id != home.id)
+        #expect(copy.browserPage == nil, "an internal page never gets a web view")
+        #expect(Set(space.tabs.map(\.order)).count == space.tabs.count)
+    }
+
+    @Test func movingATabToAnotherSpaceDropsItsFolder() throws {
+        let (manager, space) = try makeManager()
+        let other = manager.createContainer(name: "Other")
+        manager.activateContainer(space)
+        let folder = try #require(manager.createFolder(name: "Work", in: space))
+        let staying = try makeTab(manager, space, order: 1)
+        let moving = try makeTab(manager, space, order: 2)
+        manager.move(tab: moving, to: folder)
+        manager.activateTab(moving)
+
+        manager.moveTabToContainer(moving, toContainer: other)
+
+        #expect(moving.folder == nil, "folders belong to one space")
+        #expect(moving.container.id == other.id)
+        #expect(folder.sortedTabs.isEmpty)
+        // The selection follows the space, not the tab that left it.
+        #expect(manager.activeTab?.id == staying.id)
+    }
+
+    // MARK: - Activation
+
+    @Test func activatingATabUpdatesTheLRUAndTheSpace() throws {
+        let (manager, space) = try makeManager()
+        let other = manager.createContainer(name: "Other")
+        let tab = try makeTab(manager, space, order: 1)
+        tab.lastAccessedAt = Date(timeIntervalSince1970: 0)
+        manager.activateContainer(other)
+
+        manager.activateTab(tab)
+
+        #expect(manager.activeContainer?.id == space.id, "activating follows the tab into its space")
+        #expect(try #require(tab.lastAccessedAt) > Date(timeIntervalSince1970: 1))
+        #expect(tab.maybeIsActive)
+    }
+
+    /// Switching to a space whose tabs are all hibernated used to show aura://home.
+    @Test func switchingSpacesSelectsTheMostRecentTabEvenWhenHibernated() throws {
+        let (manager, space) = try makeManager()
+        let other = manager.createContainer(name: "Other")
+        let older = try makeTab(manager, space, order: 1)
+        let newer = try makeTab(manager, space, order: 2)
+        older.lastAccessedAt = Date(timeIntervalSince1970: 1000)
+        newer.lastAccessedAt = Date(timeIntervalSince1970: 2000)
+        older.isWebViewReady = false
+        newer.isWebViewReady = false
+        manager.activateContainer(other)
+
+        manager.activateContainer(space)
+
+        #expect(manager.activeTab?.id == newer.id)
+    }
+
+    @Test func switchingToAnEmptySpaceClearsTheSelection() throws {
+        let (manager, space) = try makeManager()
+        let empty = manager.createContainer(name: "Empty")
+        let tab = try makeTab(manager, space, order: 1)
+        manager.activateTab(tab)
+
+        manager.activateContainer(empty)
+
+        #expect(manager.activeTab == nil)
+        #expect(tab.maybeIsActive == false)
+    }
+
+    // MARK: - URL mirror
+
+    @Test func theSearchableURLMirrorFollowsNavigation() throws {
+        let (manager, space) = try makeManager()
+        let tab = try makeTab(manager, space, order: 1)
+
+        let target = try #require(URL(string: "https://example.org/deep/link?q=1"))
+        tab.updateURL(target)
+
+        #expect(tab.url == target)
+        #expect(tab.urlString == target.absoluteString, "tab search reads urlString, not url")
+        #expect(manager.search("deep/link").map(\.id) == [tab.id])
+    }
+
+    // MARK: - Launch policy
+
+    @Test func launchPolicyDropsNormalTabsOnceAndKeepsPinned() async throws {
+        let (manager, space) = try makeManager()
+        let store = SettingsStore.shared
+        let previous = store.restoreTabsOnLaunch
+        let pinned = try makeTab(manager, space, order: 3, type: .pinned)
+        let dropped = try makeTab(manager, space, order: 2)
+        try manager.modelContext.save()
+
+        // No `await` until the process-wide flags are back: another test running on the
+        // main actor would otherwise launch into this one's policy.
+        store.restoreTabsOnLaunch = false
+        TabManager.didApplyLaunchPolicy = false
+        _ = TabManager(
+            modelContainer: manager.modelContainer,
+            modelContext: manager.modelContext,
+            mediaController: MediaController()
+        )
+        let secondWindowTab = try makeTab(manager, space, order: 1)
+        _ = TabManager(
+            modelContainer: manager.modelContainer,
+            modelContext: manager.modelContext,
+            mediaController: MediaController()
+        )
+        TabManager.didApplyLaunchPolicy = true
+        store.restoreTabsOnLaunch = previous
+
+        await settle()
+        // Straight from the store: a relationship array read across two managers can
+        // hand back a stale snapshot.
+        let surviving = try manager.modelContext.fetch(FetchDescriptor<Tab>()).map(\.id)
+        #expect(surviving.contains(pinned.id), "pinned tabs always come back")
+        #expect(!surviving.contains(dropped.id), "saved normal tabs are dropped")
+        #expect(surviving.contains(secondWindowTab.id), "the policy runs once per launch")
+    }
+
+    /// Pinned and favourite tabs reopen at the URL they were pinned at. Every other tab,
+    /// including one coming back from hibernation mid-session, reopens where it was.
+    @Test func pinnedTabsReopenAtTheirSavedURL() throws {
+        let (manager, space) = try makeManager()
+        let tab = try makeTab(manager, space, order: 1)
+        let pinnedAt = tab.url
+
+        manager.togglePinTab(tab)
+        let wandered = try #require(URL(string: "https://example.com/deep/page"))
+        tab.updateURL(wandered)
+
+        #expect(tab.savedURL == pinnedAt)
+        #expect(tab.launchURL == pinnedAt, "a relaunch puts a pinned tab back on its own page")
+
+        manager.togglePinTab(tab)
+        #expect(tab.savedURL == nil)
+        #expect(tab.launchURL == wandered)
+    }
+
+    /// Private windows get an in-memory store, so nothing they open reaches the disk.
+    @Test func privateWindowsUseAnInMemoryStore() {
+        #expect(ModelConfiguration.oraDatabase(isPrivate: true).isStoredInMemoryOnly)
+        #expect(ModelConfiguration.oraDatabase(isPrivate: false).isStoredInMemoryOnly == false)
+    }
+}
+
+/// Drag-reorder invariants: the sidebar sorts on `order` descending, so every row in a
+/// section needs its own value and moving one row must not renumber the rest.
+@MainActor
+struct TabOrderingTests {
+    private func makeManager() throws -> (TabManager, TabContainer) {
+        let modelContainer = try ModelContainer(
+            for: TabContainer.self, History.self, Download.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(modelContainer)
+        let manager = TabManager(
+            modelContainer: modelContainer,
+            modelContext: context,
+            mediaController: MediaController()
+        )
+        return (manager, manager.createContainer(name: "Ordering Space"))
+    }
+
+    @discardableResult
+    private func makeTab(_ manager: TabManager, _ space: TabContainer, order: Int, type: TabType = .normal) throws
+        -> Tab
+    {
+        let tab = try Tab(
+            url: #require(URL(string: "https://example.com/\(order)")),
+            title: "tab \(order)",
+            container: space,
+            type: type,
+            order: order,
+            tabManager: manager,
+            isPrivate: false
+        )
+        manager.modelContext.insert(tab)
+        // Both sides, like `addTab` does: setting only `Tab.container` leaves the
+        // relationship array stale once anything re-fetches the space.
+        space.tabs.append(tab)
+        try manager.modelContext.save()
+        return tab
+    }
+
+    @Test func draggingIntoAFolderKeepsOrdersUniqueAndDescending() throws {
+        let (manager, space) = try makeManager()
+        let folder = try #require(manager.createFolder(name: "Work", in: space))
+        let inFolderTop = try makeTab(manager, space, order: 4)
+        let inFolderBottom = try makeTab(manager, space, order: 3)
+        manager.move(tab: inFolderTop, to: folder)
+        manager.move(tab: inFolderBottom, to: folder)
+        let outsider = try makeTab(manager, space, order: 1)
+
+        // What `TabDropDelegate` does: join the target's folder, then reorder next to it.
+        outsider.folder = folder
+        space.reorderTabs(from: outsider, to: inFolderTop)
+
+        let orders = folder.sortedTabs.map(\.order)
+        #expect(folder.sortedTabs.map(\.id) == [outsider.id, inFolderTop.id, inFolderBottom.id])
+        #expect(Set(orders).count == orders.count, "no duplicate orders")
+        #expect(orders == orders.sorted(by: >), "the folder stays monotonic")
+    }
+
+    @Test func draggingOutOfAFolderKeepsOrdersUnique() throws {
+        let (manager, space) = try makeManager()
+        let folder = try #require(manager.createFolder(name: "Work", in: space))
+        let child = try makeTab(manager, space, order: 4)
+        manager.move(tab: child, to: folder)
+        let topLevelUpper = try makeTab(manager, space, order: 2)
+        let topLevelLower = try makeTab(manager, space, order: 1)
+
+        child.folder = nil
+        space.reorderTabs(from: child, to: topLevelLower)
+
+        let topLevel = space.tabs.filter { $0.folder == nil }.sorted { $0.order > $1.order }
+        #expect(topLevel.map(\.id) == [topLevelUpper.id, topLevelLower.id, child.id])
+        #expect(Set(space.tabs.map(\.order)).count == space.tabs.count)
+    }
+
+    /// The old swap-chain walked past the end of its array when the two tabs shared an
+    /// order, which duplicate orders in an imported store made reachable.
+    @Test func reorderingTabsWithTheSameOrderIsSafe() throws {
+        let (manager, space) = try makeManager()
+        let first = try makeTab(manager, space, order: 2)
+        let second = try makeTab(manager, space, order: 2)
+
+        space.reorderTabs(from: first, to: second)
+
+        // Nothing to renumber, and above all nothing that walks off the end of the array.
+        #expect(space.tabs.count == 2)
+        #expect(first.order == 2)
+        #expect(second.order == 2)
+    }
+
+    @Test func reorderingIgnoresTabsFromAnotherSection() throws {
+        let (manager, space) = try makeManager()
+        let pinned = try makeTab(manager, space, order: 5, type: .pinned)
+        let normal = try makeTab(manager, space, order: 1)
+
+        space.reorderTabs(from: normal, to: pinned)
+
+        #expect(normal.order == 1, "a normal tab does not join the pinned section by drag alone")
+        #expect(pinned.order == 5)
+    }
+
+    @Test func aNewTabNeverTakesAFolderOrder() throws {
+        let (manager, space) = try makeManager()
+        let store = SettingsStore.shared
+        let previous = store.newTabPosition
+        defer { store.newTabPosition = previous }
+        store.newTabPosition = .top
+        try makeTab(manager, space, order: 1)
+        let folder = try #require(manager.createFolder(name: "Work", in: space))
+
+        let fresh = manager.addTab(container: space, isPrivate: false)
+
+        #expect(fresh.order > folder.order, "a new tab lands above every existing row")
+    }
+
+    @Test func foldersReorderAmongThemselves() throws {
+        let (manager, space) = try makeManager()
+        let first = try #require(manager.createFolder(name: "One", in: space))
+        let second = try #require(manager.createFolder(name: "Two", in: space))
+        let third = try #require(manager.createFolder(name: "Three", in: space))
+        let ordersBefore = Set(space.folders.map(\.order))
+
+        // Drag the top folder onto the bottom one.
+        manager.move(folder: third, to: first)
+
+        let sorted = space.folders.sorted { $0.order > $1.order }
+        #expect(sorted.map(\.id) == [second.id, first.id, third.id])
+        #expect(Set(space.folders.map(\.order)) == ordersBefore, "the slots are reused, not invented")
+    }
+
+    @Test func aFolderDoesNotMoveIntoAnotherSpace() throws {
+        let (manager, space) = try makeManager()
+        let other = manager.createContainer(name: "Other")
+        let here = try #require(manager.createFolder(name: "Here", in: space))
+        let there = try #require(manager.createFolder(name: "There", in: other))
+        let orderBefore = here.order
+
+        manager.move(folder: here, to: there)
+
+        #expect(here.order == orderBefore)
+        #expect(here.container.id == space.id)
+    }
+}

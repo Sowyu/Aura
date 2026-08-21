@@ -27,7 +27,7 @@
     const RELAY_BACKGROUND = 'app.aurabrowser.relay.background';
     const RELAY_PAGE = 'app.aurabrowser.relay.page';
     // Bumped when the protocol changes so a stale patched extension is repatched.
-    const SHIM_VERSION = 2;
+    const SHIM_VERSION = 3;
 
     const api = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
     if (!api || globalThis.__auraShimInstalled) { return; }
@@ -206,9 +206,19 @@
 
     let relayPort = null;
     let relayUsable = false;
+    let relayConnecting = false;
     const relayQueue = [];
 
     function relaySend(frame) {
+        // A dropped relay port used to strand every later frame in the queue,
+        // which showed up as a popup that opened blank after the first one.
+        // Guarded: relayConnect drains the queue through this function, and a
+        // port that throws on its first post would otherwise reconnect once per
+        // queued frame.
+        if (relayPort === null && !relayConnecting) {
+            relayConnecting = true;
+            try { relayConnect(); } finally { relayConnecting = false; }
+        }
         if (relayPort === null) {
             if (relayQueue.length < 256) { relayQueue.push(frame); }
             return;

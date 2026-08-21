@@ -57,6 +57,10 @@ final class ExtensionMessageRelay {
     }
 
     func attachPage(port: WKWebExtension.MessagePort, extensionID: String) {
+        // A popup WebKit tore down without calling its disconnect handler would
+        // otherwise leave its tunnelled ports in `owners` for good, and every
+        // reopen would add more. Fifty popup opens, fifty leaked entries.
+        pruneDeadOwners(for: extensionID)
         port.messageHandler = { [weak self] message, _ in
             MainActor.assumeIsolated { self?.fromPage(message, port: port, extensionID: extensionID) }
         }
@@ -117,6 +121,28 @@ final class ExtensionMessageRelay {
         guard var owned = owners[extensionID] else { return }
         let orphaned = owned.filter { $0.value === port }.map(\.key)
         for portID in orphaned {
+            owned.removeValue(forKey: portID)
+            sendToBackground(["op": "disconnect", "portId": portID], extensionID: extensionID)
+        }
+        owners[extensionID] = owned.isEmpty ? nil : owned
+    }
+
+    /// The extension went away (disabled, removed, or reloaded). WebKit does not
+    /// reliably disconnect the native ports it opened, so unloading says so here
+    /// rather than waiting for a disconnect handler that may never fire.
+    func detach(extensionID: String) {
+        backgroundPorts.removeValue(forKey: extensionID)?.disconnect()
+        queued.removeValue(forKey: extensionID)
+        for page in (owners.removeValue(forKey: extensionID) ?? [:]).values where !page.isDisconnected {
+            page.disconnect()
+        }
+    }
+
+    private func pruneDeadOwners(for extensionID: String) {
+        guard var owned = owners[extensionID] else { return }
+        let dead = owned.filter { $0.value.isDisconnected }.map(\.key)
+        guard !dead.isEmpty else { return }
+        for portID in dead {
             owned.removeValue(forKey: portID)
             sendToBackground(["op": "disconnect", "portId": portID], extensionID: extensionID)
         }

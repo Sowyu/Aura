@@ -29,12 +29,11 @@ targets:
       # message names carried over the injected-bundle channel.
       - path: auraWebBundle/AuraResourceTypes.h
       - path: auraWebBundle/AuraResourceTypes.m
-    resources:
-      - path: aura/Shared/EmojiPicker/emoji-set.json
-      - path: aura/Resources
-        optional: true
-      # Rendered by the About section.
+      # Rendered by the About section. Listed here, not under a `resources:` key:
+      # xcodegen has no such key on a target and silently dropped the file, so the
+      # About page reported the notices missing in every build.
       - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
     dependencies:
       - package: Sparkle
       - package: PublicSuffixList

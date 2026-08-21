@@ -155,6 +155,11 @@ private struct GlassChrome: ViewModifier {
 /// the sidebar and the toolbar leaves those notches in the old opaque fill, and the pane
 /// stops reading as a rounded card sitting on the chrome.
 private struct GlassWindowBackdrop: ViewModifier {
+    /// Non-zero for the revealed sidebar, which carries this same surface as a card.
+    /// macOS 26 composites `glassEffect` outside an ancestor clip, so the shape has to
+    /// reach the surface itself.
+    let cornerRadius: CGFloat
+
     @AppStorage(AuraGlass.enabledKey) private var enabled = false
     @AppStorage(AuraGlass.tintKey) private var tintHex = AuraGlass.defaultTintHex
     @AppStorage(AuraGlass.opacityKey) private var tintOpacity = AuraGlass.defaultOpacity
@@ -164,8 +169,11 @@ private struct GlassWindowBackdrop: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content.background {
-                AuraGlassSurface(tint: Color(hex: tintHex), opacity: tintOpacity, blur: blur)
-                    .ignoresSafeArea(.all)
+                AuraGlassSurface(
+                    tint: Color(hex: tintHex), opacity: tintOpacity,
+                    blur: blur, cornerRadius: cornerRadius
+                )
+                .ignoresSafeArea(.all)
             }
         } else {
             content
@@ -191,8 +199,9 @@ extension View {
         modifier(GlassChrome(surfaceRadius: cornerRadius, blending: .withinWindow))
     }
 
-    /// The one fill behind a whole browser window.
-    func auraGlassWindowBackdrop() -> some View {
-        modifier(GlassWindowBackdrop())
+    /// The one fill behind a whole browser window, and behind the revealed sidebar so
+    /// it matches the pinned one exactly.
+    func auraGlassWindowBackdrop(cornerRadius: CGFloat = 0) -> some View {
+        modifier(GlassWindowBackdrop(cornerRadius: cornerRadius))
     }
 }

@@ -80,6 +80,27 @@ extension TabManager {
         try? modelContext.save()
     }
 
+    /// Drag-reorder for folder rows. Folders share `Tab.order`'s scale, so the moved
+    /// folder takes over the target's slot and the folders in between shuffle up or
+    /// down by one; every order stays unique and the tabs around them do not move.
+    func move(folder: Folder, to target: Folder) {
+        guard folder.id != target.id, folder.container.id == target.container.id else { return }
+        var group = folder.container.folders
+            .filter { $0.id != folder.id }
+            .sorted { $0.order > $1.order }
+        guard let targetIndex = group.firstIndex(where: { $0.id == target.id }) else { return }
+
+        var values = group.map(\.order)
+        values.append(folder.order)
+        values.sort(by: >)
+
+        group.insert(folder, at: folder.order > target.order ? targetIndex + 1 : targetIndex)
+        for (index, item) in group.enumerated() {
+            item.order = values[index]
+        }
+        try? modelContext.save()
+    }
+
     func toggleCollapsed(_ folder: Folder) {
         folder.isCollapsed.toggle()
         try? modelContext.save()

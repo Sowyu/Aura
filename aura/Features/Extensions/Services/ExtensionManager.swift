@@ -10,6 +10,9 @@ struct InstalledExtension: Identifiable, Equatable {
     let directoryURL: URL
     var displayName: String
     var displayVersion: String?
+    /// The manifest's gecko id, which is the same string AMO reports as a guid.
+    /// Nil for extensions whose manifest declares none (Chrome-only ones).
+    var geckoID: String?
     var isEnabled: Bool
     var icon: NSImage?
     var loadError: String?
@@ -261,7 +264,15 @@ final class ExtensionManager {
 
         let manifest = Self.parseManifest(at: manifestURL)
         let name = manifest.name ?? sourceURL.lastPathComponent
-        if installedExtensions.contains(where: { $0.displayName == name }) {
+        // Same guid-first rule the store badge uses, so a renamed or re-translated
+        // copy of an add-on that is already here still counts as a duplicate.
+        let isDuplicate = installedExtensions.contains { installed in
+            if let geckoID = manifest.geckoID, let installedID = installed.geckoID {
+                return geckoID == installedID
+            }
+            return installed.displayName == name
+        }
+        if isDuplicate {
             throw ExtensionInstallError.alreadyInstalled(name)
         }
 
@@ -315,10 +326,20 @@ final class ExtensionManager {
         try installExtension(from: root)
     }
 
-    /// The installed entry an AMO listing produced, matched on the name the install
-    /// path names its folder after.
+    /// The installed entry an AMO listing produced.
     func installedExtension(matching addon: FirefoxAddon) -> InstalledExtension? {
-        installedExtensions.first { $0.displayName.caseInsensitiveCompare(addon.name) == .orderedSame }
+        installedExtensions.first { Self.matches(addon, $0) }
+    }
+
+    /// Same add-on or not. The guid is the identity WebExtensions actually use, so it
+    /// wins whenever both sides have one: display names are translated per locale and
+    /// two unrelated add-ons are free to share one. Names are the last resort, for
+    /// Chrome-shaped manifests that declare no gecko id.
+    static func matches(_ addon: FirefoxAddon, _ installed: InstalledExtension) -> Bool {
+        if let guid = addon.guid, let geckoID = installed.geckoID {
+            return guid == geckoID
+        }
+        return installed.displayName.caseInsensitiveCompare(addon.name) == .orderedSame
     }
 
     /// The extension's own options page, when it declares one. Nil until it has loaded.
@@ -370,6 +391,7 @@ final class ExtensionManager {
             directoryURL: directory,
             displayName: manifest.name ?? id,
             displayVersion: manifest.version,
+            geckoID: manifest.geckoID,
             isEnabled: !disabledIDs.contains(id),
             icon: nil,
             loadError: shimError ?? Self.compatibilityNote(at: directory)
@@ -413,16 +435,21 @@ final class ExtensionManager {
 
     // MARK: - Manifest helpers
 
-    private static func parseManifest(at url: URL) -> (name: String?, version: String?) {
+    private static func parseManifest(at url: URL) -> (name: String?, version: String?, geckoID: String?) {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
-            return (nil, nil)
+            return (nil, nil, nil)
         }
         // "__MSG_*__" names live in locale files; fall back to the folder name.
         let rawName = json["name"] as? String
         let name = rawName?.hasPrefix("__MSG_") == true ? nil : rawName
-        return (name, json["version"] as? String)
+        // "applications" is the pre-MV3 spelling of browser_specific_settings and
+        // plenty of shipped add-ons still use it.
+        let settings = json["browser_specific_settings"] as? [String: Any]
+            ?? json["applications"] as? [String: Any]
+        let geckoID = (settings?["gecko"] as? [String: Any])?["id"] as? String
+        return (name, json["version"] as? String, geckoID)
     }
 
     /// The same verdict the store shows, read from the installed manifest instead of AMO.

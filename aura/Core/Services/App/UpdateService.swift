@@ -2,8 +2,12 @@ import os.log
 import Sparkle
 import SwiftUI
 
-private let logger = Logger(subsystem: "com.aurabrowser.app", category: "UpdateService")
+private let logger = AuraLog.category("UpdateService")
 
+/// One updater for the app, shared by every window. Sparkle wants a single `SPUUpdater`
+/// per host bundle, and `start()` does bundle validation and installer-service setup
+/// that first paint does not need, so it is deferred: `OraRoot` calls `start()` once the
+/// first window is on screen, and the two check entry points start it on demand.
 class UpdateService: NSObject, ObservableObject {
     static let shared = UpdateService()
     @Published var canCheckForUpdates = false
@@ -15,13 +19,16 @@ class UpdateService: NSObject, ObservableObject {
 
     private var updater: SPUUpdater?
     private var userDriver: SPUStandardUserDriver?
+    private var didStart = false
 
-    override init() {
-        super.init()
-        setupUpdater()
+    /// Idempotent. Safe to call from the deferred launch work and from a check.
+    func start() {
+        guard !didStart else { return }
+        didStart = true
+        StartupProfiler.measure("sparkleStart") { setUpUpdater() }
     }
 
-    private func setupUpdater() {
+    private func setUpUpdater() {
         let hostBundle = Bundle.main
         let applicationBundle = hostBundle
         let userDriver = SPUStandardUserDriver(hostBundle: hostBundle, delegate: nil)
@@ -40,18 +47,18 @@ class UpdateService: NSObject, ObservableObject {
             try updater.start()
             self.canCheckForUpdates = true
         } catch {
-            logger.error("❌ Failed to start updater - Error: \(error.localizedDescription)")
+            logger.error("Failed to start updater: \(error.localizedDescription)")
             self.canCheckForUpdates = false
             self.lastCheckResult = "Updater failed to start: \(error.localizedDescription)"
         }
     }
 
     func checkForUpdates() {
+        start()
         guard let updater, canCheckForUpdates else {
-            logger
-                .error(
-                    "❌ Update checking not available - updater: \(self.updater != nil), canCheck: \(self.canCheckForUpdates)"
-                )
+            logger.error(
+                "Update checking not available (updater: \(self.updater != nil), canCheck: \(self.canCheckForUpdates))"
+            )
             lastCheckResult = "Update checking is not available"
             lastCheckDate = Date()
             isCheckingForUpdates = false
@@ -74,6 +81,7 @@ class UpdateService: NSObject, ObservableObject {
     }
 
     func checkForUpdatesInBackground() {
+        start()
         guard let updater, canCheckForUpdates else { return }
         updater.checkForUpdatesInBackground()
     }
@@ -96,7 +104,7 @@ extension UpdateService: SPUUpdaterDelegate {
     }
 
     func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
-        logger.error("❌ Error details: \(error.localizedDescription)")
+        logger.error("No update found: \(error.localizedDescription)")
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
 
         DispatchQueue.main.async {
@@ -124,7 +132,7 @@ extension UpdateService: SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, failedToLoadAppcastWithError error: Error) {
-        logger.error("❌ Error: \(error.localizedDescription)")
+        logger.error("Update error: \(error.localizedDescription)")
 
         DispatchQueue.main.async {
             self.isCheckingForUpdates = false
@@ -134,9 +142,9 @@ extension UpdateService: SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, failedToDownloadUpdate item: SUAppcastItem, error: Error) {
-        logger.error("❌ Error: \(error.localizedDescription)")
+        logger.error("Update error: \(error.localizedDescription)")
         let version = item.displayVersionString
-        logger.error("❌ Item version: \(version)")
+        logger.error("Item version: \(version)")
 
         DispatchQueue.main.async {
             self.isCheckingForUpdates = false

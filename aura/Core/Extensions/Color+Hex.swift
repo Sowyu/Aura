@@ -1,30 +1,29 @@
 import SwiftUI
 
-// swiftlint:disable identifier_name
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
         Scanner(string: hex).scanHexInt64(&int)
-        let a: UInt64, r: UInt64, g: UInt64, b: UInt64
+        let alpha: UInt64, red: UInt64, green: UInt64, blue: UInt64
         switch hex.count {
         case 3:  // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+            (alpha, red, green, blue) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
         case 6:  // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+            (alpha, red, green, blue) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
         case 8:  // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+            (alpha, red, green, blue) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
         default:
             // Opaque gray fallback for malformed hex strings.
-            (a, r, g, b) = (255, 128, 128, 128)
+            (alpha, red, green, blue) = (255, 128, 128, 128)
         }
 
         self.init(
             .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
+            red: Double(red) / 255,
+            green: Double(green) / 255,
+            blue: Double(blue) / 255,
+            opacity: Double(alpha) / 255
         )
     }
 
@@ -35,13 +34,13 @@ extension Color {
             return nil
         }
 
-        let r = Int(rgbColor.redComponent * 255)
-        let g = Int(rgbColor.greenComponent * 255)
-        let b = Int(rgbColor.blueComponent * 255)
-        let a = Int(rgbColor.alphaComponent * 255)
+        let red = Int(rgbColor.redComponent * 255)
+        let green = Int(rgbColor.greenComponent * 255)
+        let blue = Int(rgbColor.blueComponent * 255)
+        let alpha = Int(rgbColor.alphaComponent * 255)
 
         return includeAlpha
-            ? String(format: "#%02X%02X%02X%02X", r, g, b, a)
-            : String(format: "#%02X%02X%02X", r, g, b)
+            ? String(format: "#%02X%02X%02X%02X", red, green, blue, alpha)
+            : String(format: "#%02X%02X%02X", red, green, blue)
     }
 }

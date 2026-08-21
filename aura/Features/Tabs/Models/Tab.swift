@@ -149,11 +149,21 @@ class Tab: ObservableObject, Identifiable {
             }
     }
 
+    /// `urlString` is the searchable mirror of `url`; SwiftData cannot match on a `URL`,
+    /// so leaving it behind hid the tab from tab search under its current address.
+    func updateURL(_ newURL: URL) {
+        guard newURL != url else { return }
+        url = newURL
+        urlString = newURL.absoluteString
+    }
+
     func switchSections(from: Tab, to: Tab) {
         from.type = to.type
         switch to.type {
         case .pinned, .fav:
             from.savedURL = from.url
+            // Only normal tabs live in folders.
+            from.folder = nil
         case .normal:
             from.savedURL = nil
         }
@@ -209,11 +219,21 @@ class Tab: ObservableObject, Identifiable {
         updateHeaderColor()
     }
 
+    /// A pinned or favourite tab reopens at the URL it was pinned at, which is what
+    /// `savedURL` is for. Everything else reopens where it was.
+    var launchURL: URL {
+        type == .normal ? url : (savedURL ?? url)
+    }
+
+    /// `loading` overrides `launchURL` for the one case where the tab is being sent
+    /// somewhere new rather than restored: a pinned tab whose web view was already gone
+    /// otherwise snapped back to its pinned URL instead of following the address bar.
     func restoreTransientState(
         historyManager: HistoryManager,
         downloadManager: DownloadManager,
         tabManager: TabManager,
-        isPrivate: Bool
+        isPrivate: Bool,
+        loading: URL? = nil
     ) {
         // aura:// pages render natively in SwiftUI, so they never get a web view.
         if url.isOraInternal {
@@ -259,8 +279,7 @@ class Tab: ObservableObject, Identifiable {
         self.syncBackgroundColorFromHex()
         // Load after a short delay to ensure layout
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-            let url = if self.type != .normal { self.savedURL } else { self.url }
-            page.load(URLRequest(url: url ?? self.url))
+            page.load(URLRequest(url: loading ?? self.launchURL))
             self.isWebViewReady = true
         }
     }
@@ -326,8 +345,7 @@ class Tab: ObservableObject, Identifiable {
     private func navigate(to target: URL) {
         if target.isOraInternal {
             destroyWebView()
-            url = target
-            urlString = target.absoluteString
+            updateURL(target)
             if target.isOraHome {
                 title = "New Tab"
                 favicon = nil
@@ -340,14 +358,14 @@ class Tab: ObservableObject, Identifiable {
             return
         }
         guard let page = browserPage else {
-            url = target
-            urlString = target.absoluteString
+            updateURL(target)
             if let historyManager, let downloadManager, let tabManager {
                 restoreTransientState(
                     historyManager: historyManager,
                     downloadManager: downloadManager,
                     tabManager: tabManager,
-                    isPrivate: isPrivate
+                    isPrivate: isPrivate,
+                    loading: target
                 )
             }
             return

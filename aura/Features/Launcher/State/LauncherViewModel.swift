@@ -110,6 +110,12 @@ class LauncherViewModel: ObservableObject {
         }
     }
 
+    /// Runs the typed text through the caller's submit path, skipping the suggestion list.
+    /// Used when a search-engine capsule is showing and the list is hidden.
+    func submitTypedText() {
+        onSubmit?(nil)
+    }
+
     func moveFocusedElement(_ dir: MoveDirection) {
         guard let idx = suggestions.firstIndex(where: { $0.id == focusedElement }) else { return }
         let offset = dir == .up ? -1 : 1

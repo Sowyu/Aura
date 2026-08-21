@@ -76,7 +76,10 @@ import SwiftUI
                 let contextAnimation = context.transaction.animation
                 let animated = selectionAnimation != nil || contextAnimation != nil
                 logger.log(
-                    "updateNSViewController new \(selection.wrappedValue), count: \(pageObjects.count), animated: \(animated)"
+                    """
+                    updateNSViewController new \(selection.wrappedValue), \
+                    count: \(pageObjects.count), animated: \(animated)
+                    """
                 )
                 logger.log(
                     "updateNSViewController old \(controller.selectedIndex), count: \(controller.pageObjects.count)"

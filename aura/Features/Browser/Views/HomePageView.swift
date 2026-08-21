@@ -32,6 +32,8 @@ struct HomePageView: View {
     private static let horizontalInset: CGFloat = 48
     private static let tileSize: CGFloat = 40
     private static let maxShortcuts = 8
+    /// Gap between the suggestion panel's edge and its rows.
+    private static let panelPadding: CGFloat = 6
 
     var body: some View {
         GeometryReader { geo in
@@ -87,6 +89,11 @@ struct HomePageView: View {
             onSubmit: { viewModel.executeCommand() },
             onMoveUp: { viewModel.moveFocusedElement(.up) },
             onMoveDown: { viewModel.moveFocusedElement(.down) },
+            // Nothing to dismiss here, so Escape clears the query and its list.
+            onEscape: {
+                input = ""
+                viewModel.reset()
+            },
             placeholder: "Search the web or enter URL...",
             // `true` asks for focus, `nil` leaves focus alone. A permanent `true`
             // would yank first responder back every time the view updated.
@@ -106,11 +113,16 @@ struct HomePageView: View {
     private var suggestions: some View {
         if !viewModel.suggestions.isEmpty {
             LauncherSuggestionsView(
-                text: $input,
                 suggestions: $viewModel.suggestions,
-                focusedElement: $viewModel.focusedElement
+                focusedElement: $viewModel.focusedElement,
+                leadingInset: LauncherRowMetrics.leadingInset(
+                    textInset: LauncherField.textInset,
+                    panelPadding: Self.panelPadding,
+                    iconWidth: LauncherField.iconWidth
+                ),
+                iconWidth: LauncherField.iconWidth
             )
-            .padding(6)
+            .padding(Self.panelPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.launcherMainBackground)
             .clipShape(ConditionallyConcentricRectangle(

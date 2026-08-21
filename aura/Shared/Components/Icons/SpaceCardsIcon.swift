@@ -1,7 +1,11 @@
-// swiftlint:disable file_length function_body_length type_body_length
+// swiftlint:disable file_length
+// A traced vector path: one statement per control point, nothing to factor out.
 import SwiftUI
 
+// swiftlint:disable:next type_body_length
 struct SpaceCardsIcon: Shape {
+    // Traced vector path, one line per control point.
+    // swiftlint:disable:next function_body_length
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let width = rect.size.width

@@ -71,8 +71,13 @@ struct BrowserNavigationEvent {
 struct BrowserSnapshotConfiguration {
     let rect: CGRect?
     let afterScreenUpdates: Bool
+    /// Downscales the result; a rect-scoped snapshot is a known WebKit flash trigger,
+    /// so callers that only need a colour take the whole view at a tiny width instead.
+    var snapshotWidth: CGFloat?
 
     static let full = BrowserSnapshotConfiguration(rect: nil, afterScreenUpdates: false)
+    /// Full view, 32 px wide, waiting for the next frame: cheap and never blanks the page.
+    static let thumbnail = BrowserSnapshotConfiguration(rect: nil, afterScreenUpdates: true, snapshotWidth: 32)
 }
 
 /// What sat under the pointer when the page's context menu was asked for. Filled by the

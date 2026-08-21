@@ -209,6 +209,9 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         if let rect = configuration.rect {
             snapshotConfiguration.rect = rect
         }
+        if let width = configuration.snapshotWidth {
+            snapshotConfiguration.snapshotWidth = NSNumber(value: Double(width))
+        }
         webView.takeSnapshot(with: snapshotConfiguration, completionHandler: completion)
     }
 

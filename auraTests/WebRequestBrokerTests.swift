@@ -93,6 +93,46 @@ struct WebRequestBrokerTests {
         #expect(second == nil)
     }
 
+    /// An add-on update replaces the folder wholesale, so the copy that lands is
+    /// the one the author shipped and the shim has to go back in front of it.
+    /// The failure this pins down is the opposite one: a second patch stacking
+    /// another pair of script tags, or the pristine-manifest backup being
+    /// overwritten with an already-patched copy.
+    @Test
+    func anUpdatedAddOnIsRepatchedExactlyOnce() throws {
+        let profile = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("aura-update-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: profile) }
+
+        let installed = try #require(try Self.installBundledUBlock(into: profile))
+        #expect(try ExtensionShim.apply(at: installed))
+        #expect(ExtensionShim.isPatched(at: installed))
+
+        // What an update does: the old folder goes, the newly downloaded one
+        // takes its place under the same name.
+        let staging = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("aura-update-new-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: staging) }
+        let fresh = try #require(try Self.installBundledUBlock(into: staging))
+        try FileManager.default.removeItem(at: installed)
+        try FileManager.default.moveItem(at: fresh, to: installed)
+
+        #expect(!ExtensionShim.isPatched(at: installed), "a freshly downloaded copy has never been patched")
+        #expect(try ExtensionShim.apply(at: installed), "an update has to be patched again")
+
+        let popup = try String(
+            contentsOf: installed.appendingPathComponent("dashboard.html"), encoding: .utf8
+        )
+        #expect(popup.components(separatedBy: "/aura-shim.js").count == 2, "exactly one shim tag after an update")
+
+        let backup = installed.appendingPathComponent(ExtensionShim.originalManifestName)
+        let original = try #require(
+            try JSONSerialization.jsonObject(with: Data(contentsOf: backup)) as? [String: Any]
+        )
+        #expect(original[ExtensionShim.versionKey] == nil, "the backup has to be the manifest as downloaded")
+        #expect(original["name"] as? String == "uBlock Origin")
+    }
+
     // MARK: - Filters
 
     @Test
@@ -103,6 +143,11 @@ struct WebRequestBrokerTests {
         #expect(MatchPattern("https://*/*")?.matches("http://example.com/a") == false)
         #expect(MatchPattern("*://ads.example/*")?.matches("http://ads.example/pixel.png") == true)
         #expect(MatchPattern("*://ads.example/*")?.matches("http://other.example/pixel.png") == false)
+        // A leading `*` is the scheme slot, not "anything at all". Left as `.*`
+        // it matched any URL that mentioned the pattern anywhere in a query.
+        #expect(
+            MatchPattern("*://ads.example/*")?.matches("https://evil.test/?u=http://ads.example/x") == false
+        )
     }
 
     // MARK: - End to end
@@ -161,6 +206,279 @@ struct WebRequestBrokerTests {
         print(String(format: "BENCH webrequest-roundtrip samples=%d median_ms=%.2f",
                      WebRequestBroker.shared.latencies.count, median))
         #expect(median < WebRequestBroker.timeout * 1000, "round trip should beat the timeout")
+    }
+
+    /// Every resource kind a listener can filter on, checked against a real
+    /// WebKit load rather than against what the classifier is assumed to see.
+    ///
+    /// The extension cancels a request only when `details.type` equals the
+    /// `want=` parameter baked into its URL, so a path the server never saw was
+    /// classified correctly and a path it did see was not. Two controls carry
+    /// the wrong `want=` and must come through.
+    @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
+    @MainActor
+    func everyResourceKindReachesTheListenerAsTheRightType() async throws {
+        guard #available(macOS 15.4, *) else { return }
+
+        let directory = try makeExtension(background: ["scripts": ["bg.js"]])
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try Self.typeProbeBackground.write(
+            to: directory.appendingPathComponent("bg.js"), atomically: true, encoding: .utf8
+        )
+        #expect(try ExtensionShim.apply(at: directory))
+
+        let engine = ExtensionEngine()
+        let server = try LocalHTTPServer(html: Self.typeProbePage)
+        defer { server.stop() }
+        let port = try await server.start()
+
+        let webView = try loopbackWebView(engine: engine)
+        defer { webView.window?.close() }
+
+        let id = "aura-type-probe"
+        _ = try await engine.load(directory: directory, id: id)
+        defer { engine.unload(id: id) }
+        let ready = await waitForBroker(id)
+        #expect(ready, "the probe extension never registered its listener")
+        guard ready else { return }
+
+        webView.load(URLRequest(url: try #require(URL(string: "http://127.0.0.1:\(port)/index.html"))))
+        // The page fires everything it is going to fire in one go; wait until the
+        // server has been quiet for a beat rather than for a flag per resource.
+        let served = await settledPaths(of: server)
+
+        // Reported, not asserted: the classifier reads `Accept`, and this is the
+        // only place the header WebKit really sends can be seen.
+        for (path, fields) in server.servedHeaders.sorted(by: { $0.key < $1.key }) where path.contains("/probe/") {
+            print("PROBE \(path) accept=\(fields["accept"] ?? "-") sec-fetch-dest=\(fields["sec-fetch-dest"] ?? "-")")
+        }
+
+        let cancelled = { (path: String) in !served.contains { $0.hasPrefix(path) } }
+        #expect(cancelled("/probe/image?"), "an <img> should classify as image; served \(served)")
+        #expect(cancelled("/probe/script.js?"), "a <script src> should classify as script")
+        #expect(cancelled("/probe/style.css?"), "a <link rel=stylesheet> should classify as stylesheet")
+        #expect(cancelled("/probe/xhr.json?"), "a fetch should classify as xmlhttprequest")
+        #expect(cancelled("/probe/xhr-plain?"), "Sec-Fetch-Dest names a fetch even with no path extension")
+        #expect(cancelled("/probe/face.woff2?"), "a FontFace load should classify as font")
+        #expect(cancelled("/probe/frame?"), "an <iframe src> should classify as sub_frame")
+        #expect(!cancelled("/probe/image-control?"), "a mismatched want= must not cancel: \(served)")
+        #expect(!cancelled("/probe/xhr-control.json?"), "a mismatched want= must not cancel: \(served)")
+
+        // WebSocket handshakes do not go through the injected bundle's resource
+        // load client on every WebKit build, so this reports rather than fails.
+        print("PROBE websocket cancelled=\(cancelled("/probe/socket?"))")
+    }
+
+    /// A listener that cancels everything still must not cancel the page itself.
+    /// WebKit reports a blanked main resource as a failed navigation, which used
+    /// to swap the whole tab for an error view.
+    @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
+    @MainActor
+    func onBeforeRequestNeverCancelsTheMainDocument() async throws {
+        guard #available(macOS 15.4, *) else { return }
+
+        let directory = try makeExtension(background: ["scripts": ["bg.js"]])
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try "browser.webRequest.onBeforeRequest.addListener(() => ({ cancel: true }), "
+            .appending("{ urls: ['<all_urls>'] }, ['blocking']);\n")
+            .write(to: directory.appendingPathComponent("bg.js"), atomically: true, encoding: .utf8)
+        #expect(try ExtensionShim.apply(at: directory))
+
+        let engine = ExtensionEngine()
+        let server = try LocalHTTPServer()
+        defer { server.stop() }
+        let port = try await server.start()
+
+        let webView = try loopbackWebView(engine: engine)
+        defer { webView.window?.close() }
+
+        let id = "aura-cancel-everything"
+        _ = try await engine.load(directory: directory, id: id)
+        defer { engine.unload(id: id) }
+        let ready = await waitForBroker(id)
+        #expect(ready)
+        guard ready else { return }
+
+        let url = try #require(URL(string: "http://127.0.0.1:\(port)/index.html"))
+        let loaded = await load(url, in: webView, timeout: 25)
+        #expect(loaded, "the document itself was cancelled; the tab would be blank")
+        #expect(webView.url?.absoluteString == url.absoluteString, "got \(webView.url?.absoluteString ?? "nil")")
+        #expect(server.servedPaths.contains("/index.html"))
+        // Everything under the document is fair game and should be gone.
+        #expect(!server.servedPaths.contains("/tracker.js"))
+    }
+
+    /// A `redirectUrl` verdict rewrites the request before it exists, so the
+    /// original never reaches the network and the replacement does.
+    @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
+    @MainActor
+    func aRedirectVerdictSwapsTheRequestBeforeItLeaves() async throws {
+        guard #available(macOS 15.4, *) else { return }
+
+        let server = try LocalHTTPServer()
+        defer { server.stop() }
+        let port = try await server.start()
+
+        let directory = try makeExtension(background: ["scripts": ["bg.js"]])
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let script = """
+        const replacement = 'http://127.0.0.1:\(port)/neutered.js';
+        browser.webRequest.onBeforeRequest.addListener(
+            details => (details.url.includes('/tracker.js') ? { redirectUrl: replacement } : {}),
+            { urls: ['<all_urls>'] },
+            ['blocking']
+        );
+        """
+        try script.write(to: directory.appendingPathComponent("bg.js"), atomically: true, encoding: .utf8)
+        #expect(try ExtensionShim.apply(at: directory))
+
+        let engine = ExtensionEngine()
+        let webView = try loopbackWebView(engine: engine)
+        defer { webView.window?.close() }
+
+        let id = "aura-redirect-test"
+        _ = try await engine.load(directory: directory, id: id)
+        defer { engine.unload(id: id) }
+        let ready = await waitForBroker(id)
+        #expect(ready)
+        guard ready else { return }
+
+        webView.load(URLRequest(url: try #require(URL(string: "http://127.0.0.1:\(port)/index.html"))))
+        let state = try await settledPageState(of: webView)
+        let served = server.servedPaths
+
+        #expect(!served.contains("/tracker.js"), "the original still went out: \(served)")
+        #expect(served.contains("/neutered.js"), "the replacement never went out: \(served)")
+        #expect(state["script"] as? String == "load", "the redirected script should still run")
+    }
+
+    /// Unloading an extension has to take its listeners with it. WebKit does not
+    /// always disconnect the native ports the shim opened, and a listener left
+    /// behind keeps the injected bundle asking a port nobody answers on, which
+    /// charges every request on every page the full timeout.
+    @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
+    @MainActor
+    func unloadingAnExtensionTakesItsListenersWithIt() async throws {
+        guard #available(macOS 15.4, *) else { return }
+
+        let directory = try makeBlockingExtension()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        #expect(try ExtensionShim.apply(at: directory))
+
+        let engine = ExtensionEngine()
+        let id = "aura-unload-test"
+        _ = try await engine.load(directory: directory, id: id)
+        let ready = await waitForBroker(id)
+        #expect(ready)
+        guard ready else {
+            engine.unload(id: id)
+            return
+        }
+        #expect(WebRequestBroker.shared.isActive)
+
+        engine.unload(id: id)
+        #expect(!WebRequestBroker.shared.hasBlockingListener(for: id), "the listener outlived its extension")
+        #expect(!WebRequestBroker.shared.isActive, "the bundle would keep asking after an unload")
+        #expect(!ExtensionMessageRelay.shared.hasBackground(for: id))
+    }
+
+    /// A background page that stops answering. It registers a blocking listener
+    /// and then wedges its own thread, which is what a real one looks like after
+    /// it throws mid-start-up. Without the circuit breaker every subresource on
+    /// every page pays `WebRequestBroker.timeout`.
+    @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
+    @MainActor
+    func aWedgedBackgroundPageStopsBeingAsked() async throws {
+        guard #available(macOS 15.4, *) else { return }
+
+        let directory = try makeExtension(background: ["scripts": ["bg.js"]])
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try Self.wedgedBackground.write(
+            to: directory.appendingPathComponent("bg.js"), atomically: true, encoding: .utf8
+        )
+        #expect(try ExtensionShim.apply(at: directory))
+
+        let engine = ExtensionEngine()
+        let server = try LocalHTTPServer()
+        defer { server.stop() }
+        let port = try await server.start()
+
+        let webView = try loopbackWebView(engine: engine)
+        defer { webView.window?.close() }
+
+        let id = "aura-wedged-test"
+        _ = try await engine.load(directory: directory, id: id)
+        defer { engine.unload(id: id) }
+        let ready = await waitForBroker(id)
+        #expect(ready)
+        guard ready else { return }
+        // The active flag is pushed to live web processes one way, so the page
+        // has to start after it lands or the bundle asks nothing at all.
+        try? await Task.sleep(for: .seconds(2))
+
+        let latenciesBefore = WebRequestBroker.shared.latencies.count
+        let started = Date()
+        let loaded = await load(try #require(URL(string: "http://127.0.0.1:\(port)/index.html")),
+                                in: webView, timeout: 40)
+        let penalty = Date().timeIntervalSince(started) * 1000
+        print(String(format: "BENCH deadlistener page_load_ms=%.0f muted=%@ answered=%d requests=%d",
+                     penalty, WebRequestBroker.shared.isMuted(id) ? "yes" : "no",
+                     WebRequestBroker.shared.latencies.count - latenciesBefore, server.servedPaths.count))
+
+        #expect(loaded, "a wedged listener must not stop the page loading")
+        #expect(WebRequestBroker.shared.isMuted(id), "the broker kept asking an extension that never answers")
+        // The printed millisecond figure is the page-load penalty. It is left
+        // unasserted on purpose: this fixture page has six subresources, so the
+        // number is dominated by whatever else the machine is doing.
+    }
+
+    /// Fifty pages opening a tunnelled port and going away. Every one of them
+    /// used to leave its port in the relay's owner table, because WebKit does not
+    /// always call the disconnect handler for a web view that was torn down.
+    @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
+    @MainActor
+    func tunnelledPortsDoNotLeakAcrossManyPageOpens() async throws {
+        guard #available(macOS 15.4, *) else { return }
+
+        let directory = try makeRelayExtension()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        #expect(try ExtensionShim.apply(at: directory))
+
+        let engine = ExtensionEngine()
+        let id = "aura-port-leak-test"
+        _ = try await engine.load(directory: directory, id: id)
+        defer { engine.unload(id: id) }
+
+        let context = try #require(engine.context(for: id))
+        let attached = await poll(timeout: 20) { ExtensionMessageRelay.shared.hasBackground(for: id) }
+        #expect(attached)
+        guard attached else { return }
+
+        let before = ExtensionMessageRelay.shared.openPortCount(for: id)
+        let optionsPage = try #require(context.optionsPageURL)
+        var peak = before
+        for _ in 0 ..< 50 {
+            let page = try extensionPageWebView(for: context)
+            page.load(URLRequest(url: optionsPage))
+            _ = await poll(timeout: 10) {
+                (try? await page.evaluateJavaScript("window.__auraDone === true")) as? Bool == true
+            }
+            peak = max(peak, ExtensionMessageRelay.shared.openPortCount(for: id))
+            page.window?.close()
+            page.removeFromSuperview()
+        }
+        // A closed port is reaped either by its own handler or by the next page
+        // attaching, so one more open is what settles the count.
+        let settle = try extensionPageWebView(for: context)
+        settle.load(URLRequest(url: optionsPage))
+        _ = await poll(timeout: 10) {
+            ExtensionMessageRelay.shared.openPortCount(for: id) <= 2
+        }
+        settle.window?.close()
+        let after = ExtensionMessageRelay.shared.openPortCount(for: id)
+
+        print("RELAY ports before=\(before) peak=\(peak) after=\(after) over 50 opens")
+        #expect(after <= 2, "50 page opens leaked \(after) tunnelled ports")
     }
 
     // MARK: - uBlock Origin
@@ -350,6 +668,20 @@ struct WebRequestBrokerTests {
         #expect(!report.contains("\"blocked\":\"\""), "the popup should show a blocked count")
         #expect(ExtensionMessageRelay.shared.openPortCount(for: id) > 0, "the popup's port should be tunnelled")
 
+        // Per-site power. Clicking uBO's switch posts to the background page
+        // over the relay and the panel repaints from what comes back, so a
+        // changed body class is proof of a full round trip rather than of a
+        // local class toggle.
+        let restingClass = await popupBodyClass(popup)
+        _ = try? await popup.evaluateJavaScript("document.getElementById('switch').click()")
+        let switched = await poll(timeout: 20) { await self.popupBodyClass(popup) != restingClass }
+        let offClass = await popupBodyClass(popup)
+        _ = try? await popup.evaluateJavaScript("document.getElementById('switch').click()")
+        let restored = await poll(timeout: 20) { await self.popupBodyClass(popup) == restingClass }
+        print("UBO POWER resting=\(restingClass) toggled=\(offClass)")
+        #expect(switched, "the power button never round-tripped to the background page")
+        #expect(restored, "toggling back left the popup stuck at \(offClass)")
+
         // The dashboard is the harder case: a page in a tab that frames another
         // page, each one connecting on its own.
         let dashboard = try extensionPageWebView(for: context)
@@ -363,6 +695,14 @@ struct WebRequestBrokerTests {
         let count = (try? await dashboard.evaluateJavaScript(Self.filterListCount)) as? Int ?? 0
         print("UBO DASHBOARD filter lists: \(count)")
         #expect(lists, "the dashboard's filter-list pane came up empty")
+    }
+
+    /// uBO writes the panel's state onto the body as classes, and it only does
+    /// that from the payload the background page sends back.
+    @MainActor
+    private func popupBodyClass(_ popup: WKWebView) async -> String {
+        let value = try? await popup.evaluateJavaScript("document.body ? document.body.className : ''")
+        return (value as? String) ?? ""
     }
 
     /// What the popup looks like from the inside, as one JSON line in the log.
@@ -467,6 +807,107 @@ struct WebRequestBrokerTests {
         }
     })();
     """
+
+    // MARK: - Fixtures for the type probe and the wedged listener
+
+    /// Cancels a request only when the classifier agreed with the `want=` the
+    /// URL carries, which turns "was it served" into the whole assertion.
+    private static let typeProbeBackground = """
+    browser.webRequest.onBeforeRequest.addListener(details => {
+        let want = null;
+        try { want = new URL(details.url).searchParams.get('want'); } catch (error) { want = null; }
+        return { cancel: want !== null && want === details.type };
+    }, { urls: ['<all_urls>'] }, ['blocking']);
+    """
+
+    /// One request per resource kind, each labelled with the type it should be
+    /// classified as. The two `-control` paths carry the wrong label on purpose.
+    private static let typeProbePage = """
+    <!doctype html><meta charset="utf-8">
+    <link rel="stylesheet" href="/probe/style.css?want=stylesheet">
+    <body>
+    <img src="/probe/image?want=image">
+    <img src="/probe/image-control?want=script">
+    <script src="/probe/script.js?want=script"></script>
+    <iframe src="/probe/frame?want=sub_frame"></iframe>
+    <script>
+    fetch('/probe/xhr.json?want=xmlhttprequest').catch(function () {});
+    fetch('/probe/xhr-plain?want=xmlhttprequest').catch(function () {});
+    fetch('/probe/xhr-control.json?want=image').catch(function () {});
+    new FontFace('AuraProbe', 'url(/probe/face.woff2?want=font)').load().catch(function () {});
+    try { new WebSocket(location.origin.replace('http', 'ws') + '/probe/socket?want=websocket'); }
+    catch (error) { /* the fixture server does not speak WebSocket */ }
+    </script>
+    </body>
+    """
+
+    /// A listener that takes far longer than the broker will wait. The host sees
+    /// exactly what it sees from a background page that stopped servicing its
+    /// run loop: the ask goes out, the deadline passes, the verdict turns up too
+    /// late to be wanted. Blocking inside the listener rather than on a timer,
+    /// because WebKit does not run a background page's timers reliably.
+    private static let wedgedBackground = """
+    browser.webRequest.onBeforeRequest.addListener(
+        () => {
+            const end = Date.now() + 500;
+            while (Date.now() < end) { /* too slow on purpose */ }
+            return { cancel: false };
+        },
+        { urls: ['<all_urls>'] },
+        ['blocking']
+    );
+    """
+
+    /// A web view on the injected-bundle pool with `engine`'s extensions
+    /// attached, in a real window so WebKit does not throttle it.
+    @available(macOS 15.4, *)
+    @MainActor
+    private func loopbackWebView(engine: ExtensionEngine) throws -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.processPool = try #require(AuraWebBundle.processPool)
+        configuration.webExtensionController = engine.controller
+        configuration.websiteDataStore = .nonPersistent()
+
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), configuration: configuration)
+        let window = NSWindow(contentRect: webView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = webView
+        window.makeKeyAndOrderFront(nil)
+        return webView
+    }
+
+    /// Loads `url` and waits for that document, not the empty one the web view
+    /// starts on: a fresh WKWebView is already sitting on about:blank with
+    /// `readyState` at "complete", so waiting on readyState alone returns before
+    /// the load has even begun.
+    @MainActor
+    private func load(_ url: URL, in webView: WKWebView, timeout: TimeInterval) async -> Bool {
+        webView.load(URLRequest(url: url))
+        return await poll(timeout: timeout) {
+            let here = (try? await webView.evaluateJavaScript("location.href")) as? String
+            guard here == url.absoluteString else { return false }
+            return ((try? await webView.evaluateJavaScript("document.readyState")) as? String) == "complete"
+        }
+    }
+
+    /// Waits until the fixture server has gone a full second without a new
+    /// request, which is what "the page issued everything it was going to" looks
+    /// like from the outside.
+    private func settledPaths(of server: LocalHTTPServer, timeout: TimeInterval = 25) async -> [String] {
+        let deadline = Date().addingTimeInterval(timeout)
+        var last = server.servedPaths.count
+        var quietSince = Date()
+        while Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(250))
+            let now = server.servedPaths.count
+            if now != last {
+                last = now
+                quietSince = Date()
+                continue
+            }
+            if now > 0, Date().timeIntervalSince(quietSince) > 1 { break }
+        }
+        return server.servedPaths
+    }
 
     // MARK: - Helpers
 

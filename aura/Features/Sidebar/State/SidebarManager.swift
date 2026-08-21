@@ -117,7 +117,13 @@ final class SidebarManager {
     /// The hidden-sidebar and hidden-toolbar flags persist under their own keys and
     /// drift from `compactHides` between launches, so the window re-applies on open.
     func applyCompactModeIfEnabled(toolbar: ToolbarManager) {
-        guard isCompactEnabled else { return }
+        guard isCompactEnabled else {
+            // `isSidebarHidden` and the split's own side holder are two stored keys that
+            // can disagree, and a side stored before the sidebar moved names the wrong
+            // pane. Either way the sidebar goes missing with no edge to bring it back.
+            setSidebarHidden(isSidebarHidden)
+            return
+        }
         applyCompactMode(toolbar: toolbar)
     }
 

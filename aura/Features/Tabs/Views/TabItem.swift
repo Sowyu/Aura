@@ -143,20 +143,9 @@ struct TabItem: View {
                 : nil
         )
         .contentShape(ConditionallyConcentricRectangle(cornerRadius: 10))
-        .onTapGesture {
-            onTap()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                if !tab.isWebViewReady {
-                    tab
-                        .restoreTransientState(
-                            historyManager: historyManager,
-                            downloadManager: downloadManager,
-                            tabManager: tabManager,
-                            isPrivate: privacyMode.isPrivate
-                        )
-                }
-            }
-        }
+        // `activateTab` rebuilds the web view for a hibernated tab on the way in, so
+        // there is nothing to chase here.
+        .onTapGesture { onTap() }
         .onHover { isHovering = $0 }
         .auraContextMenu { contextMenuItems }
         .animation(AnimationSettings.easeOut(0.15), value: isDragging)
@@ -221,12 +210,9 @@ struct TabItem: View {
                 icon: tab.type == .fav ? "star.slash" : "star",
                 action: onFavoriteToggle
             )
-            AuraMenuItem.item(
-                "Duplicate Tab",
-                icon: "doc.on.doc",
-                isDisabled: !tab.isWebViewReady,
-                action: onDuplicate
-            )
+            // Duplicating works without a live web view: a hibernated tab and an
+            // aura:// page both copy fine.
+            AuraMenuItem.item("Duplicate Tab", icon: "doc.on.doc", action: onDuplicate)
             AuraMenuItem.separator
             AuraMenuItem.item("Copy Link", icon: "link") {
                 ClipboardUtils.copyToClipboard(tab.url.absoluteString)

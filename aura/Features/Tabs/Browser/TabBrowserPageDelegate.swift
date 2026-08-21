@@ -67,7 +67,7 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
             tab.isLoading = event.isLoading
             tab.loadingProgress = event.progress
             if let url = event.url {
-                tab.url = url
+                tab.updateURL(url)
             }
 
         case .committed:
@@ -90,10 +90,11 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
                 }
             }
             if let url = event.url {
-                tab.url = url
-                if tab.favicon == nil {
-                    tab.setFavicon()
-                }
+                tab.updateURL(url)
+                // Unconditional: `setFavicon` no-ops when the domain already matches, and
+                // gating on `favicon == nil` left the previous site's icon on the tab
+                // after a cross-domain navigation.
+                tab.setFavicon()
                 tab.updateHistory()
                 tab.updateHeaderColor()
             }
@@ -245,14 +246,14 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
     func takeSnapshotAfterLoad(_ page: BrowserPage) -> Bool {
         guard !page.isLoading, page.contentView.bounds.width > 0 else { return false }
 
-        page.takeSnapshot(
-            configuration: BrowserSnapshotConfiguration(
-                rect: CGRect(x: 0, y: 0, width: page.contentView.bounds.width, height: 24),
-                afterScreenUpdates: false
-            )
-        ) { [weak self] image, error in
+        page.takeSnapshot(configuration: .thumbnail) { [weak self] image, error in
             guard let self, let image, error == nil else { return }
-            guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+            guard let fullImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+            // The header colour comes from the top of the page, as the old 24pt strip did:
+            // keep the top tenth of the thumbnail (at least one row) before averaging.
+            let stripHeight = max(1, fullImage.height / 10)
+            let strip = CGRect(x: 0, y: 0, width: fullImage.width, height: stripHeight)
+            let cgImage = fullImage.cropping(to: strip) ?? fullImage
 
             let color = self.extractDominantColor(from: cgImage) ?? .black
             DispatchQueue.main.async {
@@ -274,7 +275,9 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
 
         let oldTitle = tab.title
         tab.title = update.title
-        tab.url = URL(string: update.href) ?? tab.url
+        if let href = URL(string: update.href) {
+            tab.updateURL(href)
+        }
         tab.setFavicon()
         tab.updateHistory()
 

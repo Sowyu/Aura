@@ -51,6 +51,27 @@ final class WebRequestBroker {
     private var nextRequestID = 1
     private var isDeciding = false
 
+    /// Consecutive timeouts an extension is allowed before it stops being asked.
+    /// A background page that wedged (uBlock Origin mid-filter-compile, or one
+    /// that threw on start-up) would otherwise charge every single request on
+    /// every page the full `timeout`, and a page of 80 subresources turns into
+    /// twelve seconds of stalled main thread.
+    static let timeoutsBeforeMuting = 3
+    /// How long a muted extension is skipped for. Long enough to get a page
+    /// loaded, short enough that an extension which recovers is asked again.
+    static let muteDuration: TimeInterval = 5
+
+    private var consecutiveTimeouts: [String: Int] = [:]
+    private var mutedUntil: [String: Date] = [:]
+
+    /// True while `extensionID` is being skipped for timing out.
+    func isMuted(_ extensionID: String) -> Bool {
+        guard let until = mutedUntil[extensionID] else { return false }
+        if until > Date() { return true }
+        mutedUntil.removeValue(forKey: extensionID)
+        return false
+    }
+
     /// Round-trip times in milliseconds, newest last. Capped; the tests read the
     /// median off this.
     private(set) var latencies: [Double] = []
@@ -60,7 +81,7 @@ final class WebRequestBroker {
     /// True while some extension has a blocking listener and a port to answer on.
     /// The bundle's active flag follows this.
     var isActive: Bool {
-        listeners.values.contains { hasLivePort(for: $0.extensionID) }
+        listeners.values.contains { hasLivePort(for: $0.extensionID) && !isMuted($0.extensionID) }
     }
 
     func hasBlockingListener(for extensionID: String) -> Bool {
@@ -108,6 +129,8 @@ final class WebRequestBroker {
     func detach(extensionID: String) {
         ports.removeValue(forKey: extensionID)
         listeners = listeners.filter { $0.value.extensionID != extensionID }
+        consecutiveTimeouts.removeValue(forKey: extensionID)
+        mutedUntil.removeValue(forKey: extensionID)
         writeState()
     }
 
@@ -187,7 +210,7 @@ final class WebRequestBroker {
         let type = details["type"] as? String ?? "other"
         let interested = Set(
             listeners.values.filter { $0.matches(url: url, type: type) }.map(\.extensionID)
-        )
+        ).filter { !isMuted($0) }
         guard !interested.isEmpty else { return ["cacheable": true] }
 
         isDeciding = true
@@ -220,8 +243,10 @@ final class WebRequestBroker {
 
         guard let answer = answers[id] else {
             Self.log.debug("webRequest listener timed out for \(url, privacy: .private)")
+            noteTimeout(for: interested)
             return ["cacheable": false]
         }
+        for extensionID in interested { consecutiveTimeouts.removeValue(forKey: extensionID) }
         record(latency: (CFAbsoluteTimeGetCurrent() - start) * 1000)
 
         var verdict: [String: Any] = ["cacheable": true]
@@ -231,6 +256,30 @@ final class WebRequestBroker {
             verdict["redirectUrl"] = redirect
         }
         return verdict
+    }
+
+    /// Which extension failed to answer is unknowable: the reply carries the
+    /// request id, not a sender. Asking two blocking extensions at once is rare
+    /// enough that charging the timeout to all of them is the honest simple
+    /// reading, and a single answer clears every one of their counters.
+    private func noteTimeout(for extensionIDs: Set<String>) {
+        var muted = false
+        for extensionID in extensionIDs {
+            let count = (consecutiveTimeouts[extensionID] ?? 0) + 1
+            consecutiveTimeouts[extensionID] = count
+            guard count >= Self.timeoutsBeforeMuting else { continue }
+            consecutiveTimeouts[extensionID] = 0
+            mutedUntil[extensionID] = Date().addingTimeInterval(Self.muteDuration)
+            muted = true
+            Self.log.error("\(extensionID, privacy: .public) stopped answering; muted for \(Self.muteDuration)s")
+        }
+        guard muted else { return }
+        // Stops the injected bundle asking at all while nothing can answer.
+        writeState()
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.muteDuration))
+            self?.writeState()
+        }
     }
 
     private func record(latency: Double) {
@@ -263,7 +312,11 @@ struct MatchPattern {
         } else {
             let escaped = NSRegularExpression.escapedPattern(for: pattern)
                 .replacingOccurrences(of: "\\*", with: ".*")
-            source = "^" + escaped + "$"
+            // A leading `*://` means any scheme, not any prefix. Left as `.*` it
+            // would also match a URL that merely contains the pattern later on.
+            source = "^" + escaped.replacingOccurrences(
+                of: "^\\.\\*:", with: "[a-z]+:", options: .regularExpression
+            ) + "$"
         }
         guard let expression = try? NSRegularExpression(pattern: source) else { return nil }
         self.expression = expression

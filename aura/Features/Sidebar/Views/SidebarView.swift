@@ -234,9 +234,10 @@ struct SidebarView: View {
 
     private var spacesContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The top toolbar owns the traffic lights and nav buttons, so while it is
-            // up the sidebar starts flush under the row, same as the content pane.
-            if toolbarManager.isToolbarHidden {
+            // The row owns the traffic lights and nav buttons whenever it is on screen,
+            // pinned or revealed, so the sidebar starts flush under it. With the row away
+            // the sidebar stands in for it, at the same 38pt, so nothing shifts on reveal.
+            if toolbarManager.isToolbarHidden, !toolbarManager.isFloatingToolbarVisible {
                 SidebarHeader()
             }
             NSPageView(

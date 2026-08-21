@@ -18,18 +18,26 @@ extension TabManager {
         !tab.isPlayingMedia || SettingsStore.shared.unloadMediaTabs
     }
 
+    /// A tab on screen in any window, not just this one. Managers are per window but the
+    /// store is shared, so evicting on `activeTab` alone blanked the other window's page.
+    func isActiveInAnyWindow(_ tab: Tab) -> Bool {
+        tab.id == activeTab?.id || TabManager.activeTabIDsAcrossWindows.contains(tab.id)
+    }
+
     /// Drops a tab's web view and keeps the row: URL, title, header colour, and the
     /// scroll offset all survive. Typing the user has not submitted vetoes the unload,
     /// so nothing typed is lost, and so does playback unless `unloadMediaTabs` is on.
     private func hibernate(_ tab: Tab) {
-        guard tab.isWebViewReady, tab.id != activeTab?.id, mayHibernate(tab) else { return }
+        guard tab.isWebViewReady, !isActiveInAnyWindow(tab), mayHibernate(tab) else { return }
         guard hibernating.insert(tab.id).inserted else { return }
         let id = tab.id
         tab.captureHibernationState { [weak self, weak tab] hasUnsavedInput in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.hibernating.remove(id)
-                guard let tab, !hasUnsavedInput, self.mayHibernate(tab), tab.id != self.activeTab?.id
+                // The probe is a round trip: the tab can have been selected, in this
+                // window or another, while the answer was in flight.
+                guard let tab, !hasUnsavedInput, self.mayHibernate(tab), !self.isActiveInAnyWindow(tab)
                 else { return }
                 tab.destroyWebView()
             }
@@ -45,7 +53,7 @@ extension TabManager {
         let allContainers = containers ?? fetchContainers()
         for container in allContainers {
             for tab in container.tabs {
-                if !tab.isAlive, tab.isWebViewReady, tab.id != activeTab?.id, mayHibernate(tab),
+                if !tab.isAlive, tab.isWebViewReady, !isActiveInAnyWindow(tab), mayHibernate(tab),
                    tab.type == .normal
                 {
                     hibernate(tab)
@@ -71,7 +79,7 @@ extension TabManager {
         // ponytail: plain sort over the live set, not a maintained LRU list. Switch to
         // an ordered structure if the live cap is ever raised past a few hundred.
         let evictable = live
-            .filter { $0.id != activeTab?.id && mayHibernate($0) && $0.type == .normal }
+            .filter { !isActiveInAnyWindow($0) && mayHibernate($0) && $0.type == .normal }
             .sorted { ($0.lastAccessedAt ?? .distantPast) < ($1.lastAccessedAt ?? .distantPast) }
 
         for tab in evictable.prefix(excess) {
@@ -85,10 +93,11 @@ extension TabManager {
         let allContainers = containers ?? fetchContainers()
 
         for container in allContainers {
-            for tab in container.tabs {
+            // `closeTab` deletes from `container.tabs`, so the loop walks a copy.
+            for tab in Array(container.tabs) {
                 if let lastAccessed = tab.lastAccessedAt,
                    lastAccessed < cutoffDate,
-                   tab.id != activeTab?.id,
+                   !isActiveInAnyWindow(tab),
                    !tab.isPlayingMedia,
                    tab.type == .normal
                 {
@@ -108,10 +117,10 @@ extension TabManager {
             guard let timeout = policy.seconds else { continue }
 
             let cutoffDate = Date().addingTimeInterval(-timeout)
-            for tab in container.tabs {
+            for tab in Array(container.tabs) {
                 if let lastAccessed = tab.lastAccessedAt,
                    lastAccessed < cutoffDate,
-                   tab.id != activeTab?.id,
+                   !isActiveInAnyWindow(tab),
                    !tab.isPlayingMedia,
                    tab.type == .normal
                 {

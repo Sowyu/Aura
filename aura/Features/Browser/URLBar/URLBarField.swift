@@ -63,6 +63,13 @@ struct URLBarField: View {
 
     static let height: CGFloat = 30
     private static let cornerRadius: CGFloat = 10
+    /// Field layout: leading padding, the security icon and the gap after it. The
+    /// suggestion rows below are inset to put their titles on the same column.
+    private static let leadingPadding: CGFloat = 8
+    private static let iconWidth: CGFloat = 16
+    private static let iconSpacing: CGFloat = 8
+    private static let suggestionsPadding: CGFloat = 8
+    static var textInset: CGFloat { leadingPadding + iconWidth + iconSpacing }
 
     // MARK: - Body
 
@@ -121,7 +128,7 @@ struct URLBarField: View {
     /// One NSTextField for both modes. The field editor owns mouse tracking, so a
     /// drag selects text instead of moving the hidden-titlebar window.
     private var field: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Self.iconSpacing) {
             ZStack {
                 if tab?.isLoading == true, !isEditing {
                     ProgressView()
@@ -133,7 +140,7 @@ struct URLBarField: View {
                         .foregroundColor(foregroundColor)
                 }
             }
-            .frame(width: 16, height: 16)
+            .frame(width: Self.iconWidth, height: Self.iconWidth)
 
             ZStack(alignment: .leading) {
                 CopiedURLOverlay(
@@ -197,7 +204,7 @@ struct URLBarField: View {
             .accessibilityLabel(Text("Copy URL"))
         }
         .frame(height: Self.height)
-        .padding(.leading, 8)
+        .padding(.leading, Self.leadingPadding)
         .padding(.trailing, 4)
         .background(pill)
     }
@@ -225,11 +232,17 @@ struct URLBarField: View {
                 ForEach(launcherViewModel.suggestions) { suggestion in
                     LauncherSuggestionItem(
                         suggestion: suggestion,
-                        focusedElement: $launcherViewModel.focusedElement
+                        focusedElement: $launcherViewModel.focusedElement,
+                        leadingInset: LauncherRowMetrics.leadingInset(
+                            textInset: Self.textInset,
+                            panelPadding: Self.suggestionsPadding,
+                            iconWidth: Self.iconWidth
+                        ),
+                        iconWidth: Self.iconWidth
                     )
                 }
             }
-            .padding(8)
+            .padding(Self.suggestionsPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.launcherMainBackground)
             .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))

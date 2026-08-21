@@ -2,7 +2,9 @@ import SwiftUI
 
 // MARK: - Size
 
+/// The shared size scale, spelled the way the design system spells it.
 enum OraIconSize {
+    // swiftlint:disable:next identifier_name
     case xs, sm, md, lg, xl
     case custom(CGFloat)
 

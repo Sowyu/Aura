@@ -50,7 +50,24 @@ extern NSString *const AuraWebRequestStateMessageName;
 /// Best guess at a request's resource type. WebKit's injected-bundle resource
 /// load client does not carry one, so this reads the `Accept` header first and
 /// falls back to the URL's path extension.
+///
+/// The `Accept` header is the reliable half. WebCore sets a distinct one per
+/// resource kind before `willSendRequest` runs: `text/html,...` for a document
+/// or an iframe, `image/png,image/svg+xml,...` for an image, `text/css,...` for
+/// a stylesheet. Scripts and fetches both get `*/*`, and fonts and media get
+/// none at all, which is what the extension table is for.
 uint32_t AuraResourceTypeMaskForURL(NSURL *url, NSString *_Nullable acceptHeader, BOOL isMainFrame);
+
+/// `Sec-Fetch-Dest` names the resource kind outright, so when it is there
+/// nothing has to be inferred. Returns 0 for a missing or unrecognised value,
+/// which is the caller's cue to fall back to `AuraResourceTypeMaskForURL`.
+uint32_t AuraResourceTypeForFetchDestination(NSString *_Nullable destination);
+
+/// webRequest's `type` string for one of `AuraResourceType`'s mask bits.
+///
+/// Foundation only, so it lives here rather than with the channel: the app
+/// links it too, which is the only way it can be tested without a web process.
+NSString *AuraWebRequestTypeName(uint32_t typeMask, BOOL isMainDocument, BOOL isSubframe);
 
 NS_ASSUME_NONNULL_END
 

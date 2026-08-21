@@ -1,5 +1,7 @@
 import SwiftUI
 
+private let logger = AuraLog.category("Appearance")
+
 enum AppAppearance: String, CaseIterable, Identifiable {
     case system = "System"
     case light = "Light"
@@ -20,7 +22,7 @@ class AppearanceManager: ObservableObject {
 
     func updateAppearance() {
         guard NSApp != nil else {
-            print("NSApp is nil, skipping appearance update")
+            logger.debug("NSApp is nil, skipping appearance update")
             return
         }
         switch appearance {

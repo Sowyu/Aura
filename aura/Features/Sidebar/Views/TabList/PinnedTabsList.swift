@@ -43,8 +43,7 @@ struct PinnedTabsList: View {
                         of: [.text],
                         delegate: TabDropDelegate(
                             item: tab,
-                            draggedItem: $draggedItem,
-                            targetSection: .pinned
+                            draggedItem: $draggedItem
                         )
                     )
                 }

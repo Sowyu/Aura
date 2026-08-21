@@ -1,35 +1,21 @@
 import SwiftUI
 
-/*
- * KeyModifierListener is an ObservableObject that monitors keyboard modifier key changes and global key down events.
- *
- * It publishes the current modifier flags via the `modifierFlags` property, which updates whenever modifier keys are pressed or released.
- *
- * Additionally, it allows registering custom handlers for key down events using `registerKeyDownHandler`.
- * If any registered handler returns true, the event is consumed and not propagated further.
- *
- *
- * Why not use onKeyPressed?
- *
- * SwiftUI's .onKeyPress modifier is attached to specific views and only triggers when that view has keyboard focus.
- * In contrast, KeyModifierListener uses NSEvent monitors to capture modifier flag changes and key down events
- * globally across the entire application,
- * regardless of focus. This enables app-wide keyboard shortcuts and consistent modifier state tracking.
- *
- * Also, it's not possible to use onKeyPressed to detect modifier key changes like if modifier is released.
- *
- * Usage:
- * let listener = KeyModifierListener()
- * @StateObject var keyListener = listener // In a SwiftUI View
- *
- * listener.registerKeyDownHandler { event in
- *     if event.modifierFlags.contains(.command) && event.keyCode == 12 { // Command + Q
- *         print("Command + Q pressed")
- *         return true // Consume the event
- *     }
- *     return false
- * }
- */
+/// Publishes the live modifier flags and dispatches app-wide key-down events.
+///
+/// `modifierFlags` updates whenever a modifier is pressed or released. Handlers
+/// registered with `registerKeyDownHandler` are tried in order and the first one to
+/// return true consumes the event.
+///
+/// SwiftUI's `.onKeyPress` is not enough here twice over: it only fires for the focused
+/// view, and it cannot see a modifier being released at all. Two `NSEvent` local
+/// monitors see every event in the app regardless of focus.
+///
+///     listener.registerKeyDownHandler { event in
+///         guard event.modifierFlags.contains(.command), event.keyCode == 12 else {
+///             return false
+///         }
+///         return true // consume it
+///     }
 
 final class KeyModifierListener: ObservableObject {
     @Published var modifierFlags = NSEvent.ModifierFlags([])
@@ -85,10 +71,8 @@ final class KeyModifierListener: ObservableObject {
     }
 
     private func handleGlobalKeyDown(_ event: NSEvent) -> Bool {
-        for handler in keyDownHandlers {
-            if handler(event) {
-                return true
-            }
+        for handler in keyDownHandlers where handler(event) {
+            return true
         }
         return false
     }

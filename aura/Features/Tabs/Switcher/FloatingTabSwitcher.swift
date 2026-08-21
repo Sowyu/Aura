@@ -110,23 +110,17 @@ struct FloatingTabSwitcher: View {
     }
 
     private func tabPreviewItem(for tab: Tab) -> some View {
-        Group {
-            if tab.isWebViewReady {
-                readyTabView(for: tab)
-            } else {
-                loadingTabView
-            }
-        }
-        .shadow(
-            color: focusedTab == tab.id ? theme.primary.opacity(0.3) : .clear,
-            radius: 8, x: 0, y: 2
-        )
-        .animation(AnimationSettings.easeOut(0.1), value: focusedTab)
-        .focusable()
-        .focused($focusedTab, equals: tab.id)
+        tabPreview(for: tab)
+            .shadow(
+                color: focusedTab == tab.id ? theme.primary.opacity(0.3) : .clear,
+                radius: 8, x: 0, y: 2
+            )
+            .animation(AnimationSettings.easeOut(0.1), value: focusedTab)
+            .focusable()
+            .focused($focusedTab, equals: tab.id)
     }
 
-    private func readyTabView(for tab: Tab) -> some View {
+    private func tabPreview(for tab: Tab) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             tabPreviewImage(for: tab)
 
@@ -193,17 +187,6 @@ struct FloatingTabSwitcher: View {
         }
     }
 
-    private var loadingTabView: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: Constants.cornerRadius, style: .continuous)
-                .fill(Color.gray)
-                .frame(width: Constants.previewWidth, height: Constants.previewHeight)
-
-            ProgressView()
-                .frame(width: 24, height: 24)
-        }
-    }
-
     private var keyboardHandler: some View {
         KeyCaptureView(onKeyDown: { event in
             if event.modifierFlags.contains([.control, .shift]) {
@@ -222,12 +205,14 @@ struct FloatingTabSwitcher: View {
 
     // MARK: - Computed Properties
 
+    /// Hibernated tabs are listed too: filtering on a live web view emptied the switcher
+    /// as soon as the eviction pass ran. They show the placeholder until their snapshot
+    /// exists, and selecting one loads it back.
     private var recentTabs: [Tab] {
         guard let activeContainer = tabManager.activeContainer else { return [] }
         return activeContainer.tabs
-            .filter(\.isWebViewReady)
             .sorted { (lhs: Tab, rhs: Tab) in
-                (lhs.lastAccessedAt ?? Date()) > (rhs.lastAccessedAt ?? Date())
+                (lhs.lastAccessedAt ?? .distantPast) > (rhs.lastAccessedAt ?? .distantPast)
             }
             .prefix(Constants.maxTabsToShow)
             .map { $0 }
@@ -312,7 +297,7 @@ struct FloatingTabSwitcher: View {
 
     private func takeSnapshot(for tab: Tab, url: String, group: DispatchGroup) {
         DispatchQueue.global(qos: .userInteractive).async {
-            let config = self.createSnapshotConfiguration(for: tab)
+            let config = BrowserSnapshotConfiguration(rect: nil, afterScreenUpdates: false)
 
             DispatchQueue.main.async {
                 tab.takeSnapshot(configuration: config) { image, _ in
@@ -330,10 +315,6 @@ struct FloatingTabSwitcher: View {
                 }
             }
         }
-    }
-
-    private func createSnapshotConfiguration(for tab: Tab) -> BrowserSnapshotConfiguration {
-        BrowserSnapshotConfiguration(rect: nil, afterScreenUpdates: false)
     }
 
     private func startMouseMonitor() {

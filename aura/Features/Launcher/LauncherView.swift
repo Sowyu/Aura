@@ -11,9 +11,13 @@ struct LauncherView: View {
 
     @StateObject private var viewModel = LauncherViewModel()
 
-    /// Mid-window until suggestions show, then up, if the setting allows.
+    /// Mid-window until suggestions show, then up, if the setting allows. The condition
+    /// has to match `LauncherMain`'s: an engine capsule hides the list, and the panel
+    /// used to rise over nothing.
     private var isRaised: Bool {
-        SettingsStore.shared.launcherRisesForSuggestions && !viewModel.suggestions.isEmpty
+        SettingsStore.shared.launcherRisesForSuggestions
+            && match == nil
+            && !viewModel.suggestions.isEmpty
     }
 
     @State private var input = ""
@@ -38,6 +42,12 @@ struct LauncherView: View {
 
     private func onSubmit(_ newInput: String? = nil) {
         let correctInput = newInput ?? input
+        // Clearing the field leaves the default suggestions up; Enter on them must not
+        // open a search for an empty query.
+        guard !correctInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            appState.showLauncher = false
+            return
+        }
         var engineToUse = match
 
         if engineToUse == nil,
@@ -78,13 +88,21 @@ struct LauncherView: View {
     var body: some View {
         GeometryReader { geo in
             let window = CGRect(origin: .zero, size: geo.size)
+            let width = LauncherPlacement.width(forWindowWidth: geo.size.width)
             ZStack(alignment: .topLeading) {
                 backdrop
                     .frame(width: geo.size.width, height: geo.size.height)
 
                 panel
-                    .frame(width: LauncherPlacement.width(forWindowWidth: geo.size.width))
-                    .position(LauncherPlacement.position(in: window, raised: isRaised))
+                    .frame(width: width)
+                    .offset(
+                        x: (geo.size.width - width) / 2,
+                        y: LauncherPlacement.panelTop(
+                            in: window,
+                            raised: isRaised,
+                            fieldHeight: LauncherField.height
+                        )
+                    )
                     .animation(AnimationSettings.easeOut(0.15), value: isRaised)
             }
         }
@@ -119,6 +137,7 @@ struct LauncherView: View {
             match: $match,
             isFocused: $isTextFieldFocused,
             onTabPress: onTabPress,
+            onEscape: dismiss,
             viewModel: viewModel
         )
         .gradientAnimatingBorder(
@@ -165,6 +184,11 @@ struct LauncherView: View {
             input = ""
             match = nil
             isTextFieldFocused = false
+            // The host drops this view when the window loses its last tab. Leaving the
+            // flag set re-opened the launcher on its own the next time a tab appeared.
+            DispatchQueue.main.async {
+                if tabManager.activeTab == nil { appState.showLauncher = false }
+            }
         }
         .onChange(of: appState.showLauncher) { _, newValue in
             isVisible = newValue

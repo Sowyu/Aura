@@ -55,4 +55,63 @@ struct SettingsSectionsTests {
             ) == .ask
         )
     }
+
+    @Test func everySectionHasAWorkingDeepLink() {
+        for tab in SettingsTab.allCases {
+            let url = URL.oraSettings(section: tab)
+            #expect(url.isOraSettings, "\(tab) does not produce a settings URL")
+            #expect(url.oraSettingsSection == tab, "\(url) does not resolve back to \(tab)")
+        }
+        // No section means the page keeps whatever the user last had open.
+        #expect(URL.oraSettings().oraSettingsSection == nil)
+    }
+
+    @MainActor @Test func scriptableImageFormatsNeverOpenThemselves() {
+        // SVG carries <script> and its default handler is usually a browser.
+        #expect(!DownloadManager.safeExtensions.contains("svg"))
+        #expect(!DownloadManager.safeExtensions.contains("html"))
+        #expect(DownloadManager.safeExtensions.contains("png"))
+        #expect(DownloadManager.safeExtensions.contains("pdf"))
+    }
+
+    /// `expectedContentLength` is -1 when the server sends no Content-Length, and
+    /// `WKDownload` reports 0 until the first byte lands. Neither may reach the row.
+    @Test func downloadKeepsTheLastKnownSizeWhenTheServerReportsNone() {
+        let download = Download(
+            originalURL: URL(string: "https://example.com/f.bin")!,
+            fileName: "f.bin",
+            fileSize: -1
+        )
+        #expect(download.fileSize == 0)
+
+        download.updateProgress(downloadedBytes: 512, totalBytes: -1)
+        #expect(download.fileSize == 0)
+        #expect(download.progress == 0)
+
+        download.updateProgress(downloadedBytes: 512, totalBytes: 1024)
+        #expect(download.fileSize == 1024)
+        #expect(download.progress == 0.5)
+
+        // A later tick with no size must not wipe the size already learned.
+        download.updateProgress(downloadedBytes: 768, totalBytes: 0)
+        #expect(download.fileSize == 1024)
+        #expect(download.progress == 0.75)
+    }
+
+    /// The initialiser ignored both date arguments and stamped `Date()` instead, so an
+    /// imported visit claimed to have happened just now.
+    @Test func historyKeepsTheDatesItWasGiven() {
+        let created = Date(timeIntervalSince1970: 1_000_000)
+        let accessed = Date(timeIntervalSince1970: 2_000_000)
+        let entry = History(
+            url: URL(string: "https://example.com")!,
+            title: "Example",
+            faviconURL: URL(string: "https://example.com/favicon.ico")!,
+            createdAt: created,
+            lastAccessedAt: accessed,
+            visitCount: 3
+        )
+        #expect(entry.createdAt == created)
+        #expect(entry.lastAccessedAt == accessed)
+    }
 }

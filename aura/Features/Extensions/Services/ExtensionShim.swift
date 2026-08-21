@@ -16,7 +16,7 @@ import os
 /// change re-patches by itself.
 enum ExtensionShim {
     /// Must match `SHIM_VERSION` in aura-shim.js.
-    static let version = 2
+    static let version = 3
 
     static let scriptName = "aura-shim.js"
     /// Generated per extension: `runtime.getManifest()` returns undefined under
@@ -87,7 +87,10 @@ enum ExtensionShim {
         let destination = directory.appendingPathComponent(scriptName)
         try? FileManager.default.removeItem(at: destination)
         try FileManager.default.copyItem(at: source, to: destination)
-        try writeManifestScript(manifest, to: directory)
+        // What the extension shipped, not what is on disk: a re-patch (a shim
+        // version bump, or an add-on update landing on a patched folder) reads a
+        // manifest that already carries Aura's own entries.
+        try writeManifestScript(pristineManifest(in: directory) ?? manifest, to: directory)
 
         manifest["background"] = patchedBackground(manifest["background"] as? [String: Any], in: directory)
         patchExtensionPages(manifest, in: directory)
@@ -115,6 +118,15 @@ enum ExtensionShim {
             + (manifest["optional_permissions"] as? [Any] ?? [])
         let names = Set(declared.compactMap { $0 as? String })
         return names.contains("webRequest") || names.contains("webRequestBlocking")
+    }
+
+    /// The backed-up manifest, which is the one the author shipped. Nil the
+    /// first time through, when the manifest on disk is already that.
+    private static func pristineManifest(in directory: URL) -> [String: Any]? {
+        guard let data = try? Data(contentsOf: directory.appendingPathComponent(originalManifestName)),
+              let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return manifest
     }
 
     /// The extension sees the manifest it shipped, not the patched one: the

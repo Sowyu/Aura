@@ -11,7 +11,8 @@ enum ContainerConstants {
     /// Default time in seconds after which normal tabs are completely removed
     static let defaultTabRemovalTimeout: TimeInterval = 24 * 60 * 60 // 1 day
 
-    /// UI constants for container forms and displays
+    // UI constants for container forms and displays.
+    // swiftlint:disable:next type_name
     enum UI {
         static let normalButtonWidth: CGFloat = 28
         static let compactButtonWidth: CGFloat = 12

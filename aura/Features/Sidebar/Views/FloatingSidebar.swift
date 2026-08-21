@@ -1,32 +1,20 @@
 import SwiftUI
 
+/// The sidebar as a card, used while it is hover-revealed. Same fill, same radius and
+/// same inset as the content pane, so the revealed sidebar reads as the pinned one
+/// lifted off the window rather than as a panel of its own.
 struct FloatingSidebar: View {
-    @Environment(\.theme) var theme
-
-    let sidebarCornerRadius: CGFloat = {
-        if #available(macOS 26, *) {
-            return 13
-        } else {
-            return 5
-        }
-    }()
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: browserContentCornerRadius, style: .continuous)
+    }
 
     var body: some View {
-        let clipShape = ConditionallyConcentricRectangle(cornerRadius: sidebarCornerRadius)
-
-        ZStack(alignment: .leading) {
-            SidebarView()
-                // Glass clips itself to the same radius; an ancestor clipShape does not
-                // reach the system's glass layer on macOS 26.
-                .auraGlassChrome(cornerRadius: sidebarCornerRadius)
-                .background(theme.chromeBackground)
-                .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
-                .clipShape(clipShape)
-                .overlay(clipShape
-                    .stroke(theme.invertedSolidWindowBackgroundColor.opacity(0.3), lineWidth: 1)
-                )
-                .padding(.top, 0)
-        }
-        .padding(6)
+        SidebarView()
+            // The window backdrop, not a panel material: the pinned sidebar has no fill
+            // of its own and shows this exact surface through.
+            .auraGlassWindowBackdrop(cornerRadius: browserContentCornerRadius)
+            .clipShape(shape)
+            .shadow(color: .black.opacity(0.15), radius: browserContentCornerRadius, x: 0, y: 2)
+            .padding(browserContentInset)
     }
 }

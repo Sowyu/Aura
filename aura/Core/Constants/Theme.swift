@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 
-// swiftlint:disable identifier_name
 /// The one accent colour the chrome tints itself with. Stored as a hex string so it
 /// rides in `@AppStorage` next to the glass tint.
 enum AuraAccent {
@@ -151,6 +150,7 @@ struct Theme: Equatable {
         Color(hex: "#FF4500")
     }
 
+    // swiftlint:disable:next identifier_name
     var x: Color {
         colorScheme == .dark ? .white : .black
     }

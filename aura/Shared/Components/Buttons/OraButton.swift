@@ -8,9 +8,14 @@ enum OraButtonVariant {
     case destructive
 }
 
+/// The shared size scale. Spelled the way the design system spells it, so the two
+/// letters stay.
 enum OraButtonSize {
+    // swiftlint:disable:next identifier_name
     case sm
+    // swiftlint:disable:next identifier_name
     case md
+    // swiftlint:disable:next identifier_name
     case lg
 }
 
