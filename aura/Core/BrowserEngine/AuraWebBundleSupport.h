@@ -33,3 +33,5 @@ BOOL AuraSetInjectedBundleMessageHandler(
 NS_ASSUME_NONNULL_END
 
 #endif /* AuraWebBundleSupport_h */
+
+#import "AuraExceptionCatcher.h"

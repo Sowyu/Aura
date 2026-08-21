@@ -232,7 +232,14 @@ final class AdvancedBlockingService: @unchecked Sendable {
         try FileManager.default.removeItem(at: probe)
 
         let builder = try WebExtension(containerURL: containerURL)
-        _ = try builder.buildFilterEngine(rules: advancedRulesText)
+        // The converter writes its storage with legacy NSFileHandle calls that raise
+        // ObjC exceptions on failure; catch them so a bad build is skipped, not fatal.
+        var buildError: Error?
+        let raised = AuraExceptionCatcher.try {
+            do { _ = try builder.buildFilterEngine(rules: advancedRulesText) } catch { buildError = error }
+        }
+        if let raised { throw raised }
+        if let buildError { throw buildError }
 
         // A fresh instance so the first lookup deserialises the engine we just wrote, and
         // that deserialisation happens here rather than on the navigation that needs it.
