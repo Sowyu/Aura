@@ -137,7 +137,7 @@ struct OraInput: View {
                     .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
             }
             .clipShape(ConditionallyConcentricRectangle(cornerRadius: cornerRadius))
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
+            .animation(AnimationSettings.easeOut(0.15), value: isFocused)
             .disabled(isDisabled)
 
             if let error {
@@ -151,7 +151,7 @@ struct OraInput: View {
                     .foregroundColor(theme.mutedForeground)
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: error != nil)
+        .animation(AnimationSettings.easeOut(0.15), value: error != nil)
     }
 }
 

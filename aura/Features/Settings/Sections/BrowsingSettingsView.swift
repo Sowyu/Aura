@@ -15,7 +15,10 @@ struct BrowsingSettingsView: View {
                     HStack {
                         Text("Born for your Mac. Make Aura your default browser.")
                         Spacer()
-                        Button("Set as Default") { DefaultBrowserManager.requestSetAsDefault() }
+                        Button("Set as Default") {
+                            DefaultBrowserManager.requestSetAsDefault()
+                            defaultBrowserManager.updateIsDefault()
+                        }
                     }
                 }
             }

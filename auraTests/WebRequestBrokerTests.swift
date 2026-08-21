@@ -115,9 +115,6 @@ struct WebRequestBrokerTests {
     func blockingListenerCancelsBeforeTheRequestLeavesTheWebProcess() async throws {
         guard #available(macOS 15.4, *) else { return }
 
-        // Aura's own rules must not be what blocks anything here.
-        try installEmptyRules()
-
         let directory = try makeBlockingExtension()
         defer { try? FileManager.default.removeItem(at: directory) }
         #expect(try ExtensionShim.apply(at: directory))
@@ -175,7 +172,6 @@ struct WebRequestBrokerTests {
     @MainActor
     func uBlockOriginBlocksAnEasyListHit() async throws {
         guard #available(macOS 15.4, *) else { return }
-        try installEmptyRules()
 
         let directory = try unpackBundledUBlock()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -483,17 +479,6 @@ struct WebRequestBrokerTests {
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
         return false
-    }
-
-    private func installEmptyRules() throws {
-        let url = try #require(AuraWebBundle.rulesFileURL)
-        try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try NativeBlockingRuleSet.make(fromFilterLines: [])
-            .jsonData(revision: UUID().uuidString)
-            .write(to: url, options: .atomic)
     }
 
     private func makeExtension(

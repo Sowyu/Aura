@@ -37,7 +37,7 @@ struct FloatingURLBar: View {
             .frame(maxWidth: .infinity)
             .frame(height: GlobalMouseTrackingArea.hotZone)
         }
-        .animation(.easeOut(duration: 0.15), value: showFloatingURLBar)
+        .animation(AnimationSettings.easeOut(0.15), value: showFloatingURLBar)
     }
 
     private func hoverStrip() -> some View {
@@ -47,7 +47,7 @@ struct FloatingURLBar: View {
                     mouseEntered: Binding(
                         get: { showFloatingURLBar },
                         set: { newValue in
-                            withAnimation(.easeOut(duration: 0.15)) {
+                            withAnimation(AnimationSettings.easeOut(0.15)) {
                                 isMouseOverURLBar = newValue
                                 showFloatingURLBar = newValue
                             }

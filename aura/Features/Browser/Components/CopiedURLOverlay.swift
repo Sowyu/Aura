@@ -13,7 +13,7 @@ struct CopiedURLOverlay: View {
         .foregroundColor(foregroundColor)
         .opacity(showCopiedAnimation ? 1 : 0)
         .offset(y: showCopiedAnimation ? 0 : (startWheelAnimation ? -12 : 12))
-        .animation(.easeOut(duration: 0.2), value: showCopiedAnimation)
-        .animation(.easeOut(duration: 0.2), value: startWheelAnimation)
+        .animation(AnimationSettings.easeOut(0.15), value: showCopiedAnimation)
+        .animation(AnimationSettings.easeOut(0.15), value: startWheelAnimation)
     }
 }

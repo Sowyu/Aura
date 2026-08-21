@@ -47,6 +47,11 @@ struct LauncherTextField: NSViewRepresentable {
             set {}
         }
 
+        /// AppKit hands first responder to the nearest text field whenever the current
+        /// responder (a web view mid-navigation) goes away. That must not start a URL
+        /// edit, so focus is only accepted after a click or an explicit `isEditing`.
+        var allowsFocus = false
+        override var acceptsFirstResponder: Bool { allowsFocus && super.acceptsFirstResponder }
         override var mouseDownCanMoveWindow: Bool { false }
 
         private func configureEditorIfNeeded() {
@@ -95,7 +100,15 @@ struct LauncherTextField: NSViewRepresentable {
                 super.mouseDown(with: event)
                 return
             }
+            allowsFocus = true
             window.makeFirstResponder(self)
+            // `NSTextFieldCell` installs the field editor with the click that focused the
+            // field, and that drops the caret where the pointer is — undoing the
+            // `selectAll` in `becomeFirstResponder`. Re-select once that has settled.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, currentEditor() != nil else { return }
+                currentEditor()?.selectAll(nil)
+            }
         }
     }
 
@@ -127,6 +140,8 @@ struct LauncherTextField: NSViewRepresentable {
         context.coordinator.parent = self
         let focused = nsView.currentEditor() != nil
         let wanted = (displayText == nil || focused) ? text : (displayText ?? "")
+        // Launcher and home-page fields have no display mode; they take focus freely.
+        if displayText == nil { nsView.allowsFocus = true }
         if nsView.stringValue != wanted {
             // Prevent the AppKit delegate callback from bouncing this write
             // straight back into SwiftUI during the same update pass.
@@ -142,6 +157,7 @@ struct LauncherTextField: NSViewRepresentable {
             // Outside a SwiftUI update pass: becoming first responder writes state.
             DispatchQueue.main.async {
                 guard let window = nsView.window, isEditing != (nsView.currentEditor() != nil) else { return }
+                nsView.allowsFocus = isEditing
                 window.makeFirstResponder(isEditing ? nsView : nil)
             }
         }
@@ -181,6 +197,7 @@ struct LauncherTextField: NSViewRepresentable {
         }
 
         func controlTextDidEndEditing(_ obj: Notification) {
+            (obj.object as? CustomTextField)?.allowsFocus = false
             parent.onEndEditing?()
         }
 

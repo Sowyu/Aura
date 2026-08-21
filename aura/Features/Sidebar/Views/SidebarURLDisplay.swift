@@ -62,8 +62,8 @@ struct SidebarURLDisplay: View {
                         .truncationMode(.tail)
                         .opacity(showCopiedAnimation ? 0 : 1)
                         .offset(y: showCopiedAnimation ? (startWheelAnimation ? -12 : 12) : 0)
-                        .animation(.easeOut(duration: 0.2), value: showCopiedAnimation)
-                        .animation(.easeOut(duration: 0.2), value: startWheelAnimation)
+                        .animation(AnimationSettings.easeOut(0.15), value: showCopiedAnimation)
+                        .animation(AnimationSettings.easeOut(0.15), value: startWheelAnimation)
 
                         CopiedURLOverlay(
                             foregroundColor: theme.mutedForeground,
@@ -86,7 +86,7 @@ struct SidebarURLDisplay: View {
                 .onHover { hovering in
                     isHoveringCopy = hovering
                 }
-                .animation(.easeOut(duration: 0.1), value: isHoveringCopy)
+                .animation(AnimationSettings.easeOut(0.1), value: isHoveringCopy)
             } else {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
@@ -123,7 +123,7 @@ struct SidebarURLDisplay: View {
             ConditionallyConcentricRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(theme.invertedSolidWindowBackgroundColor.opacity(0.05), lineWidth: 1)
         )
-        .animation(.easeOut(duration: 0.1), value: isHovering)
+        .animation(AnimationSettings.easeOut(0.1), value: isHovering)
         .onReceive(NotificationCenter.default.publisher(for: .copyAddressURL)) { _ in
             guard toolbarManager.isToolbarHidden, sidebarManager.sidebarPosition == .primary else { return }
             if let activeTab = tabManager.activeTab {

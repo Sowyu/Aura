@@ -37,12 +37,7 @@ struct TabDropDelegate: DropDelegate {
                             from.folder = self.item.folder
                             self.item.folder?.isCollapsed = false
                         }
-                        withAnimation(
-                            .spring(
-                                response: 0.18,
-                                dampingFraction: 0.85
-                            )
-                        ) {
+                        withAnimation(AnimationSettings.easeOut(0.15)) {
                             self.item.container
                                 .reorderTabs(
                                     from: from,

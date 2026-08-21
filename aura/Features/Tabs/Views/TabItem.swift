@@ -159,7 +159,7 @@ struct TabItem: View {
         }
         .onHover { isHovering = $0 }
         .auraContextMenu { contextMenuItems }
-        .animation(.spring(response: 0.18, dampingFraction: 0.85), value: isDragging)
+        .animation(AnimationSettings.easeOut(0.15), value: isDragging)
         .geometryGroup()
     }
 
@@ -262,12 +262,17 @@ struct ActionButton: View {
     let color: Color
     let action: () -> Void
 
+    /// The glyph stays 10pt; the hit box is 20pt square, because a 16pt target on a
+    /// 40pt row is a coin-toss for the close button.
+    private static let hitSize: CGFloat = 20
+
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(color)
-                .frame(width: 16, height: 16)
+                .frame(width: Self.hitSize, height: Self.hitSize)
+                .contentShape(Rectangle())
         }
         .buttonStyle(InteractiveButtonStyle(cornerRadius: 5, hoverOpacity: 0.18, pressOpacity: 0.3, tint: color))
     }

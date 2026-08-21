@@ -18,16 +18,18 @@ class DefaultBrowserManager: ObservableObject {
 
     private init() {
         updateIsDefault()
-        // Periodically check if default browser status changed. I couldn't find another way.
-        Timer.publish(every: 1.0, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.updateIsDefault()
-            }
+        // The handler can only change while the user is away in System Settings, so the
+        // answer is re-read when Aura comes back to the front. The 1 Hz timer this
+        // replaces hit LaunchServices and read a bundle plist off disk on the main
+        // thread every second, for the life of the app, in `.common` mode — so it also
+        // fired during scrolls and drags.
+        NotificationCenter.default
+            .publisher(for: NSApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in self?.updateIsDefault() }
             .store(in: &cancellables)
     }
 
-    private func updateIsDefault() {
+    func updateIsDefault() {
         let newValue = Self.checkIsDefault()
         if newValue != isDefault {
             isDefault = newValue

@@ -13,21 +13,25 @@ enum BundledExtensions {
     private static let log = Logger(subsystem: "com.aurabrowser.app", category: "extensions")
 
     /// Unpacks anything bundled that this profile has not seen yet. The caller's
-    /// directory scan picks the result up like any other folder.
+    /// directory scan picks the result up like any other folder, so it arrives
+    /// installed and enabled.
     ///
-    /// The marker is set before the work, not after: a first launch that fails
-    /// to unpack should not retry on every launch afterwards, and a user who
-    /// removes uBlock Origin should not find it back tomorrow.
+    /// The marker is set once the extension is on disk, and it is what stops a
+    /// user who removed uBlock Origin from finding it back tomorrow. A failed
+    /// unpack leaves the marker alone: uBlock Origin is the only ad blocker Aura
+    /// ships, so one bad first launch must not cost the profile its blocking
+    /// forever.
     static func installIfNeeded(into extensionsDirectory: URL) {
         guard !UserDefaults.standard.bool(forKey: markerKey) else { return }
         guard let archive = uBlockArchiveURL else { return }
-        UserDefaults.standard.set(true, forKey: markerKey)
 
         do {
-            guard let installed = try unpack(archive, named: folderName, into: extensionsDirectory) else { return }
-            log.info("installed bundled \(installed.lastPathComponent, privacy: .public)")
+            // nil means the folder is already there, which counts as installed.
+            let installed = try unpack(archive, named: folderName, into: extensionsDirectory)
+            UserDefaults.standard.set(true, forKey: markerKey)
+            log.info("installed bundled \(installed?.lastPathComponent ?? folderName, privacy: .public)")
         } catch {
-            log.error("bundled install failed: \(error.localizedDescription, privacy: .public)")
+            log.error("bundled install failed, retrying next launch: \(error.localizedDescription, privacy: .public)")
         }
     }
 

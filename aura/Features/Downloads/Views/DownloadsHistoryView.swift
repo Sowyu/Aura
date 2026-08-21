@@ -63,7 +63,7 @@ struct DownloadsHistoryView: View {
                 }
                 .buttonStyle(.interactive(cornerRadius: 6))
                 .onHover { isClearHovered = $0 }
-                .animation(.easeOut(duration: 0.1), value: isClearHovered)
+                .animation(AnimationSettings.easeOut(0.1), value: isClearHovered)
             }
         }
         .padding(.horizontal, 18)
@@ -268,7 +268,7 @@ struct DownloadsHistoryView: View {
     }
 
     private func dismissDownloads() {
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             downloadManager.isShowingDownloadsHistory = false
         }
     }

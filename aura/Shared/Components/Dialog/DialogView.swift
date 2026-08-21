@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - Confirm Dialog
@@ -101,6 +102,8 @@ private struct DialogsOverlay: View {
 
     private static let transition: AnyTransition = .offset(y: -12).combined(with: .opacity)
 
+    @State private var quitMonitor: Any?
+
     var body: some View {
         ZStack {
             if let dialog = dialogs.last {
@@ -116,7 +119,36 @@ private struct DialogsOverlay: View {
                     .transition(Self.transition)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: dialogs.map(\.id))
+        .animation(AnimationSettings.easeOut(0.15), value: dialogs.map(\.id))
+        .onChange(of: dialogs.last?.isQuitConfirmation ?? false, initial: true) { _, isQuit in
+            if isQuit { installQuitMonitor() } else { removeQuitMonitor() }
+        }
+        .onDisappear(perform: removeQuitMonitor)
+    }
+
+    /// A second ⌘Q takes the confirmation. It has to be caught here rather than in
+    /// `applicationShouldTerminate`: AppKit drops `terminate:` while the first
+    /// request's `terminateLater` reply is still outstanding, so the delegate is
+    /// never asked again.
+    private func installQuitMonitor() {
+        guard quitMonitor == nil else { return }
+        quitMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.modifierFlags.contains(.command),
+                  event.charactersIgnoringModifiers?.lowercased() == "q"
+            else { return event }
+            MainActor.assumeIsolated {
+                guard let dialog = dialogs.last, dialog.isQuitConfirmation else { return }
+                dialog.onConfirm?()
+                dismiss(dialog.id)
+            }
+            return nil
+        }
+    }
+
+    private func removeQuitMonitor() {
+        guard let quitMonitor else { return }
+        NSEvent.removeMonitor(quitMonitor)
+        self.quitMonitor = nil
     }
 }
 

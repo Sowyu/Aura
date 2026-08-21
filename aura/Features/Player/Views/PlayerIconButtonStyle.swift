@@ -22,7 +22,7 @@ struct PlayerIconButtonStyle: ButtonStyle {
                     )
             )
             .scaleEffect(configuration.isPressed && isEnabled ? 0.97 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: isHovering || configuration.isPressed)
+            .animation(AnimationSettings.easeOut(0.15), value: isHovering || configuration.isPressed)
             .onHover { hovering in
                 if isEnabled { isHovering = hovering }
             }

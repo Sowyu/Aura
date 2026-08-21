@@ -12,7 +12,7 @@ final class DialogManager {
     @discardableResult
     func show(@ViewBuilder content: @escaping (String) -> some View) -> String {
         let dialog = Dialog { id in content(id) }
-        withAnimation(.easeOut(duration: 0.15)) {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             dialogs.append(dialog)
         }
         return dialog.id
@@ -22,7 +22,7 @@ final class DialogManager {
         if let dialog = dialogs.first(where: { $0.id == id }) {
             dialog.onDismiss?()
         }
-        withAnimation(.easeOut(duration: 0.15)) {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             dialogs.removeAll(where: { $0.id == id })
         }
         clearQuitConfirmationIfEmpty()
@@ -34,7 +34,7 @@ final class DialogManager {
     }
 
     func dismissAll() {
-        withAnimation(.easeOut(duration: 0.15)) {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             dialogs.removeAll()
         }
         clearQuitConfirmationIfEmpty()
@@ -54,7 +54,8 @@ final class DialogManager {
         confirmLabel: String = "Confirm",
         variant: OraButtonVariant = .default,
         onConfirm: @escaping () -> Void,
-        onCancel: (() -> Void)? = nil
+        onCancel: (() -> Void)? = nil,
+        isQuitConfirmation: Bool = false
     ) {
         final class ConfirmState { var confirmed = false }
         let state = ConfirmState()
@@ -82,7 +83,8 @@ final class DialogManager {
         dialog.onDismiss = {
             if !state.confirmed { onCancel?() }
         }
-        withAnimation(.easeOut(duration: 0.15)) {
+        dialog.isQuitConfirmation = isQuitConfirmation
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             dialogs.append(dialog)
         }
     }

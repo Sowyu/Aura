@@ -53,7 +53,7 @@ struct FolderItem: View {
                 nameFieldFocused = true
             }
         }
-        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .animation(AnimationSettings.easeOut(0.12), value: isHovering)
     }
 
     @ViewBuilder

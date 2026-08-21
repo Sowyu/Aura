@@ -73,7 +73,7 @@ struct PasswordAutofillOverlayView: View {
             .onHover { isHovering in
                 isManagePasswordsHovered = isHovering
             }
-            .animation(.easeOut(duration: 0.1), value: isManagePasswordsHovered)
+            .animation(AnimationSettings.easeOut(0.1), value: isManagePasswordsHovered)
         }
         .padding(8)
     }
@@ -224,7 +224,7 @@ private struct PasswordSuggestionButton<Content: View>: View {
             self.isHovering = isHovering
             onHoverChanged(isHovering)
         }
-        .animation(.easeOut(duration: 0.1), value: isHovering)
+        .animation(AnimationSettings.easeOut(0.1), value: isHovering)
     }
 }
 

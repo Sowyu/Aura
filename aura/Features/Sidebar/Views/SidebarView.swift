@@ -15,7 +15,9 @@ struct SidebarView: View {
     @Environment(SidebarManager.self) private var sidebarManager
     @Environment(ToolbarManager.self) private var toolbarManager
 
-    @Query var containers: [TabContainer]
+    /// Creation order, so the paged space switcher lands on the same space every time.
+    /// Unsorted, SwiftData returns store order, which can change after a save.
+    @Query(sort: [SortDescriptor(\TabContainer.createdAt)]) var containers: [TabContainer]
 
     private let columns = Array(repeating: GridItem(spacing: 10), count: 3)
 
@@ -200,7 +202,7 @@ struct SidebarView: View {
                     if value.translation.width > threshold
                         || value.predictedEndTranslation.width > threshold * 2
                     {
-                        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.85)) {
+                        withAnimation(AnimationSettings.easeOut(0.15)) {
                             downloadManager.isShowingDownloadsHistory = false
                             dragOffset = 0
                         }
@@ -213,7 +215,7 @@ struct SidebarView: View {
                     if -value.translation.width > threshold
                         || -value.predictedEndTranslation.width > threshold * 2
                     {
-                        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.85)) {
+                        withAnimation(AnimationSettings.easeOut(0.15)) {
                             downloadManager.isShowingDownloadsHistory = true
                             dragOffset = 0
                         }

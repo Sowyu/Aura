@@ -30,11 +30,13 @@ struct GlassSettingsCard: View {
             HStack(alignment: .top, spacing: 20) {
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle("Enable Liquid Glass", isOn: $enabled)
+                    // The strip previews the tint. With glass off there is no tint, and
+                    // it rendered as an empty grey box that read as a broken image.
                     if enabled {
                         opacitySlider
                         blurSlider
+                        preview
                     }
-                    preview
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -42,7 +44,7 @@ struct GlassSettingsCard: View {
                     AuraColorPicker(hex: $tintHex)
                 }
             }
-            .animation(.easeOut(duration: 0.15), value: enabled)
+            .animation(AnimationSettings.easeOut(0.15), value: enabled)
         }
     }
 

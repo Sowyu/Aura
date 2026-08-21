@@ -70,7 +70,7 @@ struct DownloadHistoryRow: View {
         )
         .contentShape(Rectangle())
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.1)) {
+            withAnimation(AnimationSettings.easeOut(0.1)) {
                 isHovered = hovering
             }
         }
@@ -101,7 +101,7 @@ struct DownloadHistoryRow: View {
                 Capsule()
                     .fill(theme.accent)
                     .frame(width: geo.size.width * download.displayProgress, height: 3)
-                    .animation(.easeOut(duration: 0.2), value: download.displayProgress)
+                    .animation(AnimationSettings.easeOut(0.15), value: download.displayProgress)
             }
         }
         .frame(height: 3)
@@ -138,7 +138,7 @@ struct DownloadHistoryRow: View {
                 }
                 AuraMenuItem.separator
                 AuraMenuItem.item("Move to Trash", icon: "trash", isDestructive: true) {
-                    withAnimation(.easeOut(duration: 0.15)) {
+                    withAnimation(AnimationSettings.easeOut(0.15)) {
                         downloadManager.moveToTrash(download)
                     }
                 }
@@ -156,7 +156,7 @@ struct DownloadHistoryRow: View {
             if download.status != .downloading {
                 AuraMenuItem.separator
                 AuraMenuItem.item("Remove from Aura", icon: "minus.circle") {
-                    withAnimation(.easeOut(duration: 0.15)) {
+                    withAnimation(AnimationSettings.easeOut(0.15)) {
                         downloadManager.deleteDownload(download)
                     }
                 }

@@ -17,6 +17,7 @@ struct FavTabsGrid: View {
             Tab,
             TabContainer
         ) -> Void
+    let containers: [TabContainer]
 
     private var adaptiveColumns: [GridItem] {
         let maxColumns = 3
@@ -51,7 +52,8 @@ struct FavTabsGrid: View {
                         onFavoriteToggle: { onFavoriteToggle(tab) },
                         onClose: { onClose(tab) },
                         onDuplicate: { onDuplicate(tab) },
-                        onMoveToContainer: { onMoveToContainer(tab, $0) }
+                        onMoveToContainer: { onMoveToContainer(tab, $0) },
+                        containers: containers
                     )
                     .onDrag { onDrag(tab.id) }
                     .onDrop(
@@ -65,8 +67,8 @@ struct FavTabsGrid: View {
                 }
             }
         }
-        .animation(.easeOut(duration: 0.1), value: adaptiveColumns.count)
-        .animation(.easeOut(duration: 0.12), value: draggedItem == nil)
+        .animation(AnimationSettings.easeOut(0.1), value: adaptiveColumns.count)
+        .animation(AnimationSettings.easeOut(0.12), value: draggedItem == nil)
         .onDrop(
             of: [.text],
             delegate: SectionDropDelegate(

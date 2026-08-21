@@ -8,7 +8,9 @@ struct ContainerSwitcher: View {
     @Environment(\.theme) private var theme
     @Environment(TabManager.self) private var tabManager
     @Environment(DialogManager.self) private var dialogManager
-    @Query var containers: [TabContainer]
+    /// Creation order, so the paged space switcher lands on the same space every time.
+    /// Unsorted, SwiftData returns store order, which can change after a save.
+    @Query(sort: [SortDescriptor(\TabContainer.createdAt)]) var containers: [TabContainer]
 
     @State private var hoveredContainer: UUID?
 
@@ -83,9 +85,9 @@ struct ContainerSwitcher: View {
         // Hover is already driven by `hoveredContainer` (it resizes the emoji), so the
         // shared style only contributes the press feedback.
         .buttonStyle(InteractiveButtonStyle(cornerRadius: 8, hoverOpacity: 0))
-        .animation(.easeOut(duration: 0.12), value: isActive || isHovered)
+        .animation(AnimationSettings.easeOut(0.12), value: isActive || isHovered)
         .onHover { isHovering in
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(AnimationSettings.easeOut(0.12)) {
                 hoveredContainer = isHovering ? container.id : nil
             }
         }

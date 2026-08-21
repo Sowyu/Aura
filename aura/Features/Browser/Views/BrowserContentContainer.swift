@@ -49,7 +49,7 @@ struct BrowserContentContainer<Content: View>: View {
             .padding(.top, isCompleteFullscreen ? 0 : topInset)
             .padding(.horizontal, isCompleteFullscreen ? 0 : browserContentInset)
             .padding(.bottom, isCompleteFullscreen ? 0 : browserContentInset)
-            .animation(.easeInOut(duration: 0.15), value: appState.isFullscreen)
+            .animation(AnimationSettings.easeOut(0.15), value: appState.isFullscreen)
             .shadow(color: .black.opacity(0.15), radius: isCompleteFullscreen ? 0 : cornerRadius, x: 0, y: 2)
             .ignoresSafeArea(.all)
     }

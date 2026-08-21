@@ -1,8 +1,10 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
-/// Global privacy defaults: the filter-list catalog, fingerprinting, JavaScript,
-/// cookies, and the one place that wipes browsing data.
+/// Global privacy defaults: fingerprinting, JavaScript, cookies, and the one
+/// place that wipes browsing data. Ad and tracker blocking belongs to uBlock
+/// Origin, which ships preinstalled.
 struct PrivacySettingsView: View {
     @Query private var containers: [TabContainer]
     @Bindable private var settings = SettingsStore.shared
@@ -11,7 +13,6 @@ struct PrivacySettingsView: View {
     @Environment(ToastManager.self) private var toastManager
     @Environment(DialogManager.self) private var dialogManager
 
-    @State private var newCustomFilterListURL = ""
     @State private var clearScope: ClearScope = .allSpaces
     @State private var clearHistory = true
     @State private var clearCache = true
@@ -35,56 +36,36 @@ struct PrivacySettingsView: View {
     // MARK: - Blocking
 
     private var blockingCard: some View {
-        SettingsCard(
-            header: "Ad and tracker blocking",
-            description: "Lists are shared by every space. Turn individual lists on or off "
-                + "per space under Spaces."
-        ) {
-            Toggle("Advanced blocking (scriptlets and cosmetic rules)", isOn: $settings.advancedBlockingEnabled)
-            Toggle("Native request blocking (experimental)", isOn: $settings.nativeRequestBlockingEnabled)
-            Text("Applies $removeparam, $redirect and the block rules Safari's format drops, "
-                + "inside the web process. Takes effect on the next launch.")
-                .font(.caption)
+        SettingsCard(header: "Content blocking") {
+            Text("uBlock Origin is installed and handles ad and tracker blocking. "
+                + "Manage filter lists and per-site rules from its toolbar icon.")
+                .font(.callout)
                 .foregroundStyle(.secondary)
 
-            Divider()
-
-            ForEach(settings.adBlockFilterLists.filter(\.isBuiltin)) { record in
-                filterListRow(record, removable: false)
-            }
-
-            Divider()
-
-            HStack(spacing: 10) {
-                TextField("https://example.com/filter.txt", text: $newCustomFilterListURL)
-                    .textFieldStyle(.roundedBorder)
-                Button("Add list") { addCustomFilterList() }
-                    .disabled(newCustomFilterListURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
-            ForEach(settings.adBlockFilterLists.filter { $0.sourceKind == .custom }) { record in
-                filterListRow(record, removable: true)
-            }
+            Button("Open uBlock Origin dashboard", action: openUBlockDashboard)
+                .disabled(uBlockDashboardURL == nil)
         }
     }
 
-    private func filterListRow(_ record: FilterListRecord, removable: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(record.name)
-                    .font(.body.weight(.medium))
-                Text(record.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if removable {
-                Button("Remove", role: .destructive) {
-                    Task { await AdBlockService.shared.removeCustomList(id: record.id) }
-                }
-                .buttonStyle(.borderless)
-            }
+    /// nil until the extension engine has loaded uBlock Origin, or if the user
+    /// removed it. An extension's id is the folder it was unpacked into.
+    private var uBlockDashboardURL: URL? {
+        ExtensionManager.shared.optionsPageURL(for: BundledExtensions.uBlockFolderName)
+    }
+
+    /// Settings can be a tab or its own window, so the tab has to be asked for by
+    /// notification: only a browser window's root knows how to open one.
+    private func openUBlockDashboard() {
+        guard let url = uBlockDashboardURL else { return }
+        var host: NSWindow?
+        if #available(macOS 15.4, *) {
+            host = ExtensionWindowAdapter.focusedAdapter()?.window
         }
+        guard host != nil else {
+            WindowFactory.openWindow(with: url)
+            return
+        }
+        NotificationCenter.default.post(name: .openURL, object: host, userInfo: ["url": url])
     }
 
     private var fingerprintingCard: some View {
@@ -210,22 +191,5 @@ struct PrivacySettingsView: View {
             modelContext.delete(entry)
         }
         try? modelContext.save()
-    }
-
-    private func addCustomFilterList() {
-        let submittedURL = newCustomFilterListURL
-        Task {
-            do {
-                let record = try await AdBlockService.shared.addCustomList(sourceURL: submittedURL)
-                await MainActor.run {
-                    newCustomFilterListURL = ""
-                    _ = toastManager.show("Added \(record.name)", icon: .system("checkmark.circle"))
-                }
-            } catch {
-                await MainActor.run {
-                    _ = toastManager.show(error.localizedDescription, type: .error)
-                }
-            }
-        }
     }
 }

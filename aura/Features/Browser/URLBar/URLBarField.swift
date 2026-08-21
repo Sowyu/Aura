@@ -80,7 +80,7 @@ struct URLBarField: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.easeOut(duration: 0.15), value: isEditing)
+        .animation(AnimationSettings.easeOut(0.15), value: isEditing)
         // Hidden button for the focus-address-bar shortcut
         .overlay(
             Button("") { startEditing() }
@@ -165,8 +165,8 @@ struct URLBarField: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .opacity(showCopiedAnimation ? 0 : 1)
                 .offset(y: showCopiedAnimation ? (startWheelAnimation ? -12 : 12) : 0)
-                .animation(.easeOut(duration: 0.15), value: showCopiedAnimation)
-                .animation(.easeOut(duration: 0.15), value: startWheelAnimation)
+                .animation(AnimationSettings.easeOut(0.15), value: showCopiedAnimation)
+                .animation(AnimationSettings.easeOut(0.15), value: startWheelAnimation)
                 .onChange(of: launcherInput) { _, newValue in
                     guard isEditing else { return }
                     launcherViewModel.currentText = newValue
@@ -254,7 +254,7 @@ extension URLBarField {
         // Pre-fill before flipping the flag so the field edits the URL, not the host.
         suppressInitialSearch = true
         launcherInput = tabManager.activeTab?.url.absoluteString ?? ""
-        withAnimation(.easeOut(duration: 0.1)) {
+        withAnimation(AnimationSettings.easeOut(0.1)) {
             appState.isURLBarEditing = true
         }
     }
@@ -307,7 +307,7 @@ extension URLBarField {
     private func dismissEditing() {
         DispatchQueue.main.async {
             guard appState.isURLBarEditing else { return }
-            withAnimation(.easeOut(duration: 0.15)) {
+            withAnimation(AnimationSettings.easeOut(0.15)) {
                 appState.isURLBarEditing = false
             }
         }

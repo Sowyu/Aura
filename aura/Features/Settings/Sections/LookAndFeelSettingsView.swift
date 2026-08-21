@@ -14,7 +14,7 @@ struct LookAndFeelSettingsView: View {
         @Bindable var toolbar = toolbarManager
 
         SettingsSection {
-            SettingsCard {
+            SettingsCard(header: "Appearance") {
                 AppearanceSelector(selection: $appearanceManager.appearance)
             }
 

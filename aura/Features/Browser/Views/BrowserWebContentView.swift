@@ -27,10 +27,7 @@ struct BrowserWebContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
         } else if tab.url.isOraSettings {
-            SettingsContentView(
-                initialTab: tab.url.oraSettingsSection,
-                embedded: true
-            )
+            SettingsContentView(initialTab: tab.url.oraSettingsSection)
             .id(tab.id)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()

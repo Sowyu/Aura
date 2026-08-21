@@ -16,18 +16,17 @@ struct URLBarMenuButton: View {
 
     @Environment(\.openWindow) private var openWindow
 
-    @Query(sort: [SortDescriptor(\History.lastAccessedAt, order: .reverse)])
-    private var histories: [History]
-
     @State private var anchor: NSView?
 
     private var webView: WKWebView? {
         tabManager.activeTab?.browserPage?.contentView as? WKWebView
     }
 
-    private var recentHistory: [History] {
+    /// Fetched when the menu opens. The `@Query` this replaces re-rendered the button on
+    /// every history write, i.e. on every navigation in every space.
+    private func recentHistory() -> [History] {
         guard let containerId = tabManager.activeContainer?.id else { return [] }
-        return histories.filter { $0.container?.id == containerId }.prefix(10).map { $0 }
+        return historyManager.recent(limit: 10, in: containerId)
     }
 
     var body: some View {
@@ -153,7 +152,7 @@ struct URLBarMenuButton: View {
     /// History submenu. There is no all-history window in the app yet, so the submenu
     /// lists recent entries only.
     private func historyItem() -> AuraMenuItem {
-        let entries = recentHistory
+        let entries = recentHistory()
         guard !entries.isEmpty else {
             return .submenu(
                 "History",

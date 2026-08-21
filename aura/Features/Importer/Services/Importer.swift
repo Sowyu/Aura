@@ -1,7 +1,7 @@
 import os.log
 import SwiftUI
 
-private let logger = Logger(subsystem: "com.orabrowser.ora", category: "Importer")
+private let logger = Logger(subsystem: "com.aurabrowser.app", category: "Importer")
 
 struct Root: Decodable {
     let sidebar: Sidebar

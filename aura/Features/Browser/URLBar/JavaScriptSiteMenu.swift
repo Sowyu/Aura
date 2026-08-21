@@ -33,16 +33,6 @@ enum JavaScriptSiteMenu {
             .separator,
             .item("Reset to Default", icon: "arrow.uturn.backward", isDisabled: rule == nil) {
                 service.removeRule(host: host)
-            },
-            .separator,
-            // Scriptlets and procedural cosmetic rules break the odd site, so they get the
-            // same permanent per-domain switch page JavaScript has.
-            .item(
-                "Advanced blocking on \(host)",
-                state: AdvancedBlockingService.shared.isDisabled(host: host) ? .none : .checked
-            ) {
-                let advanced = AdvancedBlockingService.shared
-                advanced.setEnabled(advanced.isDisabled(host: host), forHost: host)
             }
         ]
     }

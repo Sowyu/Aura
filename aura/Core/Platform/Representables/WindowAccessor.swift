@@ -145,8 +145,8 @@ struct WindowAccessor: NSViewRepresentable {
         guard let containerHeight = buttons.first?.1.superview?.bounds.height else { return }
         // The titlebar container's top edge lines up with the top of the toolbar
         // row, and AppKit coordinates run upward from its bottom. The container is
-        // usually shorter than TopToolbar.rowHeightpt, so the origin goes negative; that is correct,
-        // and NSView does not clip its subviews by default.
+        // usually shorter than the toolbar row, so the origin goes negative; that is
+        // correct, and NSView does not clip its subviews by default.
         let rowCenterY = containerHeight - Self.toolbarHeight / 2
         for (index, entry) in buttons.enumerated() {
             let size = entry.1.frame.size

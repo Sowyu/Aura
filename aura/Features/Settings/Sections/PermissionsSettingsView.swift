@@ -11,7 +11,6 @@ struct PermissionsSettingsView: View {
     @Environment(DialogManager.self) private var dialogManager
     @Environment(ToastManager.self) private var toastManager
 
-    @State private var blockingOverrides: [String] = []
     @State private var siteDataSpaceID: UUID?
     @State private var siteDataHosts: [String] = []
     @State private var isLoadingSiteData = false
@@ -24,11 +23,9 @@ struct PermissionsSettingsView: View {
         SettingsSection {
             javaScriptCard
             spaceRulesCard
-            blockingOverridesCard
             siteDataCard
         }
         .onAppear {
-            blockingOverrides = AdvancedBlockingService.shared.disabledHostList
             if siteDataSpaceID == nil { siteDataSpaceID = containers.first?.id }
             loadSiteData()
         }
@@ -65,24 +62,6 @@ struct PermissionsSettingsView: View {
                     let name = containers.first { $0.id == rule.containerID }?.name ?? "Unknown space"
                     ruleRow(host: rule.host, detail: "Opens in \(name)") {
                         siteRules.removeRule(host: rule.host)
-                    }
-                }
-            }
-        }
-    }
-
-    private var blockingOverridesCard: some View {
-        SettingsCard(
-            header: "Advanced blocking exceptions",
-            description: "Sites where cosmetic and scriptlet rules are switched off."
-        ) {
-            if blockingOverrides.isEmpty {
-                emptyRow("No exceptions.")
-            } else {
-                ForEach(blockingOverrides, id: \.self) { host in
-                    ruleRow(host: host, detail: "Advanced blocking off") {
-                        AdvancedBlockingService.shared.setEnabled(true, forHost: host)
-                        blockingOverrides = AdvancedBlockingService.shared.disabledHostList
                     }
                 }
             }

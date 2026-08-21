@@ -60,12 +60,11 @@ extension ExtensionCompatibility {
     }
 
     /// Whether Aura answers blocking `webRequest` itself. The injected bundle
-    /// does the blocking and `WebRequestBroker` asks the extension, so the
-    /// verdict follows the same setting that governs native request blocking.
-    /// Read straight from defaults: the store list is built off the main actor.
+    /// stops the request inside the web process and `WebRequestBroker` asks the
+    /// extension, so the answer is simply whether that bundle is loaded.
     static var supportsBlockingWebRequest: Bool {
         guard #available(macOS 15.4, *) else { return false }
-        return UserDefaults.standard.object(forKey: SettingsStore.nativeRequestBlockingEnabledKey) as? Bool ?? true
+        return AuraWebBundle.isEnabled
     }
 
     /// The permission scan on its own, so an unpacked manifest can use the same rules.

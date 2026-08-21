@@ -3,7 +3,7 @@
 #import <os/lock.h>
 #import <os/log.h>
 
-#import "AuraBlockRules.h"
+#import "AuraResourceTypes.h"
 
 NSString *const AuraWebRequestMessageName = @"aura.webRequest.decide";
 

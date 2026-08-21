@@ -2,7 +2,7 @@ import Foundation
 import os.log
 import SwiftData
 
-private let logger = Logger(subsystem: "com.orabrowser.ora", category: "HistoryManager")
+private let logger = Logger(subsystem: "com.aurabrowser.app", category: "HistoryManager")
 
 @Observable
 @MainActor
@@ -58,6 +58,23 @@ final class HistoryManager {
         }
 
         try? modelContext.save()
+    }
+
+    /// Newest visits in one space. Bounded at the store, so the toolbar's history menu
+    /// never materialises the whole table the way a plain `@Query` did.
+    func recent(limit: Int, in containerId: UUID) -> [History] {
+        var descriptor = FetchDescriptor<History>(
+            predicate: #Predicate { $0.container?.id == containerId },
+            sortBy: [SortDescriptor(\.lastAccessedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+
+        do {
+            return try modelContext.fetch(descriptor)
+        } catch {
+            logger.error("Error fetching recent history: \(String(describing: error), privacy: .public)")
+            return []
+        }
     }
 
     func search(_ text: String, activeContainerId: UUID) -> [History] {

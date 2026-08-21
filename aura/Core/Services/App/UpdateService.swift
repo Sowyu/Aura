@@ -2,7 +2,7 @@ import os.log
 import Sparkle
 import SwiftUI
 
-private let logger = Logger(subsystem: "com.orabrowser.ora", category: "UpdateService")
+private let logger = Logger(subsystem: "com.aurabrowser.app", category: "UpdateService")
 
 class UpdateService: NSObject, ObservableObject {
     static let shared = UpdateService()

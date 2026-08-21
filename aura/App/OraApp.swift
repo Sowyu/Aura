@@ -101,12 +101,9 @@ final class AppState {
 struct OraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    /// Shared model container that uses the same configuration as the main browser
-    private let sharedModelContainer: ModelContainer? = {
-        // Must run before anything opens the store: the rename moved the data folder.
-        LegacyDataMigrator.runIfNeeded()
-        return try? ModelConfiguration.createOraContainer(isPrivate: false)
-    }()
+    /// The rename moved the data folder, so this has to run before anything opens the
+    /// store. `OraRoot` makes its own container per window.
+    private let didMigrateLegacyData: Void = LegacyDataMigrator.runIfNeeded()
 
     var body: some Scene {
         WindowGroup(id: "normal") {
@@ -128,27 +125,6 @@ struct OraApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .handlesExternalEvents(matching: [])
-
-        WindowGroup("Settings", id: "settings") {
-            if let sharedModelContainer {
-                SettingsWindowRoot()
-                    .environmentObject(AppearanceManager.shared)
-                    .environmentObject(UpdateService.shared)
-                    .environmentObject(DefaultBrowserManager.shared)
-                    .modelContainer(sharedModelContainer)
-            } else {
-                // Fallback UI when SwiftData is completely broken
-                VStack {
-                    Text("Settings Unavailable")
-                        .font(.title)
-                }
-                .padding()
-                .frame(width: 400, height: 300)
-            }
-        }
-        .windowToolbarStyle(UnifiedCompactWindowToolbarStyle())
-        .windowResizability(.contentSize)
-        .defaultSize(width: 980, height: 640)
         .commands { OraCommands() }
     }
 }

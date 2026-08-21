@@ -11,66 +11,13 @@ extension View {
     }
 }
 
-// MARK: - Genie Effect
-
-/// A subtle macOS Genie-style warp: pinches one edge while fading + scaling.
-private struct GenieEffect: GeometryEffect {
-    var progress: CGFloat // 0 = identity, 1 = fully warped
-    var isTop: Bool
-
-    var animatableData: CGFloat {
-        get { progress }
-        set { progress = newValue }
-    }
-
-    func effectValue(size: CGSize) -> ProjectionTransform {
-        let amount = progress
-
-        // Anchor at the edge the toast enters/exits from
-        let anchorY: CGFloat = isTop ? 0 : size.height
-
-        var transform = CATransform3DIdentity
-
-        // Subtle perspective
-        transform.m34 = -1.0 / 1200 * amount
-
-        // Move anchor to edge, apply scale, move back
-        transform = CATransform3DTranslate(transform, size.width / 2, anchorY, 0)
-        let scaleX = 1.0 - 0.15 * amount  // pinch width slightly
-        let scaleY = 1.0 - 0.25 * amount  // compress height more
-        transform = CATransform3DScale(transform, scaleX, scaleY, 1)
-
-        // Tiny X-axis tilt toward the edge (genie warp feel)
-        let tiltAngle = (isTop ? -1.0 : 1.0) * 0.06 * amount // ~3.4° max
-        transform = CATransform3DRotate(transform, tiltAngle, 1, 0, 0)
-
-        transform = CATransform3DTranslate(transform, -size.width / 2, -anchorY, 0)
-
-        // Slide toward the edge
-        let slideY = (isTop ? -1.0 : 1.0) * 16 * amount
-        transform = CATransform3DTranslate(transform, 0, slideY, 0)
-
-        return ProjectionTransform(transform)
-    }
-}
-
-private struct GenieTransitionModifier: ViewModifier {
-    let progress: CGFloat
-    let isTop: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(Double(1 - progress))
-            .modifier(GenieEffect(progress: progress, isTop: isTop))
-    }
-}
+// MARK: - Enter/exit
 
 private extension AnyTransition {
-    static func genie(isTop: Bool) -> AnyTransition {
-        .modifier(
-            active: GenieTransitionModifier(progress: 1, isTop: isTop),
-            identity: GenieTransitionModifier(progress: 0, isTop: isTop)
-        )
+    /// Flat slide + fade. The warp this replaces scaled and rotated the panel in 3D,
+    /// which is exactly the bounce the design rules rule out.
+    static func slide(isTop: Bool) -> AnyTransition {
+        .move(edge: isTop ? .top : .bottom).combined(with: .opacity)
     }
 }
 
@@ -82,7 +29,6 @@ private struct ToastsContainerView: View {
 
     private let maxVisible = 3
     private let collapsedOffset: CGFloat = 8
-    private let collapsedScale: CGFloat = 0.05
     private let expandedGap: CGFloat = 4
     private let estimatedToastHeight: CGFloat = 44
 
@@ -110,10 +56,8 @@ private struct ToastsContainerView: View {
                     manager.dismiss(id: toast.id)
                 }
                 .offset(y: dragOffset(for: toast))
-                .scaleEffect(
-                    isExpanded ? 1 : 1 - CGFloat(depth) * collapsedScale,
-                    anchor: isTop ? .top : .bottom
-                )
+                // Depth reads from the offset alone. Scaling the stack on hover was the
+                // one place chrome grew under the pointer.
                 .offset(
                     y: isExpanded
                         ? CGFloat(depth) * (estimatedToastHeight + expandedGap) * stackDirection
@@ -122,13 +66,13 @@ private struct ToastsContainerView: View {
                 .opacity(depth >= maxVisible ? 0 : 1)
                 .zIndex(Double(index))
                 .gesture(swipeToDismiss(toast: toast))
-                .transition(.genie(isTop: isTop))
+                .transition(.slide(isTop: isTop))
             }
         }
         .padding(isTop ? .top : .bottom, 20)
         .padding(.horizontal, 20)
         .onHover { hovering in
-            withAnimation(.smooth(duration: 0.15)) {
+            withAnimation(AnimationSettings.easeOut(0.15)) {
                 isExpanded = hovering
             }
             if hovering {
@@ -137,7 +81,7 @@ private struct ToastsContainerView: View {
                 manager.resumeTimers()
             }
         }
-        .animation(.spring(duration: 0.15, bounce: 0.25), value: manager.toasts.map(\.id))
+        .animation(AnimationSettings.easeOut(0.15), value: manager.toasts.map(\.id))
     }
 
     private func dragOffset(for toast: Toast) -> CGFloat {
@@ -163,14 +107,14 @@ private struct ToastsContainerView: View {
 
                     if dismissed {
                         let flyOut: CGFloat = isTop ? -300 : 300
-                        withAnimation(.easeIn(duration: 0.15)) {
+                        withAnimation(AnimationSettings.easeOut(0.15)) {
                             manager.toasts[idx].dragOffsetY = flyOut
                         }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                             manager.dismiss(id: toast.id)
                         }
                     } else {
-                        withAnimation(.spring(duration: 0.15, bounce: 0.2)) {
+                        withAnimation(AnimationSettings.easeOut(0.15)) {
                             manager.toasts[idx].dragOffsetY = 0
                         }
                     }

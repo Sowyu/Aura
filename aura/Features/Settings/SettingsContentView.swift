@@ -100,22 +100,6 @@ enum SettingsTab: String, Hashable, CaseIterable {
     }
 }
 
-struct SettingsWindowRoot: View {
-    // The standalone window has no browser chrome behind it, so it brings its own
-    // managers. They read and write the same defaults keys as a browser window's.
-    @State private var sidebarManager = SidebarManager()
-    @State private var toolbarManager = ToolbarManager()
-    @State private var dialogManager = DialogManager()
-
-    var body: some View {
-        SettingsContentView(initialTab: nil)
-            .environment(ToastManager.shared)
-            .environment(sidebarManager)
-            .environment(toolbarManager)
-            .environment(dialogManager)
-    }
-}
-
 struct SettingsContentView: View {
     static let selectedTabDefaultsKey = "settings.selectedTab"
 
@@ -130,10 +114,6 @@ struct SettingsContentView: View {
 
     /// Section to preselect, e.g. from a `aura://settings/<section>` tab URL.
     let initialTab: SettingsTab?
-    /// Rendered inside a browser tab (`aura://settings`) instead of the standalone settings window.
-    /// A tab has no window toolbar, and `NavigationSplitView` would impose its own minimum width
-    /// and floating sidebar toggle on the surrounding browser layout.
-    var embedded: Bool = false
 
     @AppStorage(Self.selectedTabDefaultsKey) private var selectionRawValue: String = SettingsTab
         .lookAndFeel.rawValue
@@ -150,34 +130,16 @@ struct SettingsContentView: View {
     }
 
     var body: some View {
-        Group {
-            if embedded {
-                embeddedLayout
-            } else {
-                windowLayout
+        layout
+            .onChange(of: initialTab, initial: true) { _, newValue in
+                guard let newValue else { return }
+                selectionRawValue = newValue.rawValue
             }
-        }
-        .onChange(of: initialTab, initial: true) { _, newValue in
-            guard let newValue else { return }
-            selectionRawValue = newValue.rawValue
-        }
-    }
-
-    private var windowLayout: some View {
-        NavigationSplitView {
-            sidebarList
-                .navigationSplitViewColumnWidth(SettingsMetrics.sidebarWidth)
-                .padding(.top, 8)
-        } detail: {
-            detailPane
-                .navigationTitle(selectedTab.title)
-                .navigationSubtitle(selectedTab.subtitle)
-        }
     }
 
     /// No `NavigationSplitView`: it reports a large minimum width and adds its own titlebar
     /// inset plus a floating sidebar toggle, which overflowed the browser's split pane.
-    private var embeddedLayout: some View {
+    private var layout: some View {
         HStack(spacing: 0) {
             sidebarList
                 .listStyle(.sidebar)

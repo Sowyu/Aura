@@ -12,27 +12,6 @@ This repository includes third-party source code and other third-party component
 
 The files in `ora/Shared/Layout/SplitView` were copied from the upstream `SplitView` project and may include local modifications.
 
-## AdGuard Scriptlets
-
-- Upstream project: [AdguardTeam/Scriptlets](https://github.com/AdguardTeam/Scriptlets)
-- Upstream source path: `dist/scriptlets/index.js` from `@adguard/scriptlets@2.3.1` on npm
-- Local path: `aura/Resources/WebScripts/vendor/adguard-scriptlets.js`
-- License: GPL-3.0
-- Included license text: `aura/Resources/WebScripts/vendor/LICENSE-adguard-scriptlets.txt`
-
-The bundle is verbatim except for its final line, where the ES module export was replaced
-by a global assignment so the file can be evaluated in a JavaScriptCore context.
-
-## AdGuard ExtendedCss
-
-- Upstream project: [AdguardTeam/ExtendedCss](https://github.com/AdguardTeam/ExtendedCss)
-- Upstream source path: `dist/extended-css.min.js` from `@adguard/extended-css@2.1.1` on npm
-- Local path: `aura/Resources/WebScripts/vendor/adguard-extended-css.js`
-- License: GPL-3.0
-- Included license text: `aura/Resources/WebScripts/vendor/LICENSE-adguard-extended-css.txt`
-
-Copied verbatim.
-
 ## uBlock Origin
 
 - Upstream project: [gorhill/uBlock](https://github.com/gorhill/uBlock)
@@ -44,7 +23,8 @@ Copied verbatim.
 - Included license text: `aura/Resources/Extensions/LICENSE-ublock-origin.txt`
 
 The archive is the signed AMO build, unmodified. Aura unpacks it into the profile
-on first launch and installs it like any other extension. The installed copy is
+on first launch, enabled, and installs it like any other extension: it is the
+only ad and tracker blocker Aura ships. The installed copy is
 then patched the same way every extension is: `aura-shim.js` is copied in and
 made the first script the background page runs, and `manifest.json` is rewritten
 to load it (the untouched original stays as `manifest.original.json`).

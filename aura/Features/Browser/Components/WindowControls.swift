@@ -18,7 +18,7 @@ struct WindowControls: View {
             }
             .padding(.trailing, 8)
             .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.1)) {
+                withAnimation(AnimationSettings.easeOut(0.1)) {
                     isHovered = hovering
                 }
             }

@@ -2,14 +2,14 @@
 //
 // Declares the one private-API call Swift cannot express safely (building a
 // WKProcessPool whose web content processes load an injected bundle) and
-// re-exports the matcher so the host and its tests share the bundle's code.
+// re-exports the message names the host answers on.
 
 #ifndef AuraWebBundleSupport_h
 #define AuraWebBundleSupport_h
 
 #import <Foundation/Foundation.h>
 
-#import "AuraBlockRules.h"
+#import "AuraResourceTypes.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

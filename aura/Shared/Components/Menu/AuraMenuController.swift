@@ -12,7 +12,10 @@ enum AuraMenuAnchor {
 /// Fixed geometry for every Aura menu. Rows have known heights, so a panel can be placed
 /// and hit-tested without measuring anything — that is what lets a menu appear in one frame.
 enum AuraMenuMetrics {
+    /// Floor for every panel, and the width a menu of short labels keeps.
     static let width: CGFloat = 240
+    /// Ceiling, so one pathological title cannot stretch a panel across the window.
+    static let maxWidth: CGFloat = 420
     static let rowHeight: CGFloat = 28
     static let headerHeight: CGFloat = 22
     static let separatorHeight: CGFloat = 9
@@ -35,6 +38,25 @@ enum AuraMenuMetrics {
 
     static func height(of items: [AuraMenuItem]) -> CGFloat {
         items.reduce(verticalPadding * 2) { $0 + height(of: $1) }
+    }
+
+    private static let titleFont = NSFont.systemFont(ofSize: 13)
+    private static let shortcutFont = NSFont.systemFont(ofSize: 12)
+    /// Row padding, icon slot, the gaps around them, and room for a submenu chevron.
+    private static let rowChrome: CGFloat = 10 + iconSize + 8 + 6 + 17 + 10
+
+    /// Widest row, clamped. A fixed 240pt panel middle-truncated real titles such as
+    /// "Always Open example.com in This Space" into unreadable stubs.
+    static func width(of items: [AuraMenuItem]) -> CGFloat {
+        let widest = items.reduce(CGFloat.zero) { widest, item in
+            let title = (item.title as NSString)
+                .size(withAttributes: [.font: item.kind == .header ? shortcutFont : titleFont]).width
+            let shortcut = item.shortcut.map {
+                ($0 as NSString).size(withAttributes: [.font: shortcutFont]).width
+            } ?? 0
+            return max(widest, title + shortcut)
+        }
+        return min(max(width, (widest + rowChrome).rounded(.up)), maxWidth)
     }
 
     /// Distance from the panel's top edge to the top of `index`.
@@ -106,7 +128,7 @@ final class AuraMenuController: ObservableObject {
         // ponytail: a menu taller than the window is clipped rather than scrolled. Give the
         // panel a ScrollView if any real menu ever outgrows a window.
         let size = CGSize(
-            width: AuraMenuMetrics.width,
+            width: AuraMenuMetrics.width(of: tidyItems),
             height: min(AuraMenuMetrics.height(of: tidyItems), bounds.height - AuraMenuMetrics.windowInset * 2)
         )
 
@@ -211,7 +233,7 @@ extension AuraMenuController {
         let bounds = content.bounds
         let items = parent.items
         let size = CGSize(
-            width: AuraMenuMetrics.width,
+            width: AuraMenuMetrics.width(of: items),
             height: min(AuraMenuMetrics.height(of: items), bounds.height - AuraMenuMetrics.windowInset * 2)
         )
         let panel = levels[level].frame

@@ -6,7 +6,7 @@
 #import <Foundation/Foundation.h>
 #import <os/log.h>
 
-#import "AuraBlockRules.h"
+#import "AuraResourceTypes.h"
 #import "AuraWebBundleWK.h"
 #import "AuraWebRequestChannel.h"
 
@@ -18,25 +18,6 @@ static os_log_t AuraBundleLog(void)
     static dispatch_once_t once;
     dispatch_once(&once, ^{ log = os_log_create("com.aurabrowser.app", "bundle"); });
     return log;
-}
-
-/// Asks the host for the rule document when the host's revision differs from
-/// the one loaded here. The web process cannot read Aura's files, and the bundle
-/// itself sits inside the signed app, so everything arrives over IPC.
-static void AuraLoadRulesDocument(NSString *document)
-{
-    if (!document) { return; }
-    if ([AuraBlockRules.sharedRules loadFromData:[document dataUsingEncoding:NSUTF8StringEncoding]]) {
-        os_log(AuraBundleLog(), "loaded %lu rules (revision %{public}@)",
-               (unsigned long)AuraBlockRules.sharedRules.ruleCount,
-               AuraBlockRules.sharedRules.revision ?: @"none");
-    }
-}
-
-static void AuraSyncRules(void)
-{
-    AuraLoadRulesDocument(AuraWebRequestChannelPostSync(AuraBlockRulesMessageName,
-                                                        AuraBlockRules.sharedRules.revision ?: @""));
 }
 
 #pragma mark - Main-document tracking
@@ -179,39 +160,26 @@ static WKURLRequestRef AuraWillSendRequestForFrame(
             && mainDocumentIdentifier != nil
             && mainDocumentIdentifier.unsignedLongLongValue == resourceIdentifier;
 
-        const uint32_t typeMask = [AuraBlockRules typeMaskForURL:url acceptHeader:nil isMainFrame:isMainFrame];
-        NSString *documentHost = isMainDocument ? url.host : AuraMainFrameURL(page).host;
-
-        NSURL *replacement = nil;
-        AuraBlockDecision decision = [AuraBlockRules.sharedRules decisionForURL:url
-                                                                        documentHost:documentHost
-                                                                            typeMask:typeMask
-                                                                         isMainFrame:isMainDocument
-                                                                          resultURL:&replacement];
-
-        // Aura's own rules win outright; an extension only gets asked about
-        // requests that would otherwise go through untouched.
-        if (decision == AuraBlockDecisionAllow && AuraWebRequestChannelIsActive()) {
-            decision = AuraExtensionDecision(page, frame, resourceIdentifier, request, url,
-                                             typeMask, isMainFrame, isMainDocument, &replacement);
-        }
-
-        switch (decision) {
-        case AuraBlockDecisionBlock:
-            os_log_debug(AuraBundleLog(), "block id=%llu url=%{private}@", resourceIdentifier, url);
-            return NULL;
-        case AuraBlockDecisionRedirect:
-        case AuraBlockDecisionRewrite: {
-            WKURLRequestRef rewritten = replacement ? AuraCreateRequest(replacement) : NULL;
-            if (rewritten) {
-                os_log_debug(AuraBundleLog(), "rewrite id=%llu url=%{private}@ -> %{private}@",
-                             resourceIdentifier, url, replacement);
-                return rewritten;
+        // Blocking is an extension's job now: uBlock Origin registers a blocking
+        // webRequest listener and Aura keeps no rule set of its own. Nothing is
+        // sent unless the host says some listener is actually registered.
+        if (AuraWebRequestChannelIsActive()) {
+            const uint32_t typeMask = AuraResourceTypeMaskForURL(url, nil, isMainFrame);
+            NSURL *replacement = nil;
+            AuraBlockDecision decision = AuraExtensionDecision(page, frame, resourceIdentifier, request, url,
+                                                              typeMask, isMainFrame, isMainDocument, &replacement);
+            if (decision == AuraBlockDecisionBlock) {
+                os_log_debug(AuraBundleLog(), "block id=%llu url=%{private}@", resourceIdentifier, url);
+                return NULL;
             }
-            break;
-        }
-        case AuraBlockDecisionAllow:
-            break;
+            if (decision == AuraBlockDecisionRedirect && replacement) {
+                WKURLRequestRef rewritten = AuraCreateRequest(replacement);
+                if (rewritten) {
+                    os_log_debug(AuraBundleLog(), "redirect id=%llu url=%{private}@ -> %{private}@",
+                                 resourceIdentifier, url, replacement);
+                    return rewritten;
+                }
+            }
         }
 
         // The client contract is to hand back a retained request.
@@ -222,9 +190,8 @@ static WKURLRequestRef AuraWillSendRequestForFrame(
 
 static void AuraDidCreatePage(WKBundleRef bundle, WKBundlePageRef page, const void *clientInfo)
 {
-    // Two short round trips per page creation; the rule document only travels
-    // when the host rebuilt it.
-    AuraSyncRules();
+    // One short round trip per page creation: a web process that came up after
+    // the last push still learns whether a blocking listener exists.
     AuraWebRequestChannelRefreshActive();
 
     WKBundlePageResourceLoadClientV1 client;
@@ -252,8 +219,6 @@ static void AuraDidReceiveMessage(WKBundleRef bundle, WKStringRef name, WKTypeRe
     }
     if ([messageName isEqualToString:AuraWebRequestStateMessageName]) {
         AuraWebRequestChannelSetActive(payload);
-    } else if ([messageName isEqualToString:AuraBlockRulesMessageName]) {
-        AuraLoadRulesDocument(payload);
     }
 }
 

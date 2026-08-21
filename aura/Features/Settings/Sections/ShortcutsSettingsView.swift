@@ -98,47 +98,25 @@ struct ShortcutRowView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isEditing ?
-                                    Color.accentColor.opacity(0.1) :
-                                    Color(NSColor.controlBackgroundColor)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(
-                                            isEditing ?
-                                                Color.accentColor :
-                                                Color(NSColor.separatorColor),
-                                            lineWidth: isEditing ? 1.5 : 0.5
-                                        )
-                                )
-
-                            if isEditing {
-                                PulsingBorderView()
-                            }
-                        }
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(isEditing ?
+                                Color.accentColor.opacity(0.1) :
+                                Color(NSColor.controlBackgroundColor)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(
+                                        isEditing ? Color.accentColor : Color(NSColor.separatorColor),
+                                        lineWidth: isEditing ? 1.5 : 0.5
+                                    )
+                            )
                     )
             }
             .buttonStyle(.plain)
-            .scaleEffect(isEditing ? 1.02 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isEditing)
+            // The chip already switches to an accent fill and a heavier stroke while it
+            // waits for a chord; growing it as well broke the no-scale rule.
+            .animation(AnimationSettings.easeOut(0.1), value: isEditing)
         }
         .padding(.vertical, 4)
-    }
-}
-
-struct PulsingBorderView: View {
-    @State private var isPulsing = false
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 6)
-            .stroke(Color.accentColor.opacity(0.4), lineWidth: 1.5)
-            .scaleEffect(isPulsing ? 1.6 : 1.0)
-            .opacity(isPulsing ? 0.0 : 0.8)
-            .animation(.easeOut(duration: 1.4).repeatForever(autoreverses: false), value: isPulsing)
-            .onAppear {
-                isPulsing = true
-            }
     }
 }

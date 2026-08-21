@@ -32,7 +32,7 @@ struct GlobalMediaPlayer: View {
             }
         }
         .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(AnimationSettings.easeOut(0.15), value: isHovered)
     }
 }
 
@@ -122,7 +122,7 @@ private struct MediaPlayerCard: View {
                 Spacer()
 
                 Button {
-                    withAnimation(.easeOut(duration: 0.15)) { showVolume.toggle() }
+                    withAnimation(AnimationSettings.easeOut(0.15)) { showVolume.toggle() }
                 } label: {
                     Image(systemName: media
                         .volume(of: session.tabID) <= 0.001 ? "speaker.slash.fill" : "speaker.wave.2.fill"

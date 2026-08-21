@@ -35,7 +35,8 @@ struct ContainerView: View {
                         onFavoriteToggle: toggleFavorite,
                         onClose: removeTab,
                         onDuplicate: duplicateTab,
-                        onMoveToContainer: moveTab
+                        onMoveToContainer: moveTab,
+                        containers: containers
                     )
                 }
             } else {
@@ -94,7 +95,7 @@ struct ContainerView: View {
                         containers: containers
                     )
                 }
-                .animation(.easeOut(duration: 0.12), value: draggedItem == nil)
+                .animation(AnimationSettings.easeOut(0.12), value: draggedItem == nil)
                 .adaptiveScrollElasticity()
             }
         }

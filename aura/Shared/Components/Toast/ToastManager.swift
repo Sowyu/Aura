@@ -22,7 +22,7 @@ final class ToastManager {
     ) -> String {
         let toast = Toast(message: message, type: type, icon: icon)
 
-        withAnimation(.spring(duration: 0.2, bounce: 0.15)) {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             toasts.append(toast)
         }
 
@@ -35,7 +35,7 @@ final class ToastManager {
         dismissTimers[id]?.cancel()
         dismissTimers.removeValue(forKey: id)
 
-        withAnimation(.spring(duration: 0.15, bounce: 0.15)) {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             toasts.removeAll { $0.id == id }
         }
     }
@@ -46,7 +46,7 @@ final class ToastManager {
         }
         dismissTimers.removeAll()
 
-        withAnimation(.spring(duration: 0.15, bounce: 0.15)) {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             toasts.removeAll()
         }
     }

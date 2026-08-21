@@ -37,7 +37,7 @@ struct ContainerForm: View {
                             : StrokeStyle(lineWidth: 1)
                     )
                     .animation(
-                        .easeOut(duration: ContainerConstants.Animation.emojiPickerDuration),
+                        AnimationSettings.easeOut(ContainerConstants.Animation.emojiPickerDuration),
                         value: isEmpty
                     )
                     .background(isIconPickerHovering ? theme.mutedBackground.opacity(0.8)
@@ -63,7 +63,7 @@ struct ContainerForm: View {
         .cornerRadius(ContainerConstants.UI.cornerRadius)
         .buttonStyle(InteractiveButtonStyle(cornerRadius: ContainerConstants.UI.cornerRadius, hoverOpacity: 0))
         .onHover { isIconPickerHovering = $0 }
-        .animation(.easeOut(duration: 0.1), value: isIconPickerHovering)
+        .animation(AnimationSettings.easeOut(0.1), value: isIconPickerHovering)
     }
 
     /// An emoji clears any chosen symbol; a symbol wins over the stored emoji.

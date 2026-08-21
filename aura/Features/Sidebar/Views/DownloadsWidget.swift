@@ -18,7 +18,7 @@ struct DownloadsWidget: View {
 
     var body: some View {
         Button {
-            withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+            withAnimation(AnimationSettings.easeOut(0.15)) {
                 downloadManager.isShowingDownloadsHistory.toggle()
             }
         } label: {
@@ -34,7 +34,7 @@ struct DownloadsWidget: View {
                         .stroke(theme.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                         .frame(width: 24, height: 24)
                         .rotationEffect(.degrees(-90))
-                        .animation(.easeOut(duration: 0.15), value: totalProgress)
+                        .animation(AnimationSettings.easeOut(0.15), value: totalProgress)
                 }
 
                 if hasActiveDownloads {

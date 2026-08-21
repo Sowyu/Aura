@@ -49,7 +49,7 @@ struct LinkPreview: View {
             .padding(.leading, 8)
         }
         .transition(.opacity)
-        .animation(.easeOut(duration: 0.1), value: text)
+        .animation(AnimationSettings.easeOut(0.1), value: text)
         .zIndex(900)
     }
 }

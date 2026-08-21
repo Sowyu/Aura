@@ -54,7 +54,9 @@ struct AuraMenuPanel: View {
             Text(item.title)
                 .font(.system(size: 13))
                 .lineLimit(1)
-                .truncationMode(.middle)
+                // Tail, not middle: a middle-clipped URL loses both the path and the
+                // readable part of the host and reads as noise.
+                .truncationMode(.tail)
             Spacer(minLength: 6)
             if let shortcut = item.shortcut {
                 Text(shortcut)

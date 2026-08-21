@@ -34,9 +34,6 @@ struct TopToolbar: View {
     @Environment(DownloadManager.self) private var downloadManager
     @EnvironmentObject private var privacyMode: PrivacyMode
 
-    @Query(sort: [SortDescriptor(\History.lastAccessedAt, order: .reverse)])
-    private var histories: [History]
-
     @State private var historyAnchor: NSView?
 
     private var buttonForegroundColor: Color {
@@ -47,9 +44,11 @@ struct TopToolbar: View {
         sidebarManager.sidebarPosition == .secondary ? "sidebar.right" : "sidebar.left"
     }
 
-    private var recentHistory: [History] {
+    /// Read when the menu is opened, not on every render: a `@Query` here re-ran the
+    /// whole toolbar on every page load, because every navigation writes a history row.
+    private func recentHistory() -> [History] {
         guard let containerId = tabManager.activeContainer?.id else { return [] }
-        return histories.filter { $0.container?.id == containerId }.prefix(10).map { $0 }
+        return historyManager.recent(limit: 10, in: containerId)
     }
 
     var body: some View {
@@ -60,9 +59,11 @@ struct TopToolbar: View {
             }
             // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
             .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
+            // Measured before the balancing pad: reading the padded width would feed the
+            // pad back into its own input and flip the row between two widths every pass.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { leadingWidth = $0 }
             // Pad the narrower side out to the wider one, so the field centres on the window.
             .padding(.leading, max(0, trailingWidth - leadingWidth))
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { leadingWidth = $0 }
 
             Spacer(minLength: Self.groupSpacing)
             URLBarField(
@@ -93,8 +94,8 @@ struct TopToolbar: View {
                 windowGroup
             }
             .padding(.trailing, Self.edgeInset)
-            .padding(.trailing, max(0, leadingWidth - trailingWidth))
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { trailingWidth = $0 }
+            .padding(.trailing, max(0, leadingWidth - trailingWidth))
         }
         .frame(height: Self.rowHeight)
         .frame(maxWidth: .infinity)
@@ -189,7 +190,7 @@ struct TopToolbar: View {
 
     private var historyMenu: some View {
         Button {
-            historyAnchor?.presentAuraMenu(historyItems)
+            historyAnchor?.presentAuraMenu(historyItems())
         } label: {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 14, weight: .medium))
@@ -203,9 +204,10 @@ struct TopToolbar: View {
         .help("Recent History")
     }
 
-    private var historyItems: [AuraMenuItem] {
-        guard !recentHistory.isEmpty else { return [.disabled("No recent history")] }
-        return recentHistory.map { entry in
+    private func historyItems() -> [AuraMenuItem] {
+        let recent = recentHistory()
+        guard !recent.isEmpty else { return [.disabled("No recent history")] }
+        return recent.map { entry in
             .item(entry.title.isEmpty ? entry.urlString : entry.title) {
                 openInNewTab(entry.url)
             }

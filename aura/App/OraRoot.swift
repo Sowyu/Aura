@@ -127,12 +127,7 @@ struct OraRoot: View {
                 }
 
                 downloadManager.toastManager = toastManager
-                Task {
-                    let containerIDs = await MainActor.run {
-                        (try? tabContext.fetch(FetchDescriptor<TabContainer>()))?.map(\.id) ?? []
-                    }
-                    await AdBlockService.shared.start(containerIDs: containerIDs)
-                }
+                BuiltInBlockingMigration.runIfNeeded()
 
                 // Dialog keyboard shortcuts (highest priority — checked first)
                 keyModifierListener.registerKeyDownHandler { event in
@@ -179,7 +174,8 @@ struct OraRoot: View {
                         confirmLabel: "Quit",
                         variant: .destructive,
                         onConfirm: { NSApp.reply(toApplicationShouldTerminate: true) },
-                        onCancel: { NSApp.reply(toApplicationShouldTerminate: false) }
+                        onCancel: { NSApp.reply(toApplicationShouldTerminate: false) },
+                        isQuitConfirmation: true
                     )
                 }
 
@@ -232,7 +228,7 @@ struct OraRoot: View {
                 }
                 observe(.toggleToolbar) { note in
                     guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(AnimationSettings.easeOut(0.15)) {
                         toolbarManager.isToolbarHidden.toggle()
                     }
                 }

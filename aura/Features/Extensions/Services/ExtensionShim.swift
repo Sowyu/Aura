@@ -42,11 +42,12 @@ enum ExtensionShim {
         }
     }
 
-    /// `apply` wrapped for the install path: honours the setting and turns a
-    /// failure into the note Settings shows next to the extension.
+    /// `apply` wrapped for the install path: the shim only has a channel home
+    /// when the injected bundle is loaded, so it follows that. A failure becomes
+    /// the note Settings shows next to the extension.
     @MainActor
     static func patch(at directory: URL) -> String? {
-        guard SettingsStore.shared.nativeRequestBlockingEnabled else { return nil }
+        guard AuraWebBundle.isEnabled else { return nil }
         do {
             try apply(at: directory)
             return nil

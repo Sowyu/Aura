@@ -107,7 +107,7 @@ struct NormalTabsList: View {
             insertion: .opacity.combined(with: .move(edge: .bottom)),
             removal: .opacity.combined(with: .move(edge: .top))
         ))
-        .animation(.spring(response: 0.18, dampingFraction: 0.85), value: shouldAnimate(tab))
+        .animation(AnimationSettings.easeOut(0.15), value: shouldAnimate(tab))
     }
 
     @ViewBuilder
@@ -138,7 +138,7 @@ struct NormalTabsList: View {
                 }
             }
         }
-        .animation(.easeOut(duration: 0.12), value: folder.isCollapsed)
+        .animation(AnimationSettings.easeOut(0.12), value: folder.isCollapsed)
     }
 
     private func shouldAnimate(_ tab: Tab) -> Bool {

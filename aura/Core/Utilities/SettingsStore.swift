@@ -174,14 +174,9 @@ class SettingsStore {
     private let autoUpdateKey = "settings.autoUpdateEnabled"
     private let trackingThirdPartyKey = "settings.tracking.blockThirdParty"
     private let fingerprintingKey = "settings.tracking.blockFingerprinting"
-    private let adBlockingKey = "settings.tracking.adBlocking"
     private let cookiesPolicyKey = "settings.cookies.policy"
     private let blockJavaScriptByDefaultKey = "privacy.javascript.blockedByDefault"
     private let launcherRisesForSuggestionsKey = "launcher.risesForSuggestions"
-    private let advancedBlockingEnabledKey = "privacy.advancedBlocking.enabled"
-    /// Read straight from `UserDefaults` by `AuraWebBundle`, which runs off the main actor.
-    static let nativeRequestBlockingEnabledKey = "privacy.nativeRequestBlocking.enabled"
-    private let adBlockFilterListsKey = "settings.adBlock.filterLists"
     private let sitePermissionsKey = "settings.permissions.sitePermissions"
     private let customSearchEnginesKey = "settings.customSearchEngines"
     private let globalDefaultSearchEngineKey = "settings.globalDefaultSearchEngine"
@@ -252,10 +247,6 @@ class SettingsStore {
         didSet { defaults.set(blockFingerprinting, forKey: fingerprintingKey) }
     }
 
-    var adBlocking: Bool {
-        didSet { defaults.set(adBlocking, forKey: adBlockingKey) }
-    }
-
     var cookiesPolicy: CookiesPolicy {
         didSet { defaults.set(cookiesPolicy.rawValue, forKey: cookiesPolicyKey) }
     }
@@ -270,32 +261,8 @@ class SettingsStore {
         didSet { defaults.set(blockJavaScriptByDefault, forKey: blockJavaScriptByDefaultKey) }
     }
 
-    /// Applies the filter rules WebKit's content blocking format cannot express
-    /// (scriptlets, procedural selectors, CSS injection). Per-site overrides live in
-    /// `AdvancedBlockingService`.
-    var advancedBlockingEnabled: Bool {
-        didSet {
-            defaults.set(advancedBlockingEnabled, forKey: advancedBlockingEnabledKey)
-            NotificationCenter.default.post(name: AdvancedBlockingService.didChangeNotification, object: nil)
-        }
-    }
-
-    /// Runs the filter rules WebKit's content blocking cannot express (`$removeparam`,
-    /// `$redirect`, unsupported resource types) inside the WebContent process, through
-    /// the `AuraWebBundle` injected bundle. Takes effect on the next launch.
-    var nativeRequestBlockingEnabled: Bool {
-        didSet {
-            defaults.set(nativeRequestBlockingEnabled, forKey: Self.nativeRequestBlockingEnabledKey)
-            NotificationCenter.default.post(name: AdvancedBlockingService.didChangeNotification, object: nil)
-        }
-    }
-
     var sitePermissions: [String: SitePermissionSettings] {
         didSet { saveCodable(sitePermissions, forKey: sitePermissionsKey) }
-    }
-
-    private(set) var adBlockFilterLists: [FilterListRecord] {
-        didSet { saveCodable(adBlockFilterLists, forKey: adBlockFilterListsKey) }
     }
 
     var customSearchEngines: [CustomSearchEngine] {
@@ -440,7 +407,6 @@ class SettingsStore {
         autoUpdateEnabled = defaults.object(forKey: autoUpdateKey) as? Bool ?? true
         blockThirdPartyTrackers = defaults.bool(forKey: trackingThirdPartyKey)
         blockFingerprinting = defaults.object(forKey: fingerprintingKey) as? Bool ?? true
-        adBlocking = defaults.bool(forKey: adBlockingKey)
         if let raw = defaults.string(forKey: cookiesPolicyKey),
            let policy = CookiesPolicy(rawValue: raw)
         {
@@ -451,16 +417,8 @@ class SettingsStore {
 
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
         launcherRisesForSuggestions = defaults.object(forKey: launcherRisesForSuggestionsKey) as? Bool ?? true
-        advancedBlockingEnabled = defaults.object(forKey: advancedBlockingEnabledKey) as? Bool ?? true
-        nativeRequestBlockingEnabled = defaults
-            .object(forKey: Self.nativeRequestBlockingEnabledKey) as? Bool ?? true
-
         sitePermissions =
             Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]
-
-        adBlockFilterLists = FilterListCatalogService.shared.normalizedRecords(
-            from: Self.loadCodable([FilterListRecord].self, key: adBlockFilterListsKey) ?? []
-        )
 
         customSearchEngines =
             Self.loadCodable([CustomSearchEngine].self, key: customSearchEnginesKey) ?? []
@@ -680,32 +638,6 @@ class SettingsStore {
         customSearchEngines = engines
     }
 
-    // MARK: - Ad block filter catalog
-
-    func adBlockFilterList(id: String) -> FilterListRecord? {
-        adBlockFilterLists.first { $0.id == id }
-    }
-
-    func setAdBlockFilterLists(_ records: [FilterListRecord]) {
-        adBlockFilterLists = FilterListCatalogService.shared.normalizedRecords(from: records)
-    }
-
-    func upsertAdBlockFilterList(_ record: FilterListRecord) {
-        var records = adBlockFilterLists
-        if let index = records.firstIndex(where: { $0.id == record.id }) {
-            records[index] = record
-        } else {
-            records.append(record)
-        }
-        adBlockFilterLists = FilterListCatalogService.shared.normalizedRecords(from: records)
-    }
-
-    func removeAdBlockFilterList(id: String) {
-        adBlockFilterLists = FilterListCatalogService.shared.normalizedRecords(
-            from: adBlockFilterLists.filter { $0.id != id }
-        )
-    }
-
     func removeCustomSearchEngine(withId id: String) {
         customSearchEngines = customSearchEngines.filter { $0.id != id }
     }
@@ -783,7 +715,6 @@ class SettingsStore {
         SpacePrivacySettings(
             blockThirdPartyTrackers: blockThirdPartyTrackers,
             blockFingerprinting: blockFingerprinting,
-            adBlocking: adBlocking,
             cookiesPolicy: cookiesPolicy
         )
     }

@@ -1,5 +1,4 @@
 import AppKit
-import SwiftData
 import SwiftUI
 
 struct FavTabItem: View {
@@ -11,9 +10,11 @@ struct FavTabItem: View {
     let onClose: () -> Void
     let onDuplicate: () -> Void
     let onMoveToContainer: (TabContainer) -> Void
+    /// Passed down rather than queried per tile: one `@Query` per favourite ran a store
+    /// fetch for every icon in the grid, only to fill a context menu.
+    let containers: [TabContainer]
 
     @Environment(\.theme) private var theme
-    @Query var containers: [TabContainer]
     @Environment(TabManager.self) private var tabManager
     @Environment(HistoryManager.self) private var historyManager
     @Environment(DownloadManager.self) private var downloadManager

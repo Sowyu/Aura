@@ -389,21 +389,8 @@ final class BrowserPrivacyService {
 
     private let ruleListStore = WKContentRuleListStore.default()!
     private let cacheLock = NSLock()
-    private let artifactStore = ContentBlockerArtifactStore.shared
     private var cachedRuleLists: [String: WKContentRuleList] = [:]
     private var pendingRuleListCallbacks: [String: [(WKContentRuleList?) -> Void]] = [:]
-
-    func activeRuleListIdentifiers(for spaceID: UUID) -> [String] {
-        let privacySettings = SettingsStore.shared.privacySettings(for: spaceID)
-        guard privacySettings.adBlock.enabled else { return [] }
-
-        return SettingsStore.shared.adBlockFilterLists
-            .filter { privacySettings.adBlock.enabledListIDs.contains($0.id) }
-            .flatMap { record -> [String] in
-                guard let revision = record.activeRevision else { return [] }
-                return artifactStore.ruleListIdentifiers(for: record.id, revision: revision)
-            }
-    }
 
     func prepareConfiguration(
         _ configuration: WKWebViewConfiguration,
@@ -411,7 +398,7 @@ final class BrowserPrivacyService {
         completion: @escaping () -> Void
     ) {
         let privacySettings = SettingsStore.shared.privacySettings(for: spaceID)
-        let enabledRuleLists = enabledRuleLists(for: spaceID, privacySettings: privacySettings)
+        let enabledRuleLists = ruleListIdentifiers(for: privacySettings)
         let group = DispatchGroup()
 
         for identifier in enabledRuleLists {
@@ -454,7 +441,9 @@ final class BrowserPrivacyService {
         balancedFingerprintingScriptSource
     }
 
-    private func enabledRuleLists(for spaceID: UUID, privacySettings: SpacePrivacySettings) -> [String] {
+    /// The rule lists a space attaches. Only the tracker and cookie lists are left:
+    /// filter-list blocking is uBlock Origin's, so a default space attaches nothing.
+    func ruleListIdentifiers(for privacySettings: SpacePrivacySettings) -> [String] {
         var identifiers: [String] = []
 
         if privacySettings.blockThirdPartyTrackers {
@@ -470,7 +459,7 @@ final class BrowserPrivacyService {
             identifiers.append(StaticRuleListIdentifier.allCookies.rawValue)
         }
 
-        return identifiers + activeRuleListIdentifiers(for: spaceID)
+        return identifiers
     }
 
     private func applyCookiePolicy(
@@ -521,7 +510,7 @@ final class BrowserPrivacyService {
                 return
             }
 
-            guard let encodedRuleList = Self.encodedRuleList(for: identifier, artifactStore: self.artifactStore) else {
+            guard let encodedRuleList = Self.encodedRuleList(for: identifier) else {
                 self.finishLoadingRuleList(identifier, ruleList: nil)
                 return
             }
@@ -549,10 +538,7 @@ final class BrowserPrivacyService {
         callbacks.forEach { $0(ruleList) }
     }
 
-    private static func encodedRuleList(
-        for identifier: String,
-        artifactStore: ContentBlockerArtifactStore
-    ) -> String? {
+    private static func encodedRuleList(for identifier: String) -> String? {
         switch identifier {
         case StaticRuleListIdentifier.trackers.rawValue:
             return encodeRules(networkBlockingRules(for: trackerDomains))
@@ -574,7 +560,7 @@ final class BrowserPrivacyService {
                 ]
             ])
         default:
-            return artifactStore.encodedRuleList(for: identifier)
+            return nil
         }
     }
 

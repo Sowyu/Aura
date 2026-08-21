@@ -19,33 +19,32 @@ struct AppearanceSelector: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Appearance").foregroundStyle(.secondary)
-            HStack(spacing: 16) {
-                ForEach(options) { opt in
-                    let isSelected = selection == opt.appearance
-                    Button {
-                        selection = opt.appearance
-                    } label: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Image(opt.imageName)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 105, height: 68)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            Text(opt.title)
-                                .fontWeight(isSelected ? .semibold : .regular)
-                        }
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(isSelected ? Color(.controlColor) : Color.clear)
-                        )
+        // No inline label: the card supplies the header, so every settings card
+        // reads the same way.
+        HStack(spacing: 16) {
+            ForEach(options) { opt in
+                let isSelected = selection == opt.appearance
+                Button {
+                    selection = opt.appearance
+                } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Image(opt.imageName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 105, height: 68)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        Text(opt.title)
+                            .fontWeight(isSelected ? .semibold : .regular)
                     }
-                    .buttonStyle(.interactive(cornerRadius: 10))
+                    .padding(6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(isSelected ? Color(.controlColor) : Color.clear)
+                    )
                 }
+                .buttonStyle(.interactive(cornerRadius: 10))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

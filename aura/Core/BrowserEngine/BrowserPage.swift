@@ -20,12 +20,6 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
 
     private let webView: AuraWebView
     private let messageNames: [String]
-    private let spaceID: UUID
-    /// The scripts every page gets. Kept because advanced blocking has to replace the
-    /// whole user script list per navigation: WebKit can only remove all of them at once.
-    private let baseUserScripts: [BrowserUserScript]
-    private var hasAdvancedScripts = false
-    private var advancedBlockingObserver: NSObjectProtocol?
     private var originalURL: URL?
     private(set) var lastCommittedURL: URL?
     private(set) var isDownloadNavigation = false
@@ -83,8 +77,6 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
             ExtensionManager.shared.attach(to: webConfiguration, isPrivate: profile.isPrivate)
         }
         messageNames = configuration.scriptMessageNames
-        spaceID = profile.identifier
-        baseUserScripts = configuration.userScripts
         webView = AuraWebView(frame: .zero, configuration: webConfiguration)
         self.delegate = delegate
 
@@ -115,11 +107,6 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
             layer.isOpaque = true
             layer.drawsAsynchronously = true
         }
-
-        MainActor.assumeIsolated {
-            AdvancedBlockingService.shared.prepare(spaceID: profile.identifier)
-        }
-        observeAdvancedBlockingChanges()
 
         BrowserPrivacyService.shared.prepareConfiguration(
             webConfiguration,
@@ -230,10 +217,6 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     }
 
     func teardown() {
-        if let advancedBlockingObserver {
-            NotificationCenter.default.removeObserver(advancedBlockingObserver)
-            self.advancedBlockingObserver = nil
-        }
         webView.stopLoading()
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
@@ -297,11 +280,6 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.name == "advancedBlocking" {
-            applyAdvancedBlockingToFrame(message)
-            return
-        }
-
         if message.name == "contextMenu" {
             cacheContextMenuInfo(message.body)
             return
@@ -334,11 +312,6 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
 
         switch delegate?.browserPage(self, decidePolicyFor: action) ?? .allow {
         case .allow:
-            if stripTrackingParametersIfNeeded(for: navigationAction) {
-                decisionHandler(.cancel, preferences)
-                return
-            }
-            applyAdvancedBlocking(for: navigationAction)
             decisionHandler(.allow, preferences)
         case .cancel:
             decisionHandler(.cancel, preferences)
@@ -589,114 +562,5 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
             defaultText: defaultText,
             completion: completionHandler
         )
-    }
-}
-
-// MARK: - Advanced blocking
-
-/// The rules WebKit's content blocking format cannot express are applied here: the
-/// engine is queried per navigation and the result becomes a document-start user script.
-private extension BrowserPage {
-    func observeAdvancedBlockingChanges() {
-        advancedBlockingObserver = NotificationCenter.default.addObserver(
-            forName: AdvancedBlockingService.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self, let currentURL = self.webView.url else { return }
-            // A per-site change only affects the pages on that site; a global one hits all.
-            if let changedHost = notification.userInfo?["host"] as? String,
-               registrableDomain(from: currentURL) != changedHost
-            {
-                return
-            }
-            self.webView.reload()
-        }
-    }
-
-    /// Cancels and re-issues a document navigation with `$removeparam` parameters gone.
-    /// Returns true when it took over the navigation.
-    func stripTrackingParametersIfNeeded(for navigationAction: WKNavigationAction) -> Bool {
-        // Only a plain GET into the main frame can be re-issued safely: a POST would lose
-        // its body and a back/forward entry would be rewritten under the user.
-        guard navigationAction.targetFrame?.isMainFrame == true,
-              navigationAction.navigationType != .backForward,
-              (navigationAction.request.httpMethod ?? "GET") == "GET",
-              let url = navigationAction.request.url
-        else {
-            return false
-        }
-
-        let stripped = MainActor.assumeIsolated { () -> URL? in
-            let service = AdvancedBlockingService.shared
-            guard service.isEnabled(for: url) else { return nil }
-            return service.strippedURL(for: url, spaceID: spaceID)
-        }
-        guard let stripped else { return false }
-
-        var request = navigationAction.request
-        request.url = stripped
-        DispatchQueue.main.async { [weak self] in
-            self?.webView.load(request)
-        }
-        return true
-    }
-
-    func applyAdvancedBlocking(for navigationAction: WKNavigationAction) {
-        guard navigationAction.targetFrame?.isMainFrame ?? true,
-              let url = navigationAction.request.url
-        else {
-            return
-        }
-
-        let payload = MainActor.assumeIsolated { () -> AdvancedBlockingPayload? in
-            let service = AdvancedBlockingService.shared
-            guard service.isEnabled(for: url) else { return nil }
-            return service.payload(for: url, spaceID: spaceID)
-        }
-        installUserScripts(advanced: payload)
-    }
-
-    /// A cross-origin subframe got the top document's rules, which are not its own, so it
-    /// asked for a fresh lookup against its own URL.
-    func applyAdvancedBlockingToFrame(_ message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any],
-              let urlString = body["url"] as? String,
-              let url = URL(string: urlString),
-              !message.frameInfo.isMainFrame
-        else {
-            return
-        }
-
-        let topURL = webView.url
-        let script = MainActor.assumeIsolated { () -> String? in
-            let service = AdvancedBlockingService.shared
-            // The per-site switch belongs to the site the user is looking at, not the frame.
-            guard service.isEnabled(for: topURL ?? url) else { return nil }
-            return service.frameScript(for: url, topURL: topURL, spaceID: spaceID)
-        }
-        guard let script else { return }
-
-        webView.evaluateJavaScript(script, in: message.frameInfo, in: .page) { _ in }
-    }
-
-    /// Replaces the whole user script list, because `WKUserContentController` can only
-    /// remove all of them at once. Skipped entirely when there is nothing to change.
-    func installUserScripts(advanced payload: AdvancedBlockingPayload?) {
-        let advancedScripts = payload.map { AdvancedBlockingService.shared.userScripts(for: $0) } ?? []
-        guard !advancedScripts.isEmpty || hasAdvancedScripts else { return }
-        hasAdvancedScripts = !advancedScripts.isEmpty
-
-        let controller = webView.configuration.userContentController
-        controller.removeAllUserScripts()
-        for script in baseUserScripts + advancedScripts {
-            controller.addUserScript(
-                WKUserScript(
-                    source: script.source,
-                    injectionTime: mapInjectionTime(script.injectionTime),
-                    forMainFrameOnly: script.forMainFrameOnly
-                )
-            )
-        }
     }
 }

@@ -362,6 +362,12 @@ final class DownloadManager {
         }
     }
 
+    /// `cleanupTask` only runs on the completion paths. Closing a window with downloads
+    /// in flight left their 10 Hz timers on the run loop for the rest of the session.
+    deinit {
+        for timer in progressTimers.values { timer.invalidate() }
+    }
+
     private func cleanupTask(_ taskID: UUID) {
         progressTimers[taskID]?.invalidate()
         progressTimers.removeValue(forKey: taskID)
