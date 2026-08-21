@@ -29,11 +29,12 @@ enum AuraGlass {
     /// behind shows through unfrosted.
     static func material(forBlur blur: Double) -> NSVisualEffectView.Material? {
         switch (min(max(blur, 0), 1) * 4).rounded() {
+        // Ordered by measured blur strength, weakest to strongest.
         case 0: return nil
-        case 1: return .titlebar
-        case 2: return .sidebar
-        case 3: return .hudWindow
-        default: return .underWindowBackground
+        case 1: return .hudWindow
+        case 2: return .titlebar
+        case 3: return .sidebar
+        default: return .fullScreenUI
         }
     }
 
