@@ -73,6 +73,8 @@ struct LauncherTextField: NSViewRepresentable {
             let didBecome = super.becomeFirstResponder()
             if didBecome {
                 configureEditorIfNeeded()
+                // Browser convention: focusing the address field selects the whole URL.
+                currentEditor()?.selectAll(nil)
             }
             return didBecome
         }
