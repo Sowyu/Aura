@@ -3,7 +3,6 @@ import Inject
 import SwiftUI
 
 struct BrowserView: View {
-    @Environment(\.theme) var theme
     @Environment(TabManager.self) private var tabManager
     @Environment(AppState.self) private var appState
     @Environment(DownloadManager.self) private var downloadManager
@@ -79,11 +78,7 @@ struct BrowserView: View {
             .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isToolbarHidden)
             .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isFloatingToolbarVisible)
             .ignoresSafeArea(.all)
-            .background(theme.chromeBackground)
-            .background(
-                BlurEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
-                    .ignoresSafeArea(.all)
-            )
+            .auraGlassWindowBackdrop()
             // Window-wide, and mounted only while open: the launcher's backdrop covers
             // the chrome as well as the page.
             .overlay {

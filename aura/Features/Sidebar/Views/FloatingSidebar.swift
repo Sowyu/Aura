@@ -16,6 +16,9 @@ struct FloatingSidebar: View {
 
         ZStack(alignment: .leading) {
             SidebarView()
+                // Glass clips itself to the same radius; an ancestor clipShape does not
+                // reach the system's glass layer on macOS 26.
+                .auraGlassChrome(cornerRadius: sidebarCornerRadius)
                 .background(theme.chromeBackground)
                 .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
                 .clipShape(clipShape)

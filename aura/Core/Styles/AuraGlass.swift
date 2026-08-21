@@ -12,12 +12,12 @@ enum AuraGlass {
     static let defaultTintHex = "#4DABF7"
 
     /// How much of the tint covers the glass. Below this the chrome loses every edge
-    /// against the page and the toolbar stops reading as a bar, so stored values from
-    /// older builds are clamped up on read rather than migrated.
+    /// against the page, so values stored by older builds are clamped up on read rather
+    /// than migrated.
     static let minOpacity: Double = 0.05
     static let defaultOpacity: Double = 0.35
 
-    /// How hard the chrome frosts whatever is behind the window. Quantised into five
+    /// How hard the chrome frosts whatever is behind it. Quantised into five
     /// `NSVisualEffectView` materials, because that is the only blur knob AppKit exposes.
     static let defaultBlur: Double = 0.6
 
@@ -25,8 +25,8 @@ enum AuraGlass {
         min(max(value, minOpacity), 1)
     }
 
-    /// `nil` at the bottom of the slider: no material at all, just the tint, so the
-    /// desktop shows through unfrosted.
+    /// `nil` at the bottom of the slider: no material at all, just the tint, so what is
+    /// behind shows through unfrosted.
     static func material(forBlur blur: Double) -> NSVisualEffectView.Material? {
         switch (min(max(blur, 0), 1) * 4).rounded() {
         case 0: return nil
@@ -57,20 +57,15 @@ enum AuraGlass {
             blue: Double(baseRGB.blueComponent + (tintRGB.blueComponent - baseRGB.blueComponent) * amount)
         )
     }
-}
 
-// MARK: - Window transparency
-
-extension AuraGlass {
     /// Glass is only glass if the desktop reaches it, and an opaque window paints over
-    /// every `.behindWindow` material inside it. Reverting restores AppKit's own fill.
-    @MainActor
+    /// every `.behindWindow` material inside it. Turning it off restores AppKit's fill.
     static func applyWindowTransparency(to window: NSWindow, enabled: Bool) {
         window.isOpaque = !enabled
         window.backgroundColor = enabled ? .clear : .windowBackgroundColor
         window.titlebarAppearsTransparent = true
-        // A non-opaque window derives its shadow from the rendered alpha, so the old
-        // shape survives the toggle until it is thrown away explicitly.
+        // A non-opaque window derives its shadow from the rendered alpha, so the shape
+        // from before the toggle survives until it is thrown away explicitly.
         window.hasShadow = true
         window.invalidateShadow()
     }
@@ -80,14 +75,16 @@ extension AuraGlass {
 
 /// The translucent layer itself, also used for the settings preview.
 ///
-/// It clips itself rather than relying on an ancestor `clipShape`: on macOS 26 the
-/// system composites `glassEffect` outside the SwiftUI clip, so the shape has to be
-/// handed to the effect directly.
+/// It clips itself rather than relying on an ancestor `clipShape`: on macOS 26 the system
+/// composites `glassEffect` outside the SwiftUI clip, so the shape has to be handed to
+/// the effect directly or the panel's rounded corners come back square.
 struct AuraGlassSurface: View {
     let tint: Color
     var opacity: Double = AuraGlass.defaultOpacity
     var blur: Double = AuraGlass.defaultBlur
     var cornerRadius: CGFloat = 0
+    /// `.behindWindow` frosts the desktop. Panels floating over a page want the page.
+    var blending: NSVisualEffectView.BlendingMode = .behindWindow
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -96,8 +93,7 @@ struct AuraGlassSurface: View {
     var body: some View {
         ZStack {
             if let material = AuraGlass.material(forBlur: blur) {
-                // `.behindWindow`, so what frosts is the desktop rather than the page.
-                BlurEffectView(material: material, blendingMode: .behindWindow, isClickThrough: true)
+                BlurEffectView(material: material, blendingMode: blending, isClickThrough: true)
             }
             sheen
             shape.fill(tint.opacity(AuraGlass.clampedOpacity(opacity)))
@@ -106,7 +102,7 @@ struct AuraGlassSurface: View {
     }
 
     /// macOS 26's glass has no blur radius of its own, only `.clear` and `.regular`, so
-    /// the material above carries the slider and this adds the specular edge on top.
+    /// the material above carries the slider and this adds the specular edge over it.
     @ViewBuilder
     private var sheen: some View {
         if #available(macOS 26, *) {
@@ -115,8 +111,12 @@ struct AuraGlassSurface: View {
     }
 }
 
-private struct GlassChromeBackground: ViewModifier {
-    let cornerRadius: CGFloat
+/// Reads the four defaults keys once for whoever needs the current glass.
+private struct GlassChrome: ViewModifier {
+    /// `nil` paints nothing: the window backdrop is already the surface, and a second
+    /// one here would double the tint against the gutter around the content pane.
+    let surfaceRadius: CGFloat?
+    let blending: NSVisualEffectView.BlendingMode
 
     @AppStorage(AuraGlass.enabledKey) private var enabled = false
     @AppStorage(AuraGlass.tintKey) private var tintHex = AuraGlass.defaultTintHex
@@ -133,12 +133,15 @@ private struct GlassChromeBackground: ViewModifier {
             content
                 .environment(\.theme, theme.withForeground(chromeForeground))
                 .background {
-                    AuraGlassSurface(
-                        tint: Color(hex: tintHex),
-                        opacity: tintOpacity,
-                        blur: blur,
-                        cornerRadius: cornerRadius
-                    )
+                    if let surfaceRadius {
+                        AuraGlassSurface(
+                            tint: Color(hex: tintHex),
+                            opacity: tintOpacity,
+                            blur: blur,
+                            cornerRadius: surfaceRadius,
+                            blending: blending
+                        )
+                    }
                 }
         } else {
             content
@@ -146,10 +149,10 @@ private struct GlassChromeBackground: ViewModifier {
     }
 }
 
-/// Everything behind the chrome and around the content pane, including the corner
-/// notches the pane's rounded clip cuts away. Glass has to reach here too: painting it
-/// only inside the sidebar and toolbar leaves those notches in the old opaque fill, and
-/// the pane stops reading as a rounded card sitting on the chrome.
+/// Everything behind the chrome and around the content pane, the corner notches its
+/// rounded clip cuts away included. Glass has to reach here too: painting it only inside
+/// the sidebar and the toolbar leaves those notches in the old opaque fill, and the pane
+/// stops reading as a rounded card sitting on the chrome.
 private struct GlassWindowBackdrop: ViewModifier {
     @AppStorage(AuraGlass.enabledKey) private var enabled = false
     @AppStorage(AuraGlass.tintKey) private var tintHex = AuraGlass.defaultTintHex
@@ -175,9 +178,16 @@ private struct GlassWindowBackdrop: ViewModifier {
 }
 
 extension View {
-    /// Sidebar, top toolbar and menu panels. A no-op while the setting is off.
+    /// Docked sidebar and top toolbar: chrome text colour only, because the window
+    /// backdrop under them is already the glass sheet.
+    func auraGlassChromeForeground() -> some View {
+        modifier(GlassChrome(surfaceRadius: nil, blending: .behindWindow))
+    }
+
+    /// Panels that float over the page and carry their own sheet: menus, the floating
+    /// sidebar. A no-op while the setting is off.
     func auraGlassChrome(cornerRadius: CGFloat = 0) -> some View {
-        modifier(GlassChromeBackground(cornerRadius: cornerRadius))
+        modifier(GlassChrome(surfaceRadius: cornerRadius, blending: .withinWindow))
     }
 
     /// The one fill behind a whole browser window.

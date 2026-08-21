@@ -5,12 +5,17 @@ enum WindowFactory {
     static func makeMainWindow(rootView: some View, size: CGSize = CGSize(width: 1440, height: 900)) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: size.width, height: size.height),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            // `.fullSizeContentView` matches the SwiftUI-made windows. Without it a
+            // transparent window stops drawing the frame's rounded corners and shadow.
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
+        AuraGlass.applyWindowTransparency(
+            to: window,
+            enabled: UserDefaults.standard.bool(forKey: AuraGlass.enabledKey)
+        )
         window.disableImplicitDragging()
         window.isReleasedWhenClosed = false
         window.identifier = NSUserInterfaceItemIdentifier("normal")

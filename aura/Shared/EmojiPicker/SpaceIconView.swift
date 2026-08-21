@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The single place a space's icon is drawn: an SF Symbol tinted with the chosen
+/// The single place a space's icon is drawn: a bundled glyph tinted with the chosen
 /// colour when one is set, otherwise the emoji.
 struct SpaceIconView: View {
     let symbol: String?
@@ -28,11 +28,26 @@ struct SpaceIconView: View {
 
     var body: some View {
         if let symbol, !symbol.isEmpty {
-            Image(systemName: symbol)
-                .font(.system(size: size))
-                .foregroundColor(SpaceIconCatalog.color(hex: colorHex) ?? theme.foreground)
+            glyph(symbol)
+                .foregroundStyle(SpaceIconCatalog.color(hex: colorHex) ?? theme.foreground)
         } else {
             Text(emoji)
+                .font(.system(size: size))
+        }
+    }
+
+    /// Saved spaces may hold an SF Symbol name from the old catalog, so try the bundled
+    /// glyph, then the legacy mapping, and only then SF Symbols.
+    @ViewBuilder
+    private func glyph(_ symbol: String) -> some View {
+        let legacy = SpaceIconCatalog.legacySymbolMap[symbol]
+        if let image = SpaceIconImage.load(symbol) ?? legacy.flatMap(SpaceIconImage.load) {
+            Image(nsImage: image)
+                .renderingMode(.template)
+                .resizable()
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: symbol)
                 .font(.system(size: size))
         }
     }

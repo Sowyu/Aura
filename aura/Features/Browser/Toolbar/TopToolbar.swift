@@ -84,7 +84,7 @@ struct TopToolbar: View {
         .padding(.trailing, Self.edgeInset)
         .frame(height: Self.rowHeight)
         .frame(maxWidth: .infinity)
-        .auraGlassChrome()
+        .auraGlassChromeForeground()
     }
 
     // MARK: - Button groups

@@ -39,14 +39,25 @@ struct SpaceIconTests {
     }
 
     @Test func searchPrefersPrefixMatchesOverSubstrings() {
-        let results = SpaceIconCatalog.search("car")
-        #expect(results.first?.name == "car")
-        #expect(results.contains { $0.name == "creditcard" })
+        let ranked = SpaceIconSearch.rank(query: "car", in: ["postcard", "car", "cart"]) { [$0] }
+        #expect(ranked == ["car", "cart", "postcard"])
     }
 
-    @Test func everyCuratedSymbolResolvesOnThisSystem() {
-        let missing = SpaceIconCatalog.symbols
-            .filter { NSImage(systemSymbolName: $0.name, accessibilityDescription: nil) == nil }
-        #expect(missing.isEmpty, "Unresolvable SF Symbols: \(missing.map(\.name))")
+    @Test func searchMatchesKeywordsAndDashedNames() {
+        #expect(SpaceIconCatalog.search("rocket").first?.name == "rocket")
+        #expect(SpaceIconCatalog.search("puzzle").first?.name == "extension-puzzle")
+        #expect(SpaceIconCatalog.search("coffee").first?.name == "cafe")
+    }
+
+    @MainActor
+    @Test func everyCuratedIconLoadsFromTheBundle() {
+        let missing = SpaceIconCatalog.symbols.filter { SpaceIconImage.load($0.name) == nil }
+        #expect(missing.isEmpty, "Missing bundled icons: \(missing.map(\.name))")
+    }
+
+    @Test func everyLegacySymbolMapsIntoTheCatalog() {
+        let names = Set(SpaceIconCatalog.symbols.map(\.name))
+        let unknown = SpaceIconCatalog.legacySymbolMap.filter { !names.contains($0.value) }
+        #expect(unknown.isEmpty, "Legacy mappings pointing outside the catalog: \(unknown)")
     }
 }

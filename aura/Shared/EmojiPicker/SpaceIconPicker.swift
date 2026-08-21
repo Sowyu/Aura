@@ -7,7 +7,7 @@ enum SpaceIconSelection {
     case color(String?)
 }
 
-/// Icon or emoji picker for a space. Icons are a curated SF Symbol set with a
+/// Icon or emoji picker for a space. Icons are the curated bundled glyph set with a
 /// colour swatch row; emoji reuse the bundled set, base forms only.
 struct SpaceIconPicker: View {
     let initialSymbol: String?
@@ -96,14 +96,16 @@ struct SpaceIconPicker: View {
             }
     }
 
+    /// Six across, matching Zen's picker.
+    private static let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 6)
+
     private var symbolGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 36), spacing: 4)], spacing: 4) {
+            LazyVGrid(columns: Self.gridColumns, spacing: 4) {
                 ForEach(SpaceIconCatalog.search(search)) { symbol in
-                    Image(systemName: symbol.name)
-                        .font(.system(size: 20))
-                        .foregroundColor(SpaceIconCatalog.color(hex: colorHex) ?? theme.foreground)
-                        .frame(width: 36, height: 36)
+                    SpaceIconView(symbol: symbol.name, colorHex: colorHex, emoji: "", size: 20)
+                        .frame(height: 36)
+                        .frame(maxWidth: .infinity)
                         .background(hoveredSymbol == symbol.name ? theme.mutedBackground : Color.clear)
                         .cornerRadius(6)
                         .contentShape(Rectangle())

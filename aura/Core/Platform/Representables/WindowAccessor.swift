@@ -12,6 +12,10 @@ struct WindowAccessor: NSViewRepresentable {
     /// revealed row is identical to the pinned one.
     @Environment(ToolbarManager.self) private var toolbarManager
 
+    /// Windows SwiftUI made itself never went through `WindowFactory`, so the glass
+    /// setting is applied from here and reverted the moment it is switched off.
+    @AppStorage(AuraGlass.enabledKey) private var glassEnabled = false
+
     /// Matches `TopToolbar`'s row height and leading inset.
     private static let toolbarHeight: CGFloat = TopToolbar.rowHeight
     private static let trafficLightLeading: CGFloat = 12
@@ -31,6 +35,10 @@ struct WindowAccessor: NSViewRepresentable {
 
         /// Origins AppKit gave the window buttons before we moved them.
         var defaultOrigins: [NSWindow.ButtonType: NSPoint] = [:]
+
+        /// `invalidateShadow` on every SwiftUI update flickers the window edge, so the
+        /// glass setting is only pushed at the window when it actually moved.
+        var appliedGlass: Bool?
 
         @objc func willEnterFullScreenNotification(_ notification: Notification) {
             guard let window = notification.object as? NSWindow else { return }
@@ -83,6 +91,7 @@ struct WindowAccessor: NSViewRepresentable {
             )
 
             coordinator.observers = [enterObserver, exitObserver, resizeObserver]
+            applyGlass(to: window, coordinator: coordinator)
             updateTrafficLights(for: window, coordinator: coordinator)
         }
 
@@ -91,6 +100,7 @@ struct WindowAccessor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let window = nsView.window else { return }
+        applyGlass(to: window, coordinator: context.coordinator)
         updateTrafficLights(for: window, coordinator: context.coordinator)
     }
 
@@ -98,6 +108,12 @@ struct WindowAccessor: NSViewRepresentable {
         for observer in coordinator.observers {
             NotificationCenter.default.removeObserver(observer)
         }
+    }
+
+    private func applyGlass(to window: NSWindow, coordinator: Coordinator) {
+        guard coordinator.appliedGlass != glassEnabled else { return }
+        coordinator.appliedGlass = glassEnabled
+        AuraGlass.applyWindowTransparency(to: window, enabled: glassEnabled)
     }
 
     private func updateTrafficLights(for window: NSWindow, coordinator: Coordinator) {

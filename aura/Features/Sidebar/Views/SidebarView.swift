@@ -79,7 +79,7 @@ struct SidebarView: View {
             // Swipe-to-dismiss gesture on the whole sidebar when downloads is showing
             .simultaneousGesture(downloadsNavigationGesture(width: width))
         }
-        .auraGlassChrome()
+        .auraGlassChromeForeground()
         // Behind the content, so a tab row's own catcher takes the click first and this
         // only fires on empty sidebar background.
         .auraBackgroundContextMenu { sidebarContextMenu }

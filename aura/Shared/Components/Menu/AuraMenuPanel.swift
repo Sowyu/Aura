@@ -125,7 +125,7 @@ private struct AuraMenuSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         if glassEnabled {
-            content.auraGlassChrome()
+            content.auraGlassChrome(cornerRadius: AuraMenuMetrics.panelRadius)
         } else {
             content.background(.ultraThinMaterial).background(theme.popoverBackground)
         }

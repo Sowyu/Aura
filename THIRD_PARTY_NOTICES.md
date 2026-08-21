@@ -32,3 +32,18 @@ by a global assignment so the file can be evaluated in a JavaScriptCore context.
 - Included license text: `aura/Resources/WebScripts/vendor/LICENSE-adguard-extended-css.txt`
 
 Copied verbatim.
+
+## Zen Browser space icons (Ionicons)
+
+- Upstream project: [zen-browser/desktop](https://github.com/zen-browser/desktop)
+- Upstream source path: `src/browser/themes/shared/zen-icons/common/selectable/*.svg`
+- Local path: `aura/Resources/Icons/Spaces/`
+- License: MIT (Ionicons), files carry Zen's MPL-2.0 header
+- Included license text: `aura/Resources/Icons/Spaces/LICENSE-ionicons.txt`,
+  `aura/Resources/Icons/Spaces/LICENSE-zen-browser.txt`
+
+Zen credits [Ionicons](https://github.com/ionic-team/ionicons) by Ionic (MIT) as the origin of
+these glyphs. The path data is verbatim. Two changes make the files parse outside Firefox: the
+`#filter` preprocessor line was dropped and the MPL header kept as an XML comment, and the
+Firefox-only `fill="context-fill"` / `fill-opacity="context-fill-opacity"` attributes were
+replaced by `fill="#000000"` so AppKit can draw them as template images.
