@@ -44,14 +44,20 @@ typedef NS_ENUM(uint32_t, AuraBlockDecision) {
     AuraBlockDecisionRedirect = 3
 };
 
-/// Name of the rule file the host writes and the injected bundle reads.
+/// Name of the rule file the host keeps in Application Support. The bundle
+/// never reads it: the host serves its contents over `AuraBlockRulesMessageName`.
 extern NSString *const AuraBlockRulesFileName;
 
-/// Name of the marker file the host writes while an extension has a blocking
-/// `webRequest` listener registered. Its absence is what keeps the bundle out
-/// of IPC when no extension cares, and its modification date is the bundle's
-/// cue to drop cached verdicts.
-extern NSString *const AuraWebRequestStateFileName;
+/// Synchronous message the bundle posts on page creation. Body: the revision it
+/// has loaded (empty when none). Reply: the whole rule document when the host's
+/// revision differs, nil when the bundle is already current.
+extern NSString *const AuraBlockRulesMessageName;
+
+/// Whether some extension has a blocking `webRequest` listener registered.
+/// The bundle pulls it synchronously on page creation; the host pushes it to
+/// live web processes whenever it changes. Body either way: "1" or "0". Every
+/// change is the bundle's cue to drop cached verdicts.
+extern NSString *const AuraWebRequestStateMessageName;
 
 @interface AuraBlockRules: NSObject
 
@@ -68,6 +74,9 @@ extern NSString *const AuraWebRequestStateFileName;
 
 /// Unconditional load, for tests. Returns NO when the file is missing or malformed.
 - (BOOL)loadFromPath:(NSString *)path;
+
+/// Installs the rule document in `data`. Returns NO when it is malformed.
+- (BOOL)loadFromData:(NSData *)data;
 
 /// Drops every rule. Used by tests between cases.
 - (void)unload;

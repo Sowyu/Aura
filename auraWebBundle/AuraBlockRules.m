@@ -4,7 +4,8 @@
 #import <string.h>
 
 NSString *const AuraBlockRulesFileName = @"rules-v1.json";
-NSString *const AuraWebRequestStateFileName = @"webrequest-v1.json";
+NSString *const AuraBlockRulesMessageName = @"aura.rules.fetch";
+NSString *const AuraWebRequestStateMessageName = @"aura.webRequest.state";
 
 typedef NS_ENUM(uint8_t, AuraRuleKind) {
     AuraRuleKindBlock = 0,
@@ -343,8 +344,11 @@ static NSDictionary<NSString *, NSString *> *AuraRedirectResources(void)
 - (BOOL)loadFromPath:(NSString *)path
 {
     NSData *data = [NSData dataWithContentsOfFile:path];
-    if (!data) { return NO; }
+    return data ? [self loadFromData:data] : NO;
+}
 
+- (BOOL)loadFromData:(NSData *)data
+{
     NSDictionary *root = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
     if (![root isKindOfClass:NSDictionary.class]) { return NO; }
 

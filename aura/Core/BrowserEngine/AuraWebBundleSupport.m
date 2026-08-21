@@ -52,6 +52,7 @@ typedef struct WKContextInjectedBundleClientV0 {
 } WKContextInjectedBundleClientV0;
 
 extern void WKContextSetInjectedBundleClient(WKContextRef context, const WKContextInjectedBundleClientBase *client);
+extern void WKContextPostMessageToInjectedBundle(WKContextRef context, WKStringRef messageName, WKTypeRef messageBody);
 
 static NSString *_Nullable (^AuraBundleMessageHandler)(NSString *, NSString *);
 
@@ -93,4 +94,14 @@ BOOL AuraSetInjectedBundleMessageHandler(WKProcessPool *pool, NSString *_Nullabl
     client.didReceiveSynchronousMessageFromInjectedBundle = AuraDidReceiveSynchronousMessage;
     WKContextSetInjectedBundleClient((__bridge WKContextRef)pool, &client.base);
     return YES;
+}
+
+void AuraPostMessageToInjectedBundle(WKProcessPool *pool, NSString *name, NSString *body)
+{
+    if (![pool respondsToSelector:NSSelectorFromString(@"_apiObject")]) { return; }
+    WKStringRef wkName = WKStringCreateWithCFString((__bridge CFStringRef)name);
+    WKStringRef wkBody = WKStringCreateWithCFString((__bridge CFStringRef)body);
+    WKContextPostMessageToInjectedBundle((__bridge WKContextRef)pool, wkName, (WKTypeRef)wkBody);
+    WKRelease((WKTypeRef)wkName);
+    WKRelease((WKTypeRef)wkBody);
 }

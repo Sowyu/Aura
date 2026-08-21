@@ -37,11 +37,13 @@ struct WebBundleTests {
     // MARK: - Injected bundle
 
     @Test(.enabled(if: WebBundleTests.isEnabled))
-    func injectedBundleIsInstalledNextToItsRuleFile() throws {
-        let installed = try #require(AuraWebBundle.install())
-        #expect(FileManager.default.fileExists(atPath: installed.path))
+    func injectedBundleStaysInsideTheSignedApp() throws {
+        let bundleURL = try #require(AuraWebBundle.builtInBundleURL)
+        #expect(FileManager.default.fileExists(atPath: bundleURL.path))
+        #expect(bundleURL.path.hasPrefix(Bundle.main.bundlePath))
         let rulesURL = try #require(AuraWebBundle.rulesFileURL)
-        #expect(rulesURL.path.hasPrefix(installed.path), "rule file must live inside the injected bundle")
+        // Writing into a signed bundle breaks its seal; Gatekeeper then calls the app damaged.
+        #expect(!rulesURL.path.hasPrefix(bundleURL.path), "rule file must not live inside the injected bundle")
     }
 
     @Test(.enabled(if: WebBundleTests.isEnabled))
@@ -94,7 +96,6 @@ struct WebBundleTests {
     }
 
     private static func installFixtureRules() throws {
-        _ = AuraWebBundle.install()
         let url = try #require(AuraWebBundle.rulesFileURL)
         let ruleSet = NativeBlockingRuleSet.make(fromFilterLines: fixtureRules.components(separatedBy: "\n"))
         #expect(ruleSet.rules.count == 5, "fixture should produce five rules, got \(ruleSet.rules.count)")

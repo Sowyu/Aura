@@ -30,6 +30,10 @@ BOOL AuraSetInjectedBundleMessageHandler(
     WKProcessPool *pool,
     NSString *_Nullable (^handler)(NSString *name, NSString *body));
 
+/// Posts a one-way message to every live WebContent process in `pool`. Processes
+/// that start later do not see it; the bundle pulls current state on page creation.
+void AuraPostMessageToInjectedBundle(WKProcessPool *pool, NSString *name, NSString *body);
+
 NS_ASSUME_NONNULL_END
 
 #endif /* AuraWebBundleSupport_h */

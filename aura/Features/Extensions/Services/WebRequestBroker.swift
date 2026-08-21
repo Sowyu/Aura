@@ -14,8 +14,8 @@ import os
 /// extension answers or `timeout` runs out. Two things keep that bounded. Only
 /// one decision is ever in flight, and a request that arrives while another is
 /// being decided is allowed on the spot. Everything else the bundle can do for
-/// itself: it never asks at all unless `stateFileURL` exists, and it caches
-/// answers this class marks cacheable.
+/// itself: it never asks at all unless `isActive` was pushed to it, and it
+/// caches answers this class marks cacheable.
 @available(macOS 15.4, *)
 @MainActor
 final class WebRequestBroker {
@@ -55,14 +55,10 @@ final class WebRequestBroker {
     /// median off this.
     private(set) var latencies: [Double] = []
 
-    private init() {
-        // A file left behind by the last run would make every web process pay
-        // for IPC with nothing on the other end.
-        writeState()
-    }
+    private init() {}
 
     /// True while some extension has a blocking listener and a port to answer on.
-    /// The bundle's state file follows this.
+    /// The bundle's active flag follows this.
     var isActive: Bool {
         listeners.values.contains { hasLivePort(for: $0.extensionID) }
     }
@@ -242,31 +238,13 @@ final class WebRequestBroker {
         if latencies.count > 500 { latencies.removeFirst(latencies.count - 500) }
     }
 
-    // MARK: - State file
+    // MARK: - State
 
-    /// The bundle stats this once a second and stays out of IPC entirely while
-    /// it is missing, which is the normal case.
-    static var stateFileURL: URL? {
-        AuraWebBundle.installedBundleURL?
-            .appendingPathComponent("Contents/Resources", isDirectory: true)
-            .appendingPathComponent(AuraWebRequestStateFileName)
-    }
-
+    /// Tells live web processes whether asking is worth the IPC. The bundle drops
+    /// its cached verdicts on every push, since a new set of listeners may decide
+    /// differently.
     private func writeState() {
-        guard let url = Self.stateFileURL else { return }
-        guard isActive else {
-            try? FileManager.default.removeItem(at: url)
-            return
-        }
-        let state = ["active": true, "listeners": listeners.count] as [String: Any]
-        guard let data = try? JSONSerialization.data(withJSONObject: state) else { return }
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        // Rewriting moves the modification date, which is the bundle's cue to
-        // drop the decisions it cached from the last set of listeners.
-        try? data.write(to: url, options: .atomic)
+        AuraWebBundle.webRequestStateDidChange()
     }
 }
 

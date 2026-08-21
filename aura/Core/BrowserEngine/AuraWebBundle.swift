@@ -1,4 +1,3 @@
-import Darwin
 import Foundation
 import os
 @preconcurrency import WebKit
@@ -12,22 +11,15 @@ import os
 /// non-platform binary with a non-empty injected bundle path outside /System.
 /// The Development service ships with library validation off, which is what
 /// lets a third-party bundle be dlopen'd at all. No entitlement changes.
+///
+/// The bundle loads straight out of `Aura.app/Contents/PlugIns`. It used to be
+/// copied into Application Support so the rule file could sit inside it, but a
+/// file written into a signed bundle breaks its seal and Gatekeeper then shows
+/// "Aura is damaged" on every launch. Rules and the webRequest flag now travel
+/// over the bundle's synchronous message channel instead.
 enum AuraWebBundle {
     private static let log = Logger(subsystem: "com.aurabrowser.app", category: "webbundle")
     private static let bundleName = "AuraWebBundle.wkbundle"
-
-    private static func removeQuarantine(under root: URL) {
-        let keys = ["com.apple.quarantine", "com.apple.provenance"]
-        var paths = [root.path]
-        if let walker = FileManager.default.enumerator(atPath: root.path) {
-            while let relative = walker.nextObject() as? String {
-                paths.append(root.appendingPathComponent(relative).path)
-            }
-        }
-        for path in paths {
-            for key in keys { removexattr(path, key, XATTR_NOFOLLOW) }
-        }
-    }
 
     /// `AURA_WEB_BUNDLE=0` / `=1` overrides the user setting either way.
     /// Read from `UserDefaults` rather than `SettingsStore` because pages are
@@ -39,56 +31,58 @@ enum AuraWebBundle {
         return UserDefaults.standard.object(forKey: SettingsStore.nativeRequestBlockingEnabledKey) as? Bool ?? true
     }
 
-    /// `Aura.app/Contents/PlugIns/AuraWebBundle.wkbundle`.
+    /// `Aura.app/Contents/PlugIns/AuraWebBundle.wkbundle`, the bundle WebKit loads.
     static let builtInBundleURL: URL? = Bundle.main.builtInPlugInsURL?.appendingPathComponent(bundleName)
 
-    /// `Application Support/Aura/NativeBlocking/`.
-    static let supportDirectoryURL: URL? = FileManager.default
+    /// `Application Support/Aura/NativeBlocking/rules-v1.json`: where the host keeps
+    /// the compiled native rules between launches. Served to the bundle on request.
+    static let rulesFileURL: URL? = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
         .appendingPathComponent("Aura", isDirectory: true)
         .appendingPathComponent("NativeBlocking", isDirectory: true)
-
-    /// The copy WebKit actually loads. The app bundle is read-only and signed, and
-    /// the rule file has to sit inside whatever directory `injectedBundleURL`
-    /// names: that path is the only sandbox extension the WebContent process gets.
-    static let installedBundleURL: URL? = {
-        guard let supportDirectoryURL else { return nil }
-        return supportDirectoryURL.appendingPathComponent(bundleName)
-    }()
-
-    /// Where the host writes the compiled native rules and the bundle reads them.
-    static let rulesFileURL: URL? = installedBundleURL?
-        .appendingPathComponent("Contents/Resources", isDirectory: true)
         .appendingPathComponent(AuraBlockRulesFileName)
 
     /// The shared injected-bundle process pool, or nil if the bundle is missing
     /// or the private API went away. Created once per process.
     static let processPool: WKProcessPool? = {
-        guard let installedURL = install() else { return nil }
-        guard let pool = AuraMakeInjectedBundleProcessPool(installedURL) else {
+        guard let builtInBundleURL, FileManager.default.fileExists(atPath: builtInBundleURL.path) else {
+            log.error("injected bundle missing at \(builtInBundleURL?.path ?? "nil", privacy: .public)")
+            return nil
+        }
+        guard let pool = AuraMakeInjectedBundleProcessPool(builtInBundleURL) else {
             log.error("_WKProcessPoolConfiguration unavailable; injected bundle disabled")
             return nil
         }
-        log.info("injected bundle process pool created for \(installedURL.path, privacy: .public)")
-        installWebRequestHandler(on: pool)
+        log.info("injected bundle process pool created for \(builtInBundleURL.path, privacy: .public)")
+        installMessageHandler(on: pool)
+        livePool = pool
         return pool
     }()
 
-    /// Answers the bundle's synchronous block/allow questions out of
-    /// `WebRequestBroker`. Called once, right after the pool is built, because
-    /// the client is per-pool and the bundle starts asking as soon as an
-    /// extension registers a blocking listener.
-    private static func installWebRequestHandler(on pool: WKProcessPool) {
-        guard #available(macOS 15.4, *) else { return }
+    /// Set once `processPool` exists, so pushes never force the pool into being.
+    nonisolated(unsafe) private static var livePool: WKProcessPool?
+
+    /// Answers the bundle's synchronous messages: rule sync on page creation, the
+    /// webRequest active flag, and block/allow questions out of `WebRequestBroker`.
+    /// Called once, right after the pool is built, because the client is per-pool.
+    private static func installMessageHandler(on pool: WKProcessPool) {
         let installed = AuraSetInjectedBundleMessageHandler(pool) { name, body in
             // WebKit delivers injected-bundle messages on the main thread; the
             // guard is there so a future change to that lands as an allow
             // rather than a crash.
             guard Thread.isMainThread else { return nil }
-            return MainActor.assumeIsolated { WebRequestBroker.shared.handle(name: name, body: body) }
+            switch name {
+            case AuraBlockRulesMessageName:
+                return rulesDocument(ifNewerThan: body)
+            case AuraWebRequestStateMessageName:
+                return webRequestState
+            default:
+                guard #available(macOS 15.4, *) else { return nil }
+                return MainActor.assumeIsolated { WebRequestBroker.shared.handle(name: name, body: body) }
+            }
         }
         if !installed {
-            log.error("injected-bundle message client unavailable; blocking webRequest disabled")
+            log.error("injected-bundle message client unavailable; native blocking disabled")
         }
     }
 
@@ -98,53 +92,64 @@ enum AuraWebBundle {
         configuration.processPool = processPool
     }
 
-    /// Copies the built bundle next to the rule file, refreshing the copy whenever
-    /// the app ships a new one. Returns the copy's URL.
-    @discardableResult
-    static func install() -> URL? {
-        guard let builtInBundleURL, let installedBundleURL, let rulesFileURL else { return nil }
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: builtInBundleURL.path) else {
-            log.error("injected bundle missing at \(builtInBundleURL.path, privacy: .public)")
-            return nil
-        }
+    // MARK: - Rules
 
-        do {
-            if isStale(installed: installedBundleURL, source: builtInBundleURL) {
-                let rules = try? Data(contentsOf: rulesFileURL)
-                try? fileManager.removeItem(at: installedBundleURL)
-                try fileManager.createDirectory(
-                    at: installedBundleURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                try fileManager.copyItem(at: builtInBundleURL, to: installedBundleURL)
-                // A browser's newly written files are quarantined. Gatekeeper then refuses
-                // to let WebContent load the copy and shows "Aura is damaged" while the
-                // app itself keeps running. The copy is our own signed code; unflag it.
-                Self.removeQuarantine(under: installedBundleURL)
-                try fileManager.createDirectory(
-                    at: rulesFileURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                if let rules { try? rules.write(to: rulesFileURL, options: .atomic) }
-            }
-            return installedBundleURL
-        } catch {
-            log.error("injected bundle install failed: \(error.localizedDescription, privacy: .public)")
-            return nil
+    private struct CachedRules {
+        var modified: Date?
+        var size: UInt64
+        var revision: String
+        var document: String
+    }
+
+    nonisolated(unsafe) private static var cachedRules = CachedRules(modified: nil, size: 0, revision: "", document: "{}")
+
+    /// The rule document when its revision differs from `revision`, nil otherwise.
+    /// One stat per call; the file is re-read only when it changed on disk. A
+    /// missing file (native blocking off) reads as the empty document.
+    private static func rulesDocument(ifNewerThan revision: String) -> String? {
+        guard let rulesFileURL else { return nil }
+        let attributes = try? FileManager.default.attributesOfItem(atPath: rulesFileURL.path)
+        let modified = attributes?[.modificationDate] as? Date
+        let size = (attributes?[.size] as? NSNumber)?.uint64Value ?? 0
+        if attributes == nil {
+            cachedRules = CachedRules(modified: nil, size: 0, revision: "", document: "{}")
+        } else if modified != cachedRules.modified || size != cachedRules.size {
+            guard let data = try? Data(contentsOf: rulesFileURL),
+                  let document = String(data: data, encoding: .utf8)
+            else { return nil }
+            let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            cachedRules = CachedRules(
+                modified: modified,
+                size: size,
+                revision: root?["rev"] as? String ?? "",
+                document: document
+            )
+        }
+        return cachedRules.revision == revision ? nil : cachedRules.document
+    }
+
+    /// Pushes the freshly written document to every live web process, so open
+    /// pages pick up a rebuild without waiting for the next page creation.
+    static func rulesDidChange() {
+        guard let livePool else { return }
+        DispatchQueue.main.async {
+            guard let document = rulesDocument(ifNewerThan: "\u{0}") else { return }
+            AuraPostMessageToInjectedBundle(livePool, AuraBlockRulesMessageName, document)
         }
     }
 
-    private static func isStale(installed: URL, source: URL) -> Bool {
-        let executable = "Contents/MacOS/AuraWebBundle"
-        let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey]
-        guard let installedValues = try? installed.appendingPathComponent(executable)
-            .resourceValues(forKeys: keys),
-            let sourceValues = try? source.appendingPathComponent(executable).resourceValues(forKeys: keys)
-        else {
-            return true
-        }
-        return installedValues.fileSize != sourceValues.fileSize
-            || installedValues.contentModificationDate != sourceValues.contentModificationDate
+    // MARK: - webRequest state
+
+    private static var webRequestState: String {
+        guard #available(macOS 15.4, *) else { return "0" }
+        return MainActor.assumeIsolated { WebRequestBroker.shared.isActive ? "1" : "0" }
+    }
+
+    /// Pushes the current flag to every live web process. Processes created later
+    /// pull it themselves on page creation.
+    @MainActor
+    static func webRequestStateDidChange() {
+        guard let livePool else { return }
+        AuraPostMessageToInjectedBundle(livePool, AuraWebRequestStateMessageName, webRequestState)
     }
 }

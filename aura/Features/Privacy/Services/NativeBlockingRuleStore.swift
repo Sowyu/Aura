@@ -6,8 +6,8 @@ import os.log
 ///
 /// The bundle lives in the WebContent process and cannot read the app's state, so
 /// everything it needs (rules plus the per-site kill switch) is serialised into
-/// one file inside the injected bundle's own directory. That directory is the only
-/// path WebKit hands the web process a sandbox extension for.
+/// one file, which `AuraWebBundle` hands over the bundle's message channel whenever
+/// a page is created with a stale revision.
 ///
 /// ponytail: one rule file for the whole app. The injected bundle is process-wide,
 /// so per-space rule sets would need one process pool per space. Revisit if spaces
@@ -118,13 +118,14 @@ final class NativeBlockingRuleStore: @unchecked Sendable {
     }
 
     private func write(ruleSet: NativeBlockingRuleSet, revision: String) -> Bool {
-        guard AuraWebBundle.install() != nil, let url = AuraWebBundle.rulesFileURL else { return false }
+        guard let url = AuraWebBundle.rulesFileURL else { return false }
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
             try ruleSet.jsonData(revision: revision).write(to: url, options: .atomic)
+            AuraWebBundle.rulesDidChange()
             return true
         } catch {
             os_log(.error, "native blocking rule write failed: %@", error.localizedDescription)
@@ -135,6 +136,7 @@ final class NativeBlockingRuleStore: @unchecked Sendable {
     private func removeRuleFile() {
         guard let url = AuraWebBundle.rulesFileURL else { return }
         try? FileManager.default.removeItem(at: url)
+        AuraWebBundle.rulesDidChange()
         lock.lock()
         lastSignature = nil
         lastStats = nil

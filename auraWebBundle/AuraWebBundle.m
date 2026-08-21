@@ -4,7 +4,6 @@
 // willSendRequestForFrame returns before the network request exists.
 
 #import <Foundation/Foundation.h>
-#import <dlfcn.h>
 #import <os/log.h>
 
 #import "AuraBlockRules.h"
@@ -21,34 +20,23 @@ static os_log_t AuraBundleLog(void)
     return log;
 }
 
-/// `…/NativeBlocking/AuraWebBundle.wkbundle/Contents/Resources/`.
-///
-/// Found relative to this dylib rather than passed in: the WebContent process
-/// gets a read-only sandbox extension for the injected bundle's directory and
-/// for nothing else, so anything the host wants to hand over has to live inside
-/// it.
-static NSString *AuraResourcePath(NSString *fileName)
+/// Asks the host for the rule document when the host's revision differs from
+/// the one loaded here. The web process cannot read Aura's files, and the bundle
+/// itself sits inside the signed app, so everything arrives over IPC.
+static void AuraLoadRulesDocument(NSString *document)
 {
-    static NSString *directory;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        Dl_info info;
-        if (dladdr((const void *)&AuraResourcePath, &info) == 0 || !info.dli_fname) { return; }
-        NSString *executable = @(info.dli_fname);
-        NSString *contents = executable.stringByDeletingLastPathComponent.stringByDeletingLastPathComponent;
-        directory = [contents stringByAppendingPathComponent:@"Resources"];
-    });
-    return [directory stringByAppendingPathComponent:fileName];
+    if (!document) { return; }
+    if ([AuraBlockRules.sharedRules loadFromData:[document dataUsingEncoding:NSUTF8StringEncoding]]) {
+        os_log(AuraBundleLog(), "loaded %lu rules (revision %{public}@)",
+               (unsigned long)AuraBlockRules.sharedRules.ruleCount,
+               AuraBlockRules.sharedRules.revision ?: @"none");
+    }
 }
 
-static NSString *AuraRulesPath(void)
+static void AuraSyncRules(void)
 {
-    return AuraResourcePath(AuraBlockRulesFileName);
-}
-
-static NSString *AuraWebRequestStatePath(void)
-{
-    return AuraResourcePath(AuraWebRequestStateFileName);
+    AuraLoadRulesDocument(AuraWebRequestChannelPostSync(AuraBlockRulesMessageName,
+                                                        AuraBlockRules.sharedRules.revision ?: @""));
 }
 
 #pragma mark - Main-document tracking
@@ -203,7 +191,7 @@ static WKURLRequestRef AuraWillSendRequestForFrame(
 
         // Aura's own rules win outright; an extension only gets asked about
         // requests that would otherwise go through untouched.
-        if (decision == AuraBlockDecisionAllow && AuraWebRequestChannelIsActive(AuraWebRequestStatePath())) {
+        if (decision == AuraBlockDecisionAllow && AuraWebRequestChannelIsActive()) {
             decision = AuraExtensionDecision(page, frame, resourceIdentifier, request, url,
                                              typeMask, isMainFrame, isMainDocument, &replacement);
         }
@@ -234,16 +222,10 @@ static WKURLRequestRef AuraWillSendRequestForFrame(
 
 static void AuraDidCreatePage(WKBundleRef bundle, WKBundlePageRef page, const void *clientInfo)
 {
-    NSString *rulesPath = AuraRulesPath();
-    if (rulesPath) {
-        // Cheap: one stat per page creation, a full parse only when the host
-        // rewrote the file.
-        if ([AuraBlockRules.sharedRules reloadIfChangedAtPath:rulesPath]) {
-            os_log(AuraBundleLog(), "loaded %lu rules (revision %{public}@)",
-                   (unsigned long)AuraBlockRules.sharedRules.ruleCount,
-                   AuraBlockRules.sharedRules.revision ?: @"none");
-        }
-    }
+    // Two short round trips per page creation; the rule document only travels
+    // when the host rebuilt it.
+    AuraSyncRules();
+    AuraWebRequestChannelRefreshActive();
 
     WKBundlePageResourceLoadClientV1 client;
     memset(&client, 0, sizeof(client));
@@ -261,6 +243,20 @@ static void AuraWillDestroyPage(WKBundleRef bundle, WKBundlePageRef page, const 
     [AuraMainDocumentIdentifiers() removeObjectForKey:[NSValue valueWithPointer:page]];
 }
 
+static void AuraDidReceiveMessage(WKBundleRef bundle, WKStringRef name, WKTypeRef body, const void *clientInfo)
+{
+    NSString *messageName = CFBridgingRelease(WKStringCopyCFString(kCFAllocatorDefault, name));
+    NSString *payload = nil;
+    if (body && WKGetTypeID(body) == WKStringGetTypeID()) {
+        payload = CFBridgingRelease(WKStringCopyCFString(kCFAllocatorDefault, (WKStringRef)body));
+    }
+    if ([messageName isEqualToString:AuraWebRequestStateMessageName]) {
+        AuraWebRequestChannelSetActive(payload);
+    } else if ([messageName isEqualToString:AuraBlockRulesMessageName]) {
+        AuraLoadRulesDocument(payload);
+    }
+}
+
 AURA_EXPORT void WKBundleInitialize(WKBundleRef bundle, WKTypeRef initializationUserData);
 
 void WKBundleInitialize(WKBundleRef bundle, WKTypeRef initializationUserData)
@@ -270,8 +266,8 @@ void WKBundleInitialize(WKBundleRef bundle, WKTypeRef initializationUserData)
     client.base.version = 1;
     client.didCreatePage = AuraDidCreatePage;
     client.willDestroyPage = AuraWillDestroyPage;
+    client.didReceiveMessage = AuraDidReceiveMessage;
     WKBundleSetClient(bundle, &client.base);
     AuraWebRequestChannelSetBundle(bundle);
-    os_log(AuraBundleLog(), "WKBundleInitialize: injected bundle loaded in pid %d rules=%{public}@",
-           getpid(), AuraRulesPath() ?: @"(unknown path)");
+    os_log(AuraBundleLog(), "WKBundleInitialize: injected bundle loaded in pid %d", getpid());
 }

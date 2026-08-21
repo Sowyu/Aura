@@ -486,7 +486,6 @@ struct WebRequestBrokerTests {
     }
 
     private func installEmptyRules() throws {
-        _ = AuraWebBundle.install()
         let url = try #require(AuraWebBundle.rulesFileURL)
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),

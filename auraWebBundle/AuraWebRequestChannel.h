@@ -6,8 +6,8 @@
 // extension and hands a verdict back.
 //
 // Every round trip stalls a page's main thread, so the fast path matters more
-// than the slow one: nothing is sent unless the host has written an "active"
-// marker saying some extension actually registered a blocking listener.
+// than the slow one: nothing is sent unless the host has said some extension
+// actually registered a blocking listener.
 
 #ifndef AuraWebRequestChannel_h
 #define AuraWebRequestChannel_h
@@ -26,9 +26,19 @@ extern NSString *const AuraWebRequestMessageName;
 void AuraWebRequestChannelSetBundle(WKBundleRef bundle);
 
 /// YES when the host currently has at least one blocking listener registered.
-/// Re-reads `statePath` at most once a second; every other call is a load of a
-/// cached flag.
-BOOL AuraWebRequestChannelIsActive(NSString *statePath);
+BOOL AuraWebRequestChannelIsActive(void);
+
+/// Records the host's answer to `AuraWebRequestStateMessageName` ("1"/"0").
+/// Every call drops the cached verdicts: the host only sends on a change, and a
+/// new set of listeners may decide differently.
+void AuraWebRequestChannelSetActive(NSString *_Nullable state);
+
+/// Pulls the active flag from the host. Called once per page creation so a web
+/// process that came up after the last push still learns the current state.
+void AuraWebRequestChannelRefreshActive(void);
+
+/// One synchronous round trip. Returns the host's string reply, or nil.
+NSString *_Nullable AuraWebRequestChannelPostSync(NSString *name, NSString *body);
 
 /// Blocks until the host answers or gives up. Returns the reply dictionary
 /// (`cancel`, `redirectUrl`), or nil for "allow, unchanged".

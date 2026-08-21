@@ -2,7 +2,6 @@
 
 #import <os/lock.h>
 #import <os/log.h>
-#import <sys/stat.h>
 
 #import "AuraBlockRules.h"
 
@@ -42,39 +41,27 @@ static os_unfair_lock AuraCacheLock = OS_UNFAIR_LOCK_INIT;
 
 #pragma mark - Active flag
 
-BOOL AuraWebRequestChannelIsActive(NSString *statePath)
+static _Atomic(BOOL) AuraActive;
+
+BOOL AuraWebRequestChannelIsActive(void)
 {
-    static BOOL active;
-    static CFAbsoluteTime checkedAt;
-    static struct timespec writtenAt;
-    static os_unfair_lock lock = OS_UNFAIR_LOCK_INIT;
+    return AuraActive;
+}
 
-    if (!statePath) { return NO; }
+void AuraWebRequestChannelSetActive(NSString *state)
+{
+    AuraActive = [state isEqualToString:@"1"];
+    os_unfair_lock_lock(&AuraCacheLock);
+    [AuraDecisionCache() removeAllObjects];
+    os_unfair_lock_unlock(&AuraCacheLock);
+}
 
-    os_unfair_lock_lock(&lock);
-    const CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-    // One stat a second. Long enough that a page full of subresources pays for
-    // it once, short enough that enabling uBlock takes effect before the user
-    // has finished reading the settings row.
-    if (now - checkedAt > 1.0) {
-        checkedAt = now;
-        struct stat info;
-        const BOOL exists = stat(statePath.fileSystemRepresentation, &info) == 0 && info.st_size > 0;
-        // The host rewrites this file whenever the set of blocking listeners
-        // changes, so a new modification date means every cached verdict was
-        // decided by listeners that are no longer the ones in charge.
-        if (!exists || info.st_mtimespec.tv_sec != writtenAt.tv_sec
-            || info.st_mtimespec.tv_nsec != writtenAt.tv_nsec) {
-            writtenAt = exists ? info.st_mtimespec : (struct timespec) { 0, 0 };
-            os_unfair_lock_lock(&AuraCacheLock);
-            [AuraDecisionCache() removeAllObjects];
-            os_unfair_lock_unlock(&AuraCacheLock);
-        }
-        active = exists;
-    }
-    const BOOL result = active;
-    os_unfair_lock_unlock(&lock);
-    return result;
+void AuraWebRequestChannelRefreshActive(void)
+{
+    NSString *state = AuraWebRequestChannelPostSync(AuraWebRequestStateMessageName, @"");
+    // No handler on the host side: stay quiet rather than stall every load.
+    if (!state) { state = @"0"; }
+    if ([state isEqualToString:@"1"] != AuraActive) { AuraWebRequestChannelSetActive(state); }
 }
 
 #pragma mark - Types
@@ -97,11 +84,26 @@ NSString *AuraWebRequestTypeName(uint32_t typeMask, BOOL isMainDocument, BOOL is
 
 #pragma mark - Synchronous ask
 
-static NSDictionary *AuraParseReply(WKTypeRef reply)
+NSString *AuraWebRequestChannelPostSync(NSString *name, NSString *body)
 {
-    if (!reply || WKGetTypeID(reply) != WKStringGetTypeID()) { return nil; }
-    CFStringRef cfJSON = WKStringCopyCFString(kCFAllocatorDefault, (WKStringRef)reply);
-    NSString *json = CFBridgingRelease(cfJSON);
+    if (!AuraBundle) { return nil; }
+    WKStringRef wkName = WKStringCreateWithCFString((__bridge CFStringRef)name);
+    WKStringRef payload = WKStringCreateWithCFString((__bridge CFStringRef)(body ?: @""));
+    WKTypeRef reply = NULL;
+    WKBundlePostSynchronousMessage(AuraBundle, wkName, (WKTypeRef)payload, &reply);
+    WKRelease((WKTypeRef)wkName);
+    WKRelease((WKTypeRef)payload);
+
+    NSString *result = nil;
+    if (reply && WKGetTypeID(reply) == WKStringGetTypeID()) {
+        result = CFBridgingRelease(WKStringCopyCFString(kCFAllocatorDefault, (WKStringRef)reply));
+    }
+    if (reply) { WKRelease(reply); }
+    return result;
+}
+
+static NSDictionary *AuraParseReply(NSString *json)
+{
     if (json.length == 0) { return nil; }
     NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
     id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
@@ -127,15 +129,7 @@ NSDictionary *AuraWebRequestChannelDecide(NSDictionary *request)
     NSString *json = [[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding];
 
     const CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
-    WKStringRef name = WKStringCreateWithCFString((__bridge CFStringRef)AuraWebRequestMessageName);
-    WKStringRef payload = WKStringCreateWithCFString((__bridge CFStringRef)json);
-    WKTypeRef reply = NULL;
-    WKBundlePostSynchronousMessage(AuraBundle, name, (WKTypeRef)payload, &reply);
-    WKRelease((WKTypeRef)name);
-    WKRelease((WKTypeRef)payload);
-
-    NSDictionary *decision = AuraParseReply(reply);
-    if (reply) { WKRelease(reply); }
+    NSDictionary *decision = AuraParseReply(AuraWebRequestChannelPostSync(AuraWebRequestMessageName, json));
     os_log_debug(AuraChannelLog(), "decide %{private}@ -> %{public}s in %.2f ms",
                  request[@"url"], [decision[@"cancel"] boolValue] ? "cancel" : "allow",
                  (CFAbsoluteTimeGetCurrent() - start) * 1000.0);
