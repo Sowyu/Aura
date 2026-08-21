@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct FloatingSidebarOverlay: View {
-    static let minFraction: CGFloat = 0.16
+    static let minFraction: CGFloat = 0.10
     static let maxFraction: CGFloat = 0.30
 
     @Environment(SidebarManager.self) private var sidebarManager

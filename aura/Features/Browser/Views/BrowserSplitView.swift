@@ -18,11 +18,11 @@ struct BrowserSplitView: View {
     }
 
     private var minPF: CGFloat {
-        sidebarManager.sidebarPosition == .primary ? 0.16 : 0.7
+        sidebarManager.sidebarPosition == .primary ? 0.10 : 0.7
     }
 
     private var minSF: CGFloat {
-        sidebarManager.sidebarPosition == .primary ? 0.7 : 0.16
+        sidebarManager.sidebarPosition == .primary ? 0.7 : 0.10
     }
 
     private var prioritySide: SplitSide {
