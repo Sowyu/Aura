@@ -173,9 +173,10 @@ final class AdvancedBlockingService: @unchecked Sendable {
 
         let signature = Self.signature(for: sources)
         lock.lock()
-        let isCurrent = engines[spaceID]?.signature == signature || buildingSignatures.contains(signature)
+        let buildKey = spaceID.uuidString + signature
+        let isCurrent = engines[spaceID]?.signature == signature || buildingSignatures.contains(buildKey)
         if !isCurrent {
-            buildingSignatures.insert(signature)
+            buildingSignatures.insert(buildKey)
         }
         lock.unlock()
         guard !isCurrent else { return }
@@ -189,7 +190,7 @@ final class AdvancedBlockingService: @unchecked Sendable {
     private func build(spaceID: UUID, sources: [(id: String, revision: String)], signature: String) {
         defer {
             lock.lock()
-            buildingSignatures.remove(signature)
+            buildingSignatures.remove(spaceID.uuidString + signature)
             lock.unlock()
         }
 
@@ -220,7 +221,15 @@ final class AdvancedBlockingService: @unchecked Sendable {
         signature: String = UUID().uuidString
     ) throws {
         let containerURL = baseURL.appendingPathComponent(spaceID.uuidString, isDirectory: true)
+        // Start from an empty directory: the library writes fixed file names with the
+        // legacy FileHandle API, which raises (uncatchable from Swift) instead of throwing
+        // when a stale or unwritable file gets in the way. Probe writability first so a
+        // bad container skips the build instead of taking the app down.
+        try? FileManager.default.removeItem(at: containerURL)
         try FileManager.default.createDirectory(at: containerURL, withIntermediateDirectories: true)
+        let probe = containerURL.appendingPathComponent(".writable")
+        try Data([0]).write(to: probe, options: .atomic)
+        try FileManager.default.removeItem(at: probe)
 
         let builder = try WebExtension(containerURL: containerURL)
         _ = try builder.buildFilterEngine(rules: advancedRulesText)
