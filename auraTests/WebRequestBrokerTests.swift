@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 import WebKit
@@ -258,6 +259,218 @@ struct WebRequestBrokerTests {
         guard let archive = BundledExtensions.uBlockArchiveURL else { return nil }
         return try BundledExtensions.unpack(archive, named: BundledExtensions.uBlockFolderName, into: profile)
     }
+
+    // MARK: - Intra-extension messaging
+
+    /// A page connects to its own background page, round-trips a message and
+    /// disconnects, with the background seeing all three. Every hop is real:
+    /// WebKit's extension runtime, two native ports, and Aura's relay between
+    /// them. WKWebExtension delivers none of this on its own.
+    @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
+    @MainActor
+    func anExtensionPageReachesItsBackgroundPage() async throws {
+        guard #available(macOS 15.4, *) else { return }
+
+        let directory = try makeRelayExtension()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        #expect(try ExtensionShim.apply(at: directory))
+
+        let engine = ExtensionEngine()
+        let id = "aura-relay-test"
+        _ = try await engine.load(directory: directory, id: id)
+        defer { engine.unload(id: id) }
+
+        let context = try #require(engine.context(for: id))
+        let attached = await poll(timeout: 20) { ExtensionMessageRelay.shared.hasBackground(for: id) }
+        #expect(attached, "the background shim never opened its relay port")
+        guard attached else { return }
+
+        let webView = try extensionPageWebView(for: context)
+        defer { webView.window?.close() }
+        webView.load(URLRequest(url: try #require(context.optionsPageURL)))
+
+        let done = await poll(timeout: 30) {
+            (try? await webView.evaluateJavaScript("window.__auraDone === true")) as? Bool == true
+        }
+        let log = (try? await webView.evaluateJavaScript("JSON.stringify(window.__auraLog || null)")) as? String
+        #expect(done, "the page never finished its round trip; log: \(log ?? "nil")")
+        guard done, let log, let data = log.data(using: .utf8),
+              let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+
+        #expect(result["name"] as? String == "first", "port.name has to survive the tunnel")
+        #expect((result["echo"] as? [String: Any])?["hello"] as? Int == 1)
+        let senderURL = result["senderUrl"] as? String ?? ""
+        #expect(
+            senderURL.hasPrefix(context.baseURL.absoluteString),
+            "uBlock Origin decides a port is privileged from sender.url; got \(senderURL)"
+        )
+        #expect(result["disconnects"] as? Int == 1, "the background page has to see the page's disconnect")
+        #expect((result["oneShot"] as? [String: Any])?["pong"] as? String == "ping")
+
+        print("RELAY page->background round trip: \(log)")
+    }
+
+    /// The bundled uBlock Origin's own popup and dashboard, rendered by WebKit
+    /// and read back out of their web views. Blank is the failure this fixes.
+    @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
+    @MainActor
+    func uBlockOriginsPopupAndDashboardRender() async throws {
+        guard #available(macOS 15.4, *) else { return }
+
+        let directory = try unpackBundledUBlock()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        #expect(try ExtensionShim.apply(at: directory))
+
+        let engine = ExtensionEngine()
+        let id = "ublock-origin-popup"
+        _ = try await engine.load(directory: directory, id: id)
+        defer { engine.unload(id: id) }
+
+        let context = try #require(engine.context(for: id))
+        let attached = await poll(timeout: 60) { ExtensionMessageRelay.shared.hasBackground(for: id) }
+        #expect(attached, "uBlock's background page never opened its relay port")
+        guard attached else { return }
+        // uBO compiles its filter lists before it answers anything.
+        try? await Task.sleep(for: .seconds(10))
+
+        let action = try #require(context.action(for: nil))
+        #expect(action.presentsPopup)
+        let popup = try #require(action.popupWebView, "WebKit built no popup web view")
+
+        // #version is written from the payload the background page sends back
+        // for 'getPopupData'. Filled means the round trip happened.
+        let filled = await poll(timeout: 30) {
+            let version = (try? await popup.evaluateJavaScript(
+                "(document.getElementById('version') || {}).textContent || \'\'"
+            )) as? String
+            return (version ?? "").isEmpty == false
+        }
+        let report = (try? await popup.evaluateJavaScript(Self.popupReport)) as? String ?? "nil"
+        print("UBO POPUP \(report)")
+
+        #expect(filled, "uBlock's popup never got its data from the background page: \(report)")
+        #expect(report.contains("\"powerSwitch\":true"), "the popup should hold uBO's power button")
+        #expect(!report.contains("\"blocked\":\"\""), "the popup should show a blocked count")
+        #expect(ExtensionMessageRelay.shared.openPortCount(for: id) > 0, "the popup's port should be tunnelled")
+
+        // The dashboard is the harder case: a page in a tab that frames another
+        // page, each one connecting on its own.
+        let dashboard = try extensionPageWebView(for: context)
+        defer { dashboard.window?.close() }
+        let pane = try #require(URL(string: "#3p-filters.html", relativeTo: context.optionsPageURL))
+        dashboard.load(URLRequest(url: pane))
+
+        let lists = await poll(timeout: 45) {
+            ((try? await dashboard.evaluateJavaScript(Self.filterListCount)) as? Int ?? 0) > 0
+        }
+        let count = (try? await dashboard.evaluateJavaScript(Self.filterListCount)) as? Int ?? 0
+        print("UBO DASHBOARD filter lists: \(count)")
+        #expect(lists, "the dashboard's filter-list pane came up empty")
+    }
+
+    /// What the popup looks like from the inside, as one JSON line in the log.
+    private static let popupReport = """
+    JSON.stringify({
+        url: location.href,
+        role: globalThis.__auraShimRole || null,
+        shim: globalThis.__auraShimInstalled || null,
+        relay: globalThis.__auraShimRelay,
+        port: typeof vAPI === 'object' && vAPI.messaging ? vAPI.messaging.port !== null : null,
+        powerSwitch: !!document.getElementById('switch'),
+        version: ((document.getElementById('version') || {}).textContent || ''),
+        blocked: ((document.querySelector('[data-i18n^="popupBlockedOnThisPage"] + span') || {}).textContent || ''),
+        bodyClass: document.body ? document.body.className : ''
+    })
+    """
+
+    /// uBO's dashboard swaps one iframe between panes; the filter-list pane
+    /// fills with `.listEntry` rows only after its own port answers.
+    private static let filterListCount = """
+    (() => {
+        const frame = document.getElementById('iframe');
+        const doc = frame && frame.contentDocument;
+        return doc ? doc.querySelectorAll('.listEntry').length : 0;
+    })()
+    """
+
+    @available(macOS 15.4, *)
+    @MainActor
+    private func extensionPageWebView(for context: WKWebExtensionContext) throws -> WKWebView {
+        let configuration = try #require(context.webViewConfiguration, "the context has to be loaded first")
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 400), configuration: configuration)
+        webView.isInspectable = true
+        let window = NSWindow(
+            contentRect: webView.frame, styleMask: [.borderless], backing: .buffered, defer: false
+        )
+        window.contentView = webView
+        window.makeKeyAndOrderFront(nil)
+        return webView
+    }
+
+    private func poll(timeout: TimeInterval, _ condition: () async -> Bool) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if await condition() { return true }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        return false
+    }
+
+    /// A background page that echoes and counts disconnects, plus an options
+    /// page that drives the whole sequence.
+    private func makeRelayExtension() throws -> URL {
+        let directory = try ExtensionPagePatchTests.makeExtension()
+        try Self.relayBackground.write(
+            to: directory.appendingPathComponent("bg.js"), atomically: true, encoding: .utf8
+        )
+        try Self.relayPage.write(
+            to: directory.appendingPathComponent("options.js"), atomically: true, encoding: .utf8
+        )
+        let page = "<!doctype html><html><head><meta charset=\"utf-8\"></head>"
+            + "<body><script src=\"options.js\"></script></body></html>"
+        try page.write(to: directory.appendingPathComponent("options.html"), atomically: true, encoding: .utf8)
+        return directory
+    }
+
+    private static let relayBackground = """
+    let disconnects = 0;
+    browser.runtime.onConnect.addListener(port => {
+        const sender = port.sender || {};
+        port.onDisconnect.addListener(() => { disconnects += 1; });
+        port.onMessage.addListener((message, replyPort) => {
+            if (message && message.what === 'status') {
+                replyPort.postMessage({ disconnects: disconnects });
+                return;
+            }
+            replyPort.postMessage({ echo: message, name: replyPort.name, senderUrl: sender.url });
+        });
+    });
+    browser.runtime.onMessage.addListener(message => Promise.resolve({ pong: message && message.ping }));
+    """
+
+    private static let relayPage = """
+    (async () => {
+        const log = {};
+        window.__auraLog = log;
+        const answer = (port, message) => new Promise(resolve => {
+            port.onMessage.addListener(resolve);
+            port.postMessage(message);
+        });
+        try {
+            const first = browser.runtime.connect({ name: 'first' });
+            Object.assign(log, await answer(first, { hello: 1 }));
+            first.disconnect();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const second = browser.runtime.connect({ name: 'second' });
+            Object.assign(log, await answer(second, { what: 'status' }));
+            log.oneShot = await browser.runtime.sendMessage({ ping: 'ping' });
+            window.__auraDone = true;
+        } catch (error) {
+            log.error = String(error);
+        }
+    })();
+    """
 
     // MARK: - Helpers
 

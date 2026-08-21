@@ -11,21 +11,47 @@
 // subresource load it asks the host, the host asks this file, and the answer
 // travels back before the request exists. Everything without "blocking" is
 // handed to WebKit untouched.
+//
+// The same file also runs in the extension's own pages (popup, options,
+// sidebar), where it does a second job: WebKit never delivers
+// runtime.connect()/runtime.sendMessage() from an extension page to that
+// extension's background page, so both are tunnelled through the host over a
+// native port. Content scripts are left on WebKit's native path, which works.
 
 'use strict';
 
 (function auraShim() {
     const NATIVE_APPLICATION = 'app.aurabrowser.bridge';
+    // Two identifiers rather than one plus a handshake: the host can tell which
+    // side of the tunnel a port belongs to the moment it arrives.
+    const RELAY_BACKGROUND = 'app.aurabrowser.relay.background';
+    const RELAY_PAGE = 'app.aurabrowser.relay.page';
     // Bumped when the protocol changes so a stale patched extension is repatched.
-    const SHIM_VERSION = 1;
+    const SHIM_VERSION = 2;
 
     const api = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
     if (!api || globalThis.__auraShimInstalled) { return; }
     globalThis.__auraShimInstalled = SHIM_VERSION;
 
+    // The patcher writes 'page' into every extension page it injects into. The
+    // background context gets no marker, so anything unmarked is the background.
+    const IS_PAGE = globalThis.__auraShimRole === 'page';
+
     // -----------------------------------------------------------------------
     // WebKit strictness polyfills
     // -----------------------------------------------------------------------
+
+    // WebKit gives an extension background page no requestIdleCallback. uBlock
+    // Origin schedules its badge updates through it and the TypeError aborts
+    // whatever start-up step it landed in. Deferred work run late is exactly
+    // what the caller asked for, so a timer is a faithful stand-in.
+    if (typeof globalThis.requestIdleCallback !== 'function') {
+        globalThis.requestIdleCallback = (callback, options) => setTimeout(
+            () => callback({ didTimeout: true, timeRemaining: () => 0 }),
+            options && typeof options.timeout === 'number' ? Math.min(options.timeout, 50) : 1
+        );
+        globalThis.cancelIdleCallback = id => clearTimeout(id);
+    }
 
     // WebKit builds browser.* out of native JSC class objects whose property
     // getters win over anything defined on the instance, so nothing here can be
@@ -117,6 +143,302 @@
             return rootURL() + String(path).replace(/^\//, '');
         });
     }
+
+    // WebKit throws on i18n.getMessage('') where Firefox and Chrome return the
+    // empty string. uBlock Origin's popup markup carries valueless `aria-label`
+    // attributes, its i18n pass feeds each one straight in, and the throw kills
+    // the module that every other popup script imports. That is what left the
+    // panel blank even once messaging worked.
+    if (api.i18n && typeof api.i18n.getMessage === 'function') {
+        const nativeGetMessage = api.i18n.getMessage.bind(api.i18n);
+        const i18nMembers = new Map();
+        i18nMembers.set('getMessage', (name, substitutions) => {
+            if (typeof name !== 'string' || name === '') { return ''; }
+            try {
+                const text = substitutions === undefined
+                    ? nativeGetMessage(name)
+                    : nativeGetMessage(name, substitutions);
+                return typeof text === 'string' ? text : '';
+            } catch (_) {
+                return '';
+            }
+        });
+        overrides.set('i18n', namespaceProxy(api.i18n, i18nMembers));
+    }
+
+    // WebKit rejects a menu entry whose URL patterns it does not recognise
+    // (uBlock Origin registers one for `abp:*` subscription links) and throws
+    // out of menus.create. uBO builds its whole context menu in one unguarded
+    // loop, so one bad pattern costs every entry after it. Dropping the
+    // patterns costs that one entry its URL filter and keeps the rest.
+    for (const namespace of ['menus', 'contextMenus']) {
+        const native = api[namespace];
+        if (!native || typeof native.create !== 'function') { continue; }
+        const nativeCreate = native.create.bind(native);
+        const create = (properties, callback) => {
+            const attempt = value => (callback === undefined ? nativeCreate(value) : nativeCreate(value, callback));
+            try {
+                return attempt(properties);
+            } catch (_) { /* retried below */ }
+            if (!properties || typeof properties !== 'object') { return undefined; }
+            const relaxed = Object.assign({}, properties);
+            delete relaxed.targetUrlPatterns;
+            delete relaxed.documentUrlPatterns;
+            try {
+                return attempt(relaxed);
+            } catch (_) {
+                return undefined;
+            }
+        };
+        overrides.set(namespace, namespaceProxy(native, new Map([['create', create]])));
+    }
+
+    // -----------------------------------------------------------------------
+    // Intra-extension messaging relay
+    //
+    // WKWebExtension routes runtime.connect/sendMessage from an extension page
+    // into the void: neither onConnect nor onMessage ever fires on the
+    // background page. Both sides open a native port to the host instead, and
+    // the host forwards frames between them. Port identity, message order and
+    // disconnection all survive; the objects handed to the extension are
+    // ordinary JS objects shaped like a WebExtensions Port.
+    // -----------------------------------------------------------------------
+
+    let relayPort = null;
+    let relayUsable = false;
+    const relayQueue = [];
+
+    function relaySend(frame) {
+        if (relayPort === null) {
+            if (relayQueue.length < 256) { relayQueue.push(frame); }
+            return;
+        }
+        try {
+            relayPort.postMessage(frame);
+        } catch (_) {
+            relayPort = null;
+            if (relayQueue.length < 256) { relayQueue.push(frame); }
+        }
+    }
+
+    function relayConnect() {
+        if (typeof api.runtime.connectNative !== 'function') { return false; }
+        let opened;
+        try {
+            opened = api.runtime.connectNative(IS_PAGE ? RELAY_PAGE : RELAY_BACKGROUND);
+        } catch (_) {
+            return false;
+        }
+        if (!opened) { return false; }
+        relayPort = opened;
+        relayPort.onMessage.addListener(onRelayFrame);
+        if (relayPort.onDisconnect) {
+            relayPort.onDisconnect.addListener(() => { relayPort = null; });
+        }
+        const queued = relayQueue.splice(0, relayQueue.length);
+        for (const frame of queued) { relaySend(frame); }
+        return true;
+    }
+
+    /// The smallest thing that answers to addListener/removeListener/hasListener
+    /// and can be fired. Listener identity is what removeListener needs, so a Set.
+    function relayEvent() {
+        const listeners = new Set();
+        return {
+            addListener(fn) { if (typeof fn === 'function') { listeners.add(fn); } },
+            removeListener(fn) { listeners.delete(fn); },
+            hasListener(fn) { return listeners.has(fn); },
+            fire(args) {
+                for (const fn of Array.from(listeners)) {
+                    try { fn.apply(null, args); } catch (_) { /* one bad listener is not fatal */ }
+                }
+            },
+        };
+    }
+
+    // portId -> { port, onMessage, onDisconnect }
+    const relayPorts = new Map();
+    let nextRelayPortId = 1;
+    // Ids are minted on the page side and never interpreted by the host, so a
+    // per-document prefix keeps two open pages from colliding.
+    const relayPrefix = Math.random().toString(36).slice(2, 10);
+
+    function newPortId() {
+        return relayPrefix + '-' + (nextRelayPortId++);
+    }
+
+    /// Both ends see the same object shape; only who sends the opening frame
+    /// differs. `sender` is set on the background's copy, as onConnect promises.
+    function makeRelayPort(portId, name, sender) {
+        const onMessage = relayEvent();
+        const onDisconnect = relayEvent();
+        let alive = true;
+        const port = {
+            name: typeof name === 'string' ? name : '',
+            onMessage: onMessage,
+            onDisconnect: onDisconnect,
+            postMessage(message) {
+                if (!alive) { return; }
+                relaySend({ op: 'post', portId: portId, message: message });
+            },
+            disconnect() {
+                if (!alive) { return; }
+                alive = false;
+                relayPorts.delete(portId);
+                relaySend({ op: 'disconnect', portId: portId });
+            },
+        };
+        if (sender !== undefined) { port.sender = sender; }
+        relayPorts.set(portId, { port: port, onMessage: onMessage, onDisconnect: onDisconnect,
+                                 close() { alive = false; } });
+        return port;
+    }
+
+    function senderInfo() {
+        const sender = { url: location.href, frameId: 0 };
+        try {
+            if (typeof api.runtime.id === 'string') { sender.id = api.runtime.id; }
+        } catch (_) { /* WebKit does not always expose it */ }
+        return sender;
+    }
+
+    // Background side: listeners the extension registered, fired by hand when a
+    // tunnelled frame arrives. They stay registered natively too, so content
+    // scripts keep reaching the extension on WebKit's own path.
+    const relayConnectListeners = relayEvent();
+    const relayMessageListeners = [];
+    // portId -> resolve, for the one-shot sendMessage on the page side.
+    const relayReplies = new Map();
+
+    function dispatchOneShot(frame) {
+        let answered = false;
+        const respond = value => {
+            if (answered) { return; }
+            answered = true;
+            relaySend({ op: 'response', portId: frame.portId, message: value === undefined ? null : value });
+        };
+        let asynchronous = false;
+        for (const fn of relayMessageListeners.slice()) {
+            let result;
+            try {
+                result = fn(frame.message, frame.sender, respond);
+            } catch (_) {
+                continue;
+            }
+            if (result && typeof result.then === 'function') {
+                asynchronous = true;
+                result.then(respond, () => respond(null));
+                break;
+            }
+            // Chrome's contract: true means "I will call sendResponse later".
+            if (result === true) { asynchronous = true; break; }
+            if (result !== undefined) { respond(result); break; }
+        }
+        if (!asynchronous) { respond(null); }
+    }
+
+    function onRelayFrame(frame) {
+        if (!frame || typeof frame !== 'object' || typeof frame.portId !== 'string') { return; }
+        const entry = relayPorts.get(frame.portId);
+        switch (frame.op) {
+        case 'connect':
+            if (IS_PAGE || entry !== undefined) { return; }
+            relayConnectListeners.fire([makeRelayPort(frame.portId, frame.name, frame.sender || {})]);
+            break;
+        case 'post':
+            if (entry === undefined) { return; }
+            entry.onMessage.fire([frame.message, entry.port]);
+            break;
+        case 'disconnect':
+            if (entry === undefined) { return; }
+            relayPorts.delete(frame.portId);
+            entry.close();
+            entry.onDisconnect.fire([entry.port]);
+            break;
+        case 'message':
+            if (IS_PAGE) { return; }
+            dispatchOneShot(frame);
+            break;
+        case 'response': {
+            const resolve = relayReplies.get(frame.portId);
+            if (resolve === undefined) { return; }
+            relayReplies.delete(frame.portId);
+            resolve(frame.message);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    function installRelayMembers() {
+        if (IS_PAGE) {
+            const nativeConnect = typeof api.runtime.connect === 'function'
+                ? api.runtime.connect.bind(api.runtime) : null;
+            const nativeSend = typeof api.runtime.sendMessage === 'function'
+                ? api.runtime.sendMessage.bind(api.runtime) : null;
+
+            runtimeMembers.set('connect', function connect(...args) {
+                if (!relayUsable) { return nativeConnect ? nativeConnect(...args) : undefined; }
+                const last = args[args.length - 1];
+                const info = last !== null && typeof last === 'object' ? last : {};
+                const portId = newPortId();
+                const port = makeRelayPort(portId, info.name, undefined);
+                relaySend({ op: 'connect', portId: portId, name: port.name, sender: senderInfo() });
+                return port;
+            });
+
+            runtimeMembers.set('sendMessage', function sendMessage(...args) {
+                if (!relayUsable) { return nativeSend ? nativeSend(...args) : Promise.resolve(); }
+                const callback = typeof args[args.length - 1] === 'function' ? args.pop() : null;
+                // (extensionId, message, options) or (message, options).
+                const message = args.length >= 2 && typeof args[0] === 'string' ? args[1] : args[0];
+                const portId = newPortId();
+                const promise = new Promise(resolve => { relayReplies.set(portId, resolve); });
+                relaySend({ op: 'message', portId: portId, message: message, sender: senderInfo() });
+                if (callback === null) { return promise; }
+                promise.then(callback, () => {});
+                return undefined;
+            });
+            return;
+        }
+
+        const nativeConnectEvent = api.runtime.onConnect;
+        runtimeMembers.set('onConnect', {
+            __auraShim: true,
+            addListener(fn) {
+                relayConnectListeners.addListener(fn);
+                if (nativeConnectEvent) { try { nativeConnectEvent.addListener(fn); } catch (_) {} }
+            },
+            removeListener(fn) {
+                relayConnectListeners.removeListener(fn);
+                if (nativeConnectEvent) { try { nativeConnectEvent.removeListener(fn); } catch (_) {} }
+            },
+            hasListener(fn) { return relayConnectListeners.hasListener(fn); },
+        });
+
+        const nativeMessageEvent = api.runtime.onMessage;
+        runtimeMembers.set('onMessage', {
+            __auraShim: true,
+            addListener(fn) {
+                if (typeof fn !== 'function' || relayMessageListeners.includes(fn)) { return; }
+                relayMessageListeners.push(fn);
+                if (nativeMessageEvent) { try { nativeMessageEvent.addListener(fn); } catch (_) {} }
+            },
+            removeListener(fn) {
+                const at = relayMessageListeners.indexOf(fn);
+                if (at !== -1) { relayMessageListeners.splice(at, 1); }
+                if (nativeMessageEvent) { try { nativeMessageEvent.removeListener(fn); } catch (_) {} }
+            },
+            hasListener(fn) { return relayMessageListeners.includes(fn); },
+        });
+    }
+
+    relayUsable = relayConnect();
+    // Read by Aura's tests and by anyone inspecting a popup: false here means
+    // the page fell back to WebKit's own (silently lossy) messaging.
+    globalThis.__auraShimRelay = relayUsable;
+    installRelayMembers();
 
     // -----------------------------------------------------------------------
     // Native port
@@ -371,7 +693,11 @@
         webRequestMembers.set('handlerBehaviorChanged', () => {});
     }
 
-    overrides.set('webRequest', namespaceProxy(nativeWebRequest, webRequestMembers));
+    // Only the background context blocks requests; a popup registering a
+    // blocking listener would be a bug, so it keeps WebKit's own webRequest.
+    if (!IS_PAGE) {
+        overrides.set('webRequest', namespaceProxy(nativeWebRequest, webRequestMembers));
+    }
     if (runtimeMembers.size > 0) {
         overrides.set('runtime', namespaceProxy(api.runtime, runtimeMembers));
     }
@@ -405,16 +731,21 @@
         } catch (_) { /* reported in the hello below */ }
     }
 
-    startTabTracking();
-    connect();
+    if (!IS_PAGE) {
+        startTabTracking();
+        connect();
+    }
 
-    // The background page has no console the browser can read, so the shim says
-    // what it managed to wire up. One message, at start-up.
+    // Neither a background page nor a popup has a console the browser can read,
+    // so the shim says what it managed to wire up. One message, at start-up.
     if (typeof api.runtime.sendNativeMessage === 'function') {
         try {
             api.runtime.sendNativeMessage(NATIVE_APPLICATION, {
                 op: 'hello',
                 shimVersion: SHIM_VERSION,
+                role: IS_PAGE ? 'page' : 'background',
+                url: location.href,
+                relay: relayUsable,
                 connectNative: typeof api.runtime.connectNative,
                 connected: port !== null,
                 connectError: lastConnectError,

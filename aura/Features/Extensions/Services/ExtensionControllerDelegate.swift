@@ -100,20 +100,27 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
     // MARK: - Native messaging
 
     /// The only thing that connects here is Aura's own shim, prepended to the
-    /// extension's background scripts at install time. It announces blocking
-    /// `webRequest` listeners and answers the questions the injected bundle
-    /// asks while a page load waits.
+    /// extension's background scripts and pages at install time. Which of the
+    /// three channels a port belongs to is the identifier it asked for: the
+    /// blocking `webRequest` bridge, or either end of the messaging relay.
     func webExtensionController(
         _ controller: WKWebExtensionController,
         connectUsing port: WKWebExtension.MessagePort,
         for context: WKWebExtensionContext,
         completionHandler: @escaping ((any Error)?) -> Void
     ) {
-        guard port.applicationIdentifier == WebRequestBroker.applicationIdentifier else {
+        let extensionID = context.uniqueIdentifier
+        switch port.applicationIdentifier {
+        case WebRequestBroker.applicationIdentifier:
+            WebRequestBroker.shared.attach(port: port, extensionID: extensionID)
+        case ExtensionMessageRelay.backgroundIdentifier:
+            ExtensionMessageRelay.shared.attachBackground(port: port, extensionID: extensionID)
+        case ExtensionMessageRelay.pageIdentifier:
+            ExtensionMessageRelay.shared.attachPage(port: port, extensionID: extensionID)
+        default:
             completionHandler(ExtensionActionError.unknownNativeApplication)
             return
         }
-        WebRequestBroker.shared.attach(port: port, extensionID: context.uniqueIdentifier)
         completionHandler(nil)
     }
 
