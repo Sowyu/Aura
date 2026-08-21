@@ -115,8 +115,12 @@ struct TabItem: View {
                 isPlayingMedia: tab.isPlayingMedia
             )
             tabTitle
-            Spacer()
+            Spacer(minLength: 4)
+            // Always laid out, so hovering toggles opacity only: nothing moves or reflows.
             actionButton
+                .frame(width: 20, height: 20)
+                .opacity(isHovering ? 1 : 0)
+                .allowsHitTesting(isHovering)
         }
         .onAppear {
             if tabManager.isActive(tab) {
@@ -180,9 +184,9 @@ struct TabItem: View {
 
     @ViewBuilder
     private var actionButton: some View {
-        if isHovering, tab.type == .pinned, !tab.isWebViewReady {
+        if tab.type == .pinned, !tab.isWebViewReady {
             ActionButton(icon: "pin.slash", color: textColor, action: onPinToggle).help("Unpin Tab")
-        } else if isHovering {
+        } else {
             ActionButton(icon: "xmark", color: textColor, action: onClose).help("Close Tab")
         }
     }

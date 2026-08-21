@@ -10,28 +10,12 @@ struct FolderDropDelegate: DropDelegate {
     @Binding var dropTargetFolderID: UUID?
     let tabManager: TabManager
 
+    /// Entering only highlights the folder. Moving on enter meant a tab dragged *past*
+    /// a folder on its way somewhere else was pulled into it, then out, then in again.
     func dropEntered(info: DropInfo) {
-        guard let provider = info.itemProviders(for: [.text]).first else { return }
+        guard draggedItem != nil, draggedItem != folder.id else { return }
         performHapticFeedback(pattern: .alignment)
-
-        provider.loadObject(ofClass: NSString.self) { object, _ in
-            guard let string = object as? String,
-                  let uuid = UUID(uuidString: string),
-                  uuid != folder.id
-            else { return }
-
-            DispatchQueue.main.async {
-                if let dragged = folder.container.folders.first(where: { $0.id == uuid }) {
-                    withAnimation(AnimationSettings.easeOut(0.15)) {
-                        tabManager.move(folder: dragged, to: folder)
-                    }
-                    return
-                }
-                guard let tab = folder.container.tabs.first(where: { $0.id == uuid }) else { return }
-                dropTargetFolderID = folder.id
-                tabManager.move(tab: tab, to: folder)
-            }
-        }
+        dropTargetFolderID = folder.id
     }
 
     func dropExited(info: DropInfo) {
@@ -45,8 +29,21 @@ struct FolderDropDelegate: DropDelegate {
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        dropTargetFolderID = nil
-        draggedItem = nil
+        defer {
+            dropTargetFolderID = nil
+            draggedItem = nil
+        }
+        guard let uuid = draggedItem, uuid != folder.id else { return false }
+        if let dragged = folder.container.folders.first(where: { $0.id == uuid }) {
+            withAnimation(AnimationSettings.easeOut(0.15)) {
+                tabManager.move(folder: dragged, to: folder)
+            }
+            return true
+        }
+        guard let tab = folder.container.tabs.first(where: { $0.id == uuid }) else { return false }
+        withAnimation(AnimationSettings.easeOut(0.15)) {
+            tabManager.move(tab: tab, to: folder)
+        }
         return true
     }
 }
