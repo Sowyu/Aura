@@ -170,6 +170,14 @@ static WKURLRequestRef AuraWillSendRequestForFrame(
                                                               typeMask, isMainFrame, isMainDocument, &replacement);
             if (decision == AuraBlockDecisionBlock) {
                 os_log_debug(AuraBundleLog(), "block id=%llu url=%{private}@", resourceIdentifier, url);
+                if (isMainDocument) {
+                    // Extensions may cancel subresources and subframes, never the top
+                    // document: WebKit would report a failed navigation and the tab
+                    // would go blank. Log and let it through.
+                    os_log_debug(AuraBundleLog(), "extension asked to cancel a main document; allowing");
+                    if (request) { WKRetain((WKTypeRef)request); }
+                    return request;
+                }
                 return NULL;
             }
             if (decision == AuraBlockDecisionRedirect && replacement) {

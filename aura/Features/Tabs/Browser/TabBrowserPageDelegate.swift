@@ -114,6 +114,14 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
     }
 
     func browserPage(_ page: BrowserPage, didFailNavigationWith error: Error, failingURL: URL?) {
+        // Cancellations are not failures: a superseding navigation, a download, a
+        // blocked subresource or a policy redirect all end the previous load with
+        // NSURLErrorCancelled or WebKit's "frame load interrupted". Showing the error
+        // page for those replaces a rendered page with a blank one.
+        let nsError = error as NSError
+        let isCancellation = (nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled)
+            || (nsError.domain == "WebKitErrorDomain" && nsError.code == 102)
+        guard !isCancellation else { return }
         tab?.setNavigationError(error, for: failingURL)
     }
 
