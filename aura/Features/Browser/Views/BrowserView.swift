@@ -61,6 +61,22 @@ struct BrowserView: View {
         }
     }
 
+    /// While the address field is being edited, everything under the toolbar softens so
+    /// the suggestions read as the foreground. Clicking it ends the edit.
+    @ViewBuilder
+    private var urlEditingBackdrop: some View {
+        if appState.isURLBarEditing {
+            ZStack {
+                BlurEffectView(material: .hudWindow, blendingMode: .withinWindow, isClickThrough: true)
+                Color.black.opacity(0.12)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { appState.isURLBarEditing = false }
+            .transition(.opacity)
+            .animation(AnimationSettings.easeOut(0.12), value: appState.isURLBarEditing)
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
@@ -74,6 +90,7 @@ struct BrowserView: View {
                         .zIndex(1)
                 }
                 BrowserSplitView()
+                    .overlay { urlEditingBackdrop }
             }
             .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isToolbarHidden)
             .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isFloatingToolbarVisible)
