@@ -47,47 +47,44 @@ struct TopToolbar: View {
         return histories.filter { $0.container?.id == containerId }.prefix(10).map { $0 }
     }
 
-    /// While the address field is edited everything but the field softens, the toolbar's
-    /// own buttons included; the field stays sharp because it sits outside these groups.
+    @State private var fieldFrame: CGRect = .zero
+
+    /// While the address field is edited everything but the field softens: two blur
+    /// slabs, left and right of the measured field frame, over the single real row.
     @ViewBuilder
     private var editingBlur: some View {
         if appState.isURLBarEditing {
-            ZStack {
-                BlurEffectView(material: .hudWindow, blendingMode: .withinWindow, isClickThrough: true)
-                Color.black.opacity(0.12)
+            GeometryReader { proxy in
+                let gap: CGFloat = 6
+                let leftWidth = max(0, fieldFrame.minX - gap)
+                let rightStart = fieldFrame.maxX + gap
+                ZStack(alignment: .leading) {
+                    blurSlab.frame(width: leftWidth)
+                    blurSlab
+                        .frame(width: max(0, proxy.size.width - rightStart))
+                        .offset(x: rightStart)
+                }
             }
-            .contentShape(Rectangle())
-            .onTapGesture { appState.isURLBarEditing = false }
             .transition(.opacity)
             .animation(AnimationSettings.easeOut(0.12), value: appState.isURLBarEditing)
         }
     }
 
-    var body: some View {
-        // Two copies of the same row: buttons below the editing blur, the field above it.
-        // Each copy keeps its counterpart laid out but invisible, so both align exactly.
+    private var blurSlab: some View {
         ZStack {
-            row(showsButtons: true, showsField: false)
-            editingBlur
-            row(showsButtons: false, showsField: true)
+            BlurEffectView(material: .hudWindow, blendingMode: .withinWindow, isClickThrough: true)
+            Color.black.opacity(0.12)
         }
-        // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
-        .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
-        .padding(.trailing, Self.edgeInset)
-        .frame(height: Self.rowHeight)
-        .frame(maxWidth: .infinity)
-        .auraGlassChromeForeground()
+        .contentShape(Rectangle())
+        .onTapGesture { appState.isURLBarEditing = false }
     }
 
-
-    private func row(showsButtons: Bool, showsField: Bool) -> some View {
+    var body: some View {
         HStack(spacing: Self.groupSpacing) {
             HStack(spacing: Self.groupSpacing) {
                 navigationGroup
                 historyGroup
             }
-            .opacity(showsButtons ? 1 : 0)
-            .allowsHitTesting(showsButtons)
 
             Spacer(minLength: Self.groupSpacing)
             URLBarField(
@@ -99,8 +96,8 @@ struct TopToolbar: View {
             // Beats the two Spacers to the free space, so the field reaches its
             // max width and they only split what is left, centring it.
             .layoutPriority(1)
-            .opacity(showsField ? 1 : 0)
-            .allowsHitTesting(showsField)
+            .zIndex(1)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("toolbarRow")) } action: { fieldFrame = $0 }
             Spacer(minLength: Self.groupSpacing)
 
             HStack(spacing: Self.groupSpacing) {
@@ -118,9 +115,15 @@ struct TopToolbar: View {
 
                 windowGroup
             }
-            .opacity(showsButtons ? 1 : 0)
-            .allowsHitTesting(showsButtons)
         }
+        .coordinateSpace(name: "toolbarRow")
+        .overlay { editingBlur }
+        // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
+        .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
+        .padding(.trailing, Self.edgeInset)
+        .frame(height: Self.rowHeight)
+        .frame(maxWidth: .infinity)
+        .auraGlassChromeForeground()
     }
 
     // MARK: - Button groups
