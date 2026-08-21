@@ -47,10 +47,27 @@ struct TopToolbar: View {
         return histories.filter { $0.container?.id == containerId }.prefix(10).map { $0 }
     }
 
+    /// While the address field is edited everything but the field softens, the toolbar's
+    /// own buttons included; the field stays sharp because it sits outside these groups.
+    @ViewBuilder
+    private var editingBlur: some View {
+        if appState.isURLBarEditing {
+            ZStack {
+                BlurEffectView(material: .hudWindow, blendingMode: .withinWindow, isClickThrough: true)
+                Color.black.opacity(0.12)
+            }
+            .transition(.opacity)
+            .animation(AnimationSettings.easeOut(0.12), value: appState.isURLBarEditing)
+        }
+    }
+
     var body: some View {
         HStack(spacing: Self.groupSpacing) {
-            navigationGroup
-            historyGroup
+            HStack(spacing: Self.groupSpacing) {
+                navigationGroup
+                historyGroup
+            }
+            .overlay { editingBlur }
 
             Spacer(minLength: Self.groupSpacing)
             URLBarField(
@@ -65,19 +82,22 @@ struct TopToolbar: View {
             .zIndex(1)
             Spacer(minLength: Self.groupSpacing)
 
-            JavaScriptBlockedBadge(
-                foregroundColor: buttonForegroundColor,
-                url: tabManager.activeTab?.url,
-                size: Self.buttonSize
-            )
-            ExtensionToolbarIcons(foregroundColor: buttonForegroundColor)
-            appGroup
+            HStack(spacing: Self.groupSpacing) {
+                JavaScriptBlockedBadge(
+                    foregroundColor: buttonForegroundColor,
+                    url: tabManager.activeTab?.url,
+                    size: Self.buttonSize
+                )
+                ExtensionToolbarIcons(foregroundColor: buttonForegroundColor)
+                appGroup
 
-            Rectangle()
-                .fill(theme.foreground.opacity(0.2))
-                .frame(width: 1, height: 16)
+                Rectangle()
+                    .fill(theme.foreground.opacity(0.2))
+                    .frame(width: 1, height: 16)
 
-            windowGroup
+                windowGroup
+            }
+            .overlay { editingBlur }
         }
         // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
         .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
