@@ -44,11 +44,6 @@ extension ExtensionCompatibility {
         "pkcs11", "captivePortal", "networkStatus", "geckoProfiler", "theme", "urlbar",
     ]
 
-    /// Subset of the above whose absence is invisible in day-to-day use.
-    static let cosmeticPermissions: Set<String> = [
-        "theme", "urlbar", "geckoProfiler", "networkStatus", "captivePortal",
-    ]
-
     /// Verdict for one AMO listing. Non-extension types are listed for completeness but
     /// never install: WebKit's extension support covers extensions only.
     static func evaluate(_ addon: FirefoxAddon) -> ExtensionCompatibility {
@@ -76,10 +71,7 @@ extension ExtensionCompatibility {
                 "Theming the browser chrome is the point of this add-on, and WebKit has no API for it."
             )
         }
-        // Cosmetic Firefox-only APIs: an add-on that also asks for these loses a decoration,
-        // not its function. They don't lower the badge.
-        let functional = missing.filter { !cosmeticPermissions.contains($0) }
-        guard !functional.isEmpty else { return .supported }
+        let functional = missing
 
         if functional.contains("webRequestBlocking") {
             return .notSupported(
