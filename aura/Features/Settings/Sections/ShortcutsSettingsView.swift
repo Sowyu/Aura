@@ -9,10 +9,13 @@ struct ShortcutsSettingsView: View {
         return KeyboardShortcuts.itemsByCategory
     }
 
+    /// One card per category, like every other settings page. The `List` this replaces
+    /// drew its own inset-grouped rows flush against the page header, so this was the
+    /// only section whose content did not line up with the title above it.
     var body: some View {
-        List {
+        SettingsSection {
             ForEach(sections, id: \.category) { section in
-                Section(section.category) {
+                SettingsCard(header: section.category) {
                     ForEach(section.items) { item in
                         ShortcutRowView(
                             item: item,
@@ -34,7 +37,6 @@ struct ShortcutsSettingsView: View {
                 }
             }
         }
-        .scrollContentBackground(.hidden)
     }
 
     private func handleAction(for item: KeyboardShortcutDefinition, action: ShortcutRowView.Action) {

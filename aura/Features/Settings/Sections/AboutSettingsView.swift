@@ -94,15 +94,23 @@ struct AboutSettingsView: View {
         }
     }
 
+    /// Only drawn when the file is in the bundle. The fixed 220 pt scroll view used to
+    /// stay on screen either way, so a build without the notices showed a one-line error
+    /// floating in an otherwise empty box.
+    @ViewBuilder
     private var noticesCard: some View {
-        SettingsCard(header: "Third-party notices") {
-            ScrollView {
-                Text(notices.isEmpty ? "THIRD_PARTY_NOTICES.md is not in this build." : notices)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        if notices.isEmpty {
+            EmptyView()
+        } else {
+            SettingsCard(header: "Third-party notices") {
+                ScrollView {
+                    Text(notices)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: 220)
             }
-            .frame(height: 220)
         }
     }
 

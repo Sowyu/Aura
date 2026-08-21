@@ -113,7 +113,10 @@ struct SearchEngineSettingsView: View {
                     }
                 }
 
-                // AI Search Engines
+                // AI Search Engines. No "Set as Default" here: the only default these
+                // rows could write is `globalDefaultSearchEngine`, which is the plain
+                // search default, so picking ChatGPT sent every ordinary query to it.
+                // The AI default is per space, under Spaces.
                 let aiEngines = searchEngineService.builtInSearchEngines.filter(\.isAIChat)
                 if !aiEngines.isEmpty {
                     Text("AI Search Engines")
@@ -123,14 +126,13 @@ struct SearchEngineSettingsView: View {
                         .padding(.bottom, 4)
 
                     ForEach(aiEngines, id: \.name) { engine in
-                        BuiltInSearchEngineRow(
-                            engine: engine,
-                            isDefault: settings.globalDefaultSearchEngine == engine.name,
-                            onSetAsDefault: {
-                                settings.globalDefaultSearchEngine = engine.name
-                            }
-                        )
+                        BuiltInSearchEngineRow(engine: engine, isDefault: false, onSetAsDefault: nil)
                     }
+
+                    Text("Pick the AI chat each space uses under Settings › Spaces.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
                 }
 
                 if !settings.customSearchEngines.isEmpty {
@@ -155,7 +157,6 @@ struct SearchEngineSettingsView: View {
                         onSetAsDefault: {
                             settings.globalDefaultSearchEngine = engine.name
                         },
-                        onEdit: {},
                         isDefault: settings.globalDefaultSearchEngine == engine.name,
                         settings: settings
                     )
@@ -173,13 +174,6 @@ struct SearchEngineSettingsView: View {
 
     private func cancelForm() {
         clearForm()
-        showingAddForm = false
-    }
-
-    private func populateForm(with engine: CustomSearchEngine) {
-        newEngineName = engine.name
-        newEngineURL = engine.searchURL
-        newEngineAliases = engine.aliases.joined(separator: ", ")
         showingAddForm = false
     }
 
@@ -207,7 +201,8 @@ struct SearchEngineSettingsView: View {
 struct BuiltInSearchEngineRow: View {
     let engine: SearchEngine
     let isDefault: Bool
-    let onSetAsDefault: () -> Void
+    /// `nil` for a row that cannot be made the default, e.g. the AI chat engines.
+    let onSetAsDefault: (() -> Void)?
 
     var body: some View {
         HStack {
@@ -249,10 +244,8 @@ struct BuiltInSearchEngineRow: View {
             Spacer()
 
             // Set as default button
-            if !isDefault {
-                Button("Set as Default") {
-                    onSetAsDefault()
-                }
+            if !isDefault, let onSetAsDefault {
+                Button("Set as Default", action: onSetAsDefault)
             }
         }
         .padding(.vertical, 4)
@@ -263,7 +256,6 @@ struct CustomSearchEngineRow: View {
     let engine: CustomSearchEngine
     let onDelete: () -> Void
     let onSetAsDefault: () -> Void
-    let onEdit: () -> Void
     let isDefault: Bool
     let settings: SettingsStore
 
@@ -395,7 +387,9 @@ struct CustomSearchEngineRow: View {
 
                     // Action buttons
                     HStack(spacing: 12) {
-                        if !isDefault {
+                        // Same reason the built-in AI rows have no button: the only
+                        // default it could set is the plain search one.
+                        if !isDefault, !engine.isAIChat {
                             Button("Set as Default") {
                                 onSetAsDefault()
                             }

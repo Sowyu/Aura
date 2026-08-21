@@ -4,6 +4,13 @@ import SwiftData
 
 private let logger = Logger(subsystem: "com.aurabrowser.app", category: "HistoryManager")
 
+/// Every visit in one space, on the store the window was built with.
+///
+/// A private window is handed a container backed by `isStoredInMemoryOnly`, so its
+/// visits never touch `OraData.sqlite` and go away with the window. They are still
+/// visible in that window's own history menu while it is open, which is what an
+/// in-memory store means; nothing is written to disk and nothing crosses into a
+/// normal window.
 @Observable
 @MainActor
 final class HistoryManager {

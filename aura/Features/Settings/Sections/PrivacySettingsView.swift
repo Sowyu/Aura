@@ -9,7 +9,7 @@ struct PrivacySettingsView: View {
     @Query private var containers: [TabContainer]
     @Bindable private var settings = SettingsStore.shared
     @ObservedObject private var javaScriptPolicy = JavaScriptPolicyService.shared
-    @Environment(\.modelContext) private var modelContext
+    @Environment(HistoryManager.self) private var historyManager
     @Environment(ToastManager.self) private var toastManager
     @Environment(DialogManager.self) private var dialogManager
 
@@ -30,6 +30,13 @@ struct PrivacySettingsView: View {
             javaScriptCard
             cookiesCard
             clearDataCard
+        }
+        // Deleting the scoped space from the sidebar left the picker blank and every
+        // clear a silent no-op, because nothing matched the stored id any more.
+        .onChange(of: containers.map(\.id)) { _, ids in
+            if case let .space(id) = clearScope, !ids.contains(id) {
+                clearScope = .allSpaces
+            }
         }
     }
 
@@ -176,20 +183,8 @@ struct PrivacySettingsView: View {
         for container in targets {
             if clearCache { PrivacyService.clearCache(container) }
             if clearCookies { PrivacyService.clearCookies(container) }
-            if clearHistory { deleteHistory(for: container) }
+            if clearHistory { historyManager.clearContainerHistory(container) }
         }
         toastManager.show("Browsing data cleared", icon: .system("trash"))
-    }
-
-    private func deleteHistory(for container: TabContainer) {
-        let containerId = container.id
-        let descriptor = FetchDescriptor<History>(
-            predicate: #Predicate { $0.container?.id == containerId }
-        )
-        guard let entries = try? modelContext.fetch(descriptor) else { return }
-        for entry in entries {
-            modelContext.delete(entry)
-        }
-        try? modelContext.save()
     }
 }

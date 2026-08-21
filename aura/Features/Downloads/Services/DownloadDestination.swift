@@ -32,10 +32,12 @@ extension DownloadManager {
     }
 
     /// Document types that cannot run code on open. Archives and disk images are left
-    /// out on purpose: they are the usual carrier for something that can.
+    /// out on purpose: they are the usual carrier for something that can. So is SVG,
+    /// which looks like an image but is a document that can carry `<script>`, and whose
+    /// default handler on most Macs is a browser.
     static let safeExtensions: Set<String> = [
         "pdf", "txt", "rtf", "csv", "json", "xml", "md",
-        "png", "jpg", "jpeg", "gif", "webp", "heic", "svg",
+        "png", "jpg", "jpeg", "gif", "webp", "heic",
         "mp3", "m4a", "wav", "flac", "mp4", "m4v", "mov"
     ]
 

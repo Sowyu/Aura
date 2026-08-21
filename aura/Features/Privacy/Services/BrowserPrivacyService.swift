@@ -421,6 +421,10 @@ final class BrowserPrivacyService {
         group.notify(queue: .main, execute: completion)
     }
 
+    /// Read once, when a web view's configuration is built. A user script cannot be
+    /// pulled out of a live page, so flipping "Block fingerprinting" reaches a tab only
+    /// after it is rebuilt: the Spaces section reloads the space's open tabs for exactly
+    /// this reason, and tabs in other spaces keep the profile they were created with.
     static func privacyScripts(for privacySettings: SpacePrivacySettings) -> [BrowserUserScript] {
         guard privacySettings.blockFingerprinting else { return [] }
 
@@ -467,11 +471,6 @@ final class BrowserPrivacyService {
         to dataStore: WKWebsiteDataStore,
         completion: @escaping () -> Void
     ) {
-        guard #available(macOS 14.0, *) else {
-            completion()
-            return
-        }
-
         let cookiePolicy: WKHTTPCookieStore.CookiePolicy = switch policy {
         case .blockAll:
             .disallow

@@ -40,14 +40,20 @@ final class DownloadManager {
         recentDownloads = recent
     }
 
+    /// Bounded at the store. The unbounded fetch this replaces pulled every download ever
+    /// made into memory on each start, complete, fail, cancel and delete, only to throw
+    /// all but the newest 50 away.
+    /// ponytail: an in-flight download older than the newest 50 drops off the active list.
+    /// Fetch it separately if anyone ever starts 50 downloads while one is still running.
     private func loadRecentDownloads() {
-        let descriptor = FetchDescriptor<Download>(
+        var descriptor = FetchDescriptor<Download>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
+        descriptor.fetchLimit = 50
 
         do {
             let downloads = try modelContext.fetch(descriptor)
-            self.recentDownloads = Array(downloads.prefix(50))
+            self.recentDownloads = downloads
             self.activeDownloads = downloads.filter { $0.status == .downloading }
         } catch {
             // Failed to load downloads
@@ -91,10 +97,11 @@ final class DownloadManager {
         return download
     }
 
+    /// No `save()` here on purpose: this runs at 10 Hz per in-flight download, and the
+    /// byte counts it writes are re-derived from the task on the next tick anyway. The
+    /// completion, failure and cancellation paths persist the final state.
     func updateDownloadProgress(_ download: Download, downloadedBytes: Int64, totalBytes: Int64) {
         download.updateProgress(downloadedBytes: downloadedBytes, totalBytes: totalBytes)
-
-        try? modelContext.save()
 
         // Trigger UI updates
         DispatchQueue.main.async {

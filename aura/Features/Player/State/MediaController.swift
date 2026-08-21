@@ -128,8 +128,12 @@ final class MediaController {
             break
         }
 
+        // `visibleSessions`, not `sessions`: a page that registered a media element it
+        // never played has a session but nothing to show, and closeSession/removeSession
+        // already use the filtered list. Reading the raw one here left the player docked
+        // with no card in it.
         // Assigning unconditionally republishes on every media event.
-        let shouldBeVisible = !sessions.isEmpty
+        let shouldBeVisible = !visibleSessions.isEmpty
         if isVisible != shouldBeVisible {
             isVisible = shouldBeVisible
         }

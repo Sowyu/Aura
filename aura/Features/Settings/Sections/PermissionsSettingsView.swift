@@ -15,6 +15,8 @@ struct PermissionsSettingsView: View {
     @State private var siteDataHosts: [String] = []
     @State private var isLoadingSiteData = false
 
+    private static let siteDataRowLimit = 50
+
     private var selectedSpace: TabContainer? {
         containers.first { $0.id == siteDataSpaceID } ?? containers.first
     }
@@ -92,10 +94,17 @@ struct PermissionsSettingsView: View {
             } else if siteDataHosts.isEmpty {
                 emptyRow("No stored site data.")
             } else {
-                ForEach(siteDataHosts, id: \.self) { host in
+                // Capped: a long-lived profile reports hundreds of hosts, and the card is
+                // inside the page's scroll view, so every row would be laid out at once.
+                ForEach(siteDataHosts.prefix(Self.siteDataRowLimit), id: \.self) { host in
                     ruleRow(host: host, detail: "Cookies and storage") {
                         clearSiteData(for: host)
                     }
+                }
+
+                if siteDataHosts.count > Self.siteDataRowLimit {
+                    emptyRow("\(siteDataHosts.count - Self.siteDataRowLimit) more sites not shown. "
+                        + "Clear the whole space under Spaces.")
                 }
             }
         }

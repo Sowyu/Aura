@@ -356,12 +356,12 @@ final class PasswordManagerService: ObservableObject {
     }
 
     static func generateStrongPassword() -> String {
-        if #available(macOS 11.0, *),
-           let generated = SecCreateSharedWebCredentialPassword() as String?
-        {
+        if let generated = SecCreateSharedWebCredentialPassword() as String? {
             return generated
         }
 
+        // Reached only when the Security framework declines. Ambiguous characters
+        // (0/O, 1/l/I, 2/Z) are left out so the password stays readable aloud.
         let uppercase = Array("ABCDEFGHJKLMNPQRSTUVWXYZ")
         let lowercase = Array("abcdefghijkmnopqrstuvwxyz")
         let digits = Array("3456789")

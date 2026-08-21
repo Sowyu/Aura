@@ -3,12 +3,6 @@ import SwiftUI
 
 // swiftlint:disable type_body_length large_tuple
 struct SpacesSettingsView: View {
-    private enum ClearDataAction: Hashable {
-        case cache(UUID)
-        case cookies(UUID)
-        case history(UUID)
-    }
-
     /// Creation order, so the paged space switcher lands on the same space every time.
     /// Unsorted, SwiftData returns store order, which can change after a save.
     @Query(sort: [SortDescriptor(\TabContainer.createdAt)]) var containers: [TabContainer]
@@ -17,8 +11,10 @@ struct SpacesSettingsView: View {
     @ObservedObject private var siteRules = SiteSpaceRuleService.shared
     @State private var searchService = SearchEngineService()
     @State private var selectedContainerId: UUID?
-    @State private var completedClearActions: Set<ClearDataAction> = []
-    @Environment(\.modelContext) private var modelContext
+    // The page rolls its own split layout instead of `SettingsSection`, so it has to
+    // honour the accessibility scroll-bar setting itself.
+    @AppStorage("a11y.alwaysShowScrollBars") private var alwaysShowScrollBars = false
+    @Environment(HistoryManager.self) private var historyManager
     @Environment(ToastManager.self) private var toastManager
 
     private var selectedContainer: TabContainer? {
@@ -37,7 +33,7 @@ struct SpacesSettingsView: View {
                     .tag(container.id)
                 }
             }
-            .frame(width: SettingsMetrics.sidebarWidth)
+            .frame(width: SettingsMetrics.spaceListWidth)
 
             Divider()
 
@@ -123,59 +119,7 @@ struct SpacesSettingsView: View {
                         siteRulesCard(for: container)
                         privacySettingsCard(for: container)
 
-                        SettingsCard(header: "Clear Data") {
-                            VStack(spacing: 8) {
-                                Button(
-                                    clearDataButtonTitle(
-                                        for: .cache(container.id),
-                                        defaultTitle: "Clear Cache",
-                                        completedTitle: "Cache Cleared"
-                                    )
-                                ) {
-                                    PrivacyService.clearCache(container) {
-                                        DispatchQueue.main.async {
-                                            completedClearActions.insert(.cache(container.id))
-                                            toastManager.show("Cache cleared", icon: .system("trash"))
-                                        }
-                                    }
-                                }
-                                .disabled(completedClearActions.contains(.cache(container.id)))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                                Button(
-                                    clearDataButtonTitle(
-                                        for: .cookies(container.id),
-                                        defaultTitle: "Clear Cookies",
-                                        completedTitle: "Cookies Cleared"
-                                    )
-                                ) {
-                                    PrivacyService.clearCookies(container) {
-                                        DispatchQueue.main.async {
-                                            completedClearActions.insert(.cookies(container.id))
-                                            toastManager.show("Cookies cleared", icon: .system("trash"))
-                                        }
-                                    }
-                                }
-                                .disabled(completedClearActions.contains(.cookies(container.id)))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                                Button(
-                                    clearDataButtonTitle(
-                                        for: .history(container.id),
-                                        defaultTitle: "Clear History",
-                                        completedTitle: "History Cleared"
-                                    )
-                                ) {
-                                    if clearHistory(for: container) {
-                                        completedClearActions.insert(.history(container.id))
-                                        toastManager.show("History cleared", icon: .system("trash"))
-                                    }
-                                }
-                                .disabled(completedClearActions.contains(.history(container.id)))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(.bordered)
-                        }
+                        clearDataCard(for: container)
 
                     } else {
                         Text("No spaces found")
@@ -187,6 +131,7 @@ struct SpacesSettingsView: View {
                 .padding(SettingsMetrics.pagePadding)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .scrollIndicators(alwaysShowScrollBars ? .visible : .automatic)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
         }
@@ -195,31 +140,40 @@ struct SpacesSettingsView: View {
         }
     }
 
-    private func clearHistory(for container: TabContainer) -> Bool {
-        let containerId = container.id
-        let descriptor = FetchDescriptor<History>(
-            predicate: #Predicate { $0.container?.id == containerId }
-        )
+    /// The toast is the confirmation. The buttons used to latch to "Cache Cleared" and
+    /// disable themselves for the rest of the session, so a second clear was impossible
+    /// without closing Settings.
+    private func clearDataCard(for container: TabContainer) -> some View {
+        SettingsCard(header: "Clear Data") {
+            VStack(spacing: 8) {
+                clearButton("Clear Cache") {
+                    PrivacyService.clearCache(container) {
+                        DispatchQueue.main.async {
+                            toastManager.show("Cache cleared", icon: .system("trash"))
+                        }
+                    }
+                }
 
-        do {
-            let histories = try modelContext.fetch(descriptor)
-            for history in histories {
-                modelContext.delete(history)
+                clearButton("Clear Cookies") {
+                    PrivacyService.clearCookies(container) {
+                        DispatchQueue.main.async {
+                            toastManager.show("Cookies cleared", icon: .system("trash"))
+                        }
+                    }
+                }
+
+                clearButton("Clear History") {
+                    historyManager.clearContainerHistory(container)
+                    toastManager.show("History cleared", icon: .system("trash"))
+                }
             }
-            try modelContext.save()
-            return true
-        } catch {
-            print("Failed to clear history for container \(container.id): \(error.localizedDescription)")
-            return false
+            .buttonStyle(.bordered)
         }
     }
 
-    private func clearDataButtonTitle(
-        for action: ClearDataAction,
-        defaultTitle: String,
-        completedTitle: String
-    ) -> String {
-        completedClearActions.contains(action) ? completedTitle : defaultTitle
+    private func clearButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Sites pinned to this space by "Always open … in this space".
@@ -251,11 +205,10 @@ struct SpacesSettingsView: View {
 
     private func privacySettingsCard(for container: TabContainer) -> some View {
         SettingsCard(header: "Privacy") {
-            Text(
-                "These protections apply only to \(container.name). Open tabs in this space are refreshed automatically."
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
+            Text("These protections apply only to \(container.name). "
+                + "Open tabs in this space are refreshed automatically.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
             Toggle(
                 "Block third-party trackers",
@@ -266,11 +219,10 @@ struct SpacesSettingsView: View {
                 isOn: privacyBinding(for: container, keyPath: \.blockFingerprinting)
             )
 
-            Text(
-                "Reduces browser and device fingerprint surface for this space. This does not block cookies or other storage by itself."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            Text("Reduces the browser and device fingerprint this space shows. "
+                + "It does not block cookies or other storage on its own.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             Divider()
 

@@ -5,7 +5,12 @@ enum SettingsMetrics {
     static let pagePadding: CGFloat = 24
     static let cardSpacing: CGFloat = 16
     static let cardPadding: CGFloat = 16
-    static let sidebarWidth: CGFloat = 220
+    /// Wide enough for the longest section title. At 220 "Passwords and Autofill"
+    /// truncated to "Passwords and Auto…".
+    static let sidebarWidth: CGFloat = 244
+    /// The space picker inside the Spaces page. Narrower than the nav sidebar: it holds
+    /// one short name per row and the cards beside it need the width more.
+    static let spaceListWidth: CGFloat = 180
 }
 
 struct SettingsSection<Content: View>: View {

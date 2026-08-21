@@ -27,14 +27,15 @@ final class History {
         visitCount: Int,
         container: TabContainer? = nil
     ) {
-        let now = Date()
         self.id = id
         self.url = url
         self.urlString = url.absoluteString
         self.title = title
         self.faviconURL = faviconURL
-        self.createdAt = now
-        self.lastAccessedAt = now
+        // Both dates were overwritten with `Date()`, so an imported or backdated visit
+        // silently landed at the top of the list as if it had just happened.
+        self.createdAt = createdAt
+        self.lastAccessedAt = lastAccessedAt
         self.visitCount = visitCount
         self.faviconLocalFile = faviconLocalFile
         self.container = container

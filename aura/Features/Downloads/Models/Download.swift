@@ -39,28 +39,35 @@ class Download: ObservableObject, Identifiable {
         self.originalURL = originalURL
         self.originalURLString = originalURL.absoluteString
         self.fileName = fileName
-        self.fileSize = fileSize
+        // `expectedContentLength` is -1 when the server sends no Content-Length.
+        self.fileSize = max(0, fileSize)
         self.downloadedBytes = 0
         self.status = .pending
         self.progress = 0.0
         self.createdAt = Date()
 
         // Initialize published properties
-        self.displayFileSize = fileSize
+        self.displayFileSize = max(0, fileSize)
         self.displayDownloadedBytes = 0
         self.displayProgress = 0.0
     }
 
+    /// A server that sends no `Content-Length` reports an expected size of `-1`, and
+    /// `WKDownload` reports `0` until the first byte arrives. Neither is a size, so the
+    /// last known one is kept rather than overwritten with a number the row would render
+    /// as "-1 bytes".
     func updateProgress(downloadedBytes: Int64, totalBytes: Int64) {
         self.downloadedBytes = downloadedBytes
-        self.fileSize = totalBytes
-        self.progress = totalBytes > 0 ? Double(downloadedBytes) / Double(totalBytes) : 0.0
+        if totalBytes > 0 { self.fileSize = totalBytes }
+        self.progress = self.fileSize > 0 ? Double(downloadedBytes) / Double(self.fileSize) : 0.0
 
+        let knownSize = self.fileSize
+        let currentProgress = self.progress
         // Update published properties for UI
         DispatchQueue.main.async {
             self.displayDownloadedBytes = downloadedBytes
-            self.displayFileSize = totalBytes > 0 ? totalBytes : self.fileSize
-            self.displayProgress = self.progress
+            self.displayFileSize = knownSize
+            self.displayProgress = currentProgress
         }
     }
 

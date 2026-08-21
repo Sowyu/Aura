@@ -166,9 +166,11 @@ struct DownloadHistoryRow: View {
 
     // MARK: - Computed Properties
 
+    /// Only the leading `www.` comes off. Replacing every occurrence turned hosts like
+    /// `newww.example.com` into `neexample.com`.
     private var sourceHostname: String? {
-        guard let url = URL(string: download.originalURLString) else { return nil }
-        return url.host?.replacingOccurrences(of: "www.", with: "")
+        guard let host = URL(string: download.originalURLString)?.host else { return nil }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
     /// Returns the native macOS file icon for this download, matching what Finder shows.
