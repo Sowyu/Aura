@@ -100,3 +100,4 @@ codesign*
 Vendor/CEF
 # Claude Code
 CLAUDE.md
+.claude/
