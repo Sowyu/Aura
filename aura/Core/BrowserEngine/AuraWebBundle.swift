@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import os
 @preconcurrency import WebKit
@@ -14,6 +15,19 @@ import os
 enum AuraWebBundle {
     private static let log = Logger(subsystem: "com.aurabrowser.app", category: "webbundle")
     private static let bundleName = "AuraWebBundle.wkbundle"
+
+    private static func removeQuarantine(under root: URL) {
+        let keys = ["com.apple.quarantine", "com.apple.provenance"]
+        var paths = [root.path]
+        if let walker = FileManager.default.enumerator(atPath: root.path) {
+            while let relative = walker.nextObject() as? String {
+                paths.append(root.appendingPathComponent(relative).path)
+            }
+        }
+        for path in paths {
+            for key in keys { removexattr(path, key, XATTR_NOFOLLOW) }
+        }
+    }
 
     /// `AURA_WEB_BUNDLE=0` / `=1` overrides the user setting either way.
     /// Read from `UserDefaults` rather than `SettingsStore` because pages are
@@ -104,6 +118,10 @@ enum AuraWebBundle {
                     withIntermediateDirectories: true
                 )
                 try fileManager.copyItem(at: builtInBundleURL, to: installedBundleURL)
+                // A browser's newly written files are quarantined. Gatekeeper then refuses
+                // to let WebContent load the copy and shows "Aura is damaged" while the
+                // app itself keeps running. The copy is our own signed code; unflag it.
+                Self.removeQuarantine(under: installedBundleURL)
                 try fileManager.createDirectory(
                     at: rulesFileURL.deletingLastPathComponent(),
                     withIntermediateDirectories: true
