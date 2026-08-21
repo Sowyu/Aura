@@ -21,6 +21,11 @@ struct TopToolbar: View {
     private static let edgeInset: CGFloat = 12
     private static let fieldMaxWidth: CGFloat = 760
 
+    /// Measured widths of the two button groups including their edge padding. The
+    /// extra padding is the difference, so the field always sits on the window's midline.
+    @State private var leadingWidth: CGFloat = 0
+    @State private var trailingWidth: CGFloat = 0
+
     @Environment(\.theme) private var theme
     @Environment(TabManager.self) private var tabManager
     @Environment(AppState.self) private var appState
@@ -53,6 +58,11 @@ struct TopToolbar: View {
                 navigationGroup
                 historyGroup
             }
+            // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
+            .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
+            // Pad the narrower side out to the wider one, so the field centres on the window.
+            .padding(.leading, max(0, trailingWidth - leadingWidth))
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { leadingWidth = $0 }
 
             Spacer(minLength: Self.groupSpacing)
             URLBarField(
@@ -82,10 +92,10 @@ struct TopToolbar: View {
 
                 windowGroup
             }
+            .padding(.trailing, Self.edgeInset)
+            .padding(.trailing, max(0, leadingWidth - trailingWidth))
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { trailingWidth = $0 }
         }
-        // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
-        .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
-        .padding(.trailing, Self.edgeInset)
         .frame(height: Self.rowHeight)
         .frame(maxWidth: .infinity)
         .auraGlassChromeForeground()
