@@ -85,7 +85,7 @@ struct LauncherView: View {
                 panel
                     .frame(width: LauncherPlacement.width(forWindowWidth: geo.size.width))
                     .position(LauncherPlacement.position(in: window, raised: isRaised))
-                    .animation(.easeOut(duration: 0.15), value: isRaised)
+                    .animation(AnimationSettings.easeOut(0.15), value: isRaised)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -108,7 +108,7 @@ struct LauncherView: View {
         }
         .ignoresSafeArea()
         .opacity(isVisible ? 1 : 0)
-        .animation(.easeOut(duration: 0.12), value: isVisible)
+        .animation(AnimationSettings.easeOut(0.12), value: isVisible)
         .contentShape(Rectangle())
         .onTapGesture(perform: dismiss)
     }
@@ -126,7 +126,7 @@ struct LauncherView: View {
             trigger: match != nil
         )
         .opacity(isVisible ? 1.0 : 0.0)
-        .animation(.easeOut(duration: 0.12), value: isVisible)
+        .animation(AnimationSettings.easeOut(0.12), value: isVisible)
         .onAppear {
             isVisible = true
             isTextFieldFocused = true

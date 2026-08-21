@@ -15,6 +15,68 @@ struct FirefoxAddonTests {
         #expect(FirefoxAddonStore.slug(fromPageURL: "ublock") == nil)
     }
 
+    @Test func decodesSearchPageFields() throws {
+        let json = #"""
+        {
+          "next": "https://addons.mozilla.org/api/v5/addons/search/?page=2",
+          "results": [
+            {
+              "id": 607454,
+              "slug": "ublock-origin",
+              "name": {"en-US": "uBlock Origin"},
+              "summary": {"en-US": "Finally, an efficient blocker."},
+              "type": "extension",
+              "average_daily_users": 7654321,
+              "last_updated": "2024-05-21T10:33:00Z",
+              "icon_url": "https://addons.mozilla.org/icon.png",
+              "authors": [{"name": "Raymond Hill"}],
+              "ratings": {"average": 4.78, "count": 18000},
+              "current_version": {
+                "version": "1.60.0",
+                "file": {
+                  "url": "https://addons.mozilla.org/file.xpi",
+                  "permissions": ["webRequest", "webRequestBlocking"],
+                  "optional_permissions": ["clipboardWrite"],
+                  "host_permissions": ["<all_urls>"]
+                }
+              }
+            }
+          ]
+        }
+        """#
+
+        let page = FirefoxAddonStore.parsePage(Data(json.utf8))
+        #expect(page.hasMore)
+        let addon = try #require(page.addons.first)
+        #expect(addon.name == "uBlock Origin")
+        #expect(addon.type == .extension)
+        #expect(addon.authors == ["Raymond Hill"])
+        #expect(addon.averageRating == 4.78)
+        #expect(addon.dailyUsers == 7_654_321)
+        #expect(addon.version == "1.60.0")
+        #expect(addon.downloadURL?.lastPathComponent == "file.xpi")
+        #expect(addon.permissions == ["webRequest", "webRequestBlocking"])
+        #expect(addon.optionalPermissions == ["clipboardWrite"])
+        #expect(addon.hostPermissions == ["<all_urls>"])
+        #expect(addon.lastUpdated != nil)
+        // The badge is decided from the record, before anything is downloaded.
+        #expect(!ExtensionCompatibility.evaluate(addon).allowsInstall)
+    }
+
+    @Test func compatibilityBadgeFollowsRequestedPermissions() {
+        #expect(ExtensionCompatibility.evaluate(permissions: ["storage", "tabs"]) == .supported)
+        #expect(ExtensionCompatibility.evaluate(permissions: ["proxy", "storage"]) == .partial(["proxy"]))
+
+        let blocking = ExtensionCompatibility.evaluate(permissions: ["webRequest", "webRequestBlocking"])
+        #expect(blocking.title == "Not supported")
+        #expect(!blocking.allowsInstall)
+
+        // Themes list, but WebKit has no theme API, so they never install.
+        let theme = ExtensionCompatibility.evaluate(FirefoxAddon(id: 1, slug: "dark", name: "Dark", type: .statictheme))
+        #expect(theme.title == "Not supported")
+        #expect(ExtensionCompatibility.evaluate(permissions: ["theme"]).allowsInstall == false)
+    }
+
     @Test func unpacksZipAndFindsManifestRoot() throws {
         let base = FileManager.default.temporaryDirectory
             .appendingPathComponent("ora-xpi-test-\(UUID().uuidString)", isDirectory: true)
@@ -38,6 +100,42 @@ struct FirefoxAddonTests {
         try XPIUnpacker.unpack(archive, to: unpacked)
         let root = try #require(XPIUnpacker.manifestRoot(in: unpacked))
         #expect(root.lastPathComponent == "inner")
+    }
+
+    @Test func stripsCRXHeaderAndUnpacksTheZipBehindIt() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ora-crx-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let content = base.appendingPathComponent("src", isDirectory: true)
+        try FileManager.default.createDirectory(at: content, withIntermediateDirectories: true)
+        try Data(#"{"manifest_version": 3, "name": "Crx", "version": "1.0"}"#.utf8)
+            .write(to: content.appendingPathComponent("manifest.json"))
+
+        let zipURL = base.appendingPathComponent("fixture.zip")
+        let zip = Process()
+        zip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        zip.arguments = ["-c", "-k", content.path, zipURL.path]
+        try zip.run()
+        zip.waitUntilExit()
+
+        // CRX3: "Cr24", version 3, header length, header bytes, then the zip.
+        let signature = Data(repeating: 0xAB, count: 42)
+        var crx = Data("Cr24".utf8)
+        crx.append(contentsOf: [3, 0, 0, 0])
+        crx.append(contentsOf: [UInt8(signature.count), 0, 0, 0])
+        crx.append(signature)
+        let zipData = try Data(contentsOf: zipURL)
+        crx.append(zipData)
+        #expect(try XPIUnpacker.crxPayload(crx) == zipData)
+
+        let crxURL = base.appendingPathComponent("fixture.crx")
+        try crx.write(to: crxURL)
+        let stripped = try XPIUnpacker.zipFromCRX(crxURL)
+        defer { try? FileManager.default.removeItem(at: stripped) }
+        let unpacked = base.appendingPathComponent("out", isDirectory: true)
+        try XPIUnpacker.unpack(stripped, to: unpacked)
+        #expect(XPIUnpacker.manifestRoot(in: unpacked) != nil)
     }
 
     /// Live end-to-end: search AMO, download a real Firefox extension, unpack

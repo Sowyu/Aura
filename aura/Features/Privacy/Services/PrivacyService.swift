@@ -49,6 +49,18 @@ class PrivacyService {
         )
     }
 
+    /// Sites this space has data stored for, newest listing first from WebKit.
+    /// `WKWebsiteDataRecord` exposes no size publicly, so only the site and the kinds
+    /// of data it holds can be shown.
+    /// ponytail: add sizes when WebKit makes `_dataSize` public.
+    @MainActor static func websiteDataHosts(_ container: TabContainer) async -> [String] {
+        await profile(for: container).dataRecordDisplayNames()
+    }
+
+    static func clearAllData(forHost host: String, container: TabContainer, completion: (() -> Void)? = nil) {
+        self.clearData(container, [.all], host: host, completion)
+    }
+
     static func clearCookiesForHost(for host: String, container: TabContainer, completion: (() -> Void)? = nil) {
         self.clearData(container, [.cookies], host: host, completion)
     }

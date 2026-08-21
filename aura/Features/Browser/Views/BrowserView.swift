@@ -76,8 +76,8 @@ struct BrowserView: View {
                 }
                 BrowserSplitView()
             }
-            .animation(.easeOut(duration: 0.15), value: toolbarManager.isToolbarHidden)
-            .animation(.easeOut(duration: 0.15), value: toolbarManager.isFloatingToolbarVisible)
+            .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isToolbarHidden)
+            .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isFloatingToolbarVisible)
             .ignoresSafeArea(.all)
             .background(theme.chromeBackground)
             .background(
@@ -121,7 +121,7 @@ struct BrowserView: View {
         }
         .edgesIgnoringSafeArea(.all)
         .enableInjection()
-        .animation(.easeOut(duration: 0.15), value: showFloatingSidebar)
+        .animation(AnimationSettings.easeOut(0.15), value: showFloatingSidebar)
         .onChange(of: showFloatingSidebar) { _, visible in
             injectSidebarMouseShield(visible: visible)
         }
@@ -212,7 +212,7 @@ private struct FloatingTopToolbar: View {
                     )
                 )
         }
-        .animation(.easeOut(duration: 0.15), value: isVisible)
+        .animation(AnimationSettings.easeOut(0.15), value: isVisible)
         .onDisappear { toolbarManager.isFloatingToolbarVisible = false }
     }
 }

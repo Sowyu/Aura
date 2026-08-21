@@ -319,7 +319,16 @@ struct OraRoot: View {
                             guard NSApp.keyWindow === window ?? NSApp.keyWindow else { return }
                         }
                         let section = (note.userInfo?["tab"] as? String)
-                            .flatMap(SettingsTab.init(rawValue:))
+                            .flatMap(SettingsTab.resolve(rawValue:))
+                        // Extensions moved out of Settings into their own internal page.
+                        if section == .extensions {
+                            tabManager.openExtensionsStore(
+                                historyManager: historyManager,
+                                downloadManager: downloadManager,
+                                isPrivate: privacyMode.isPrivate
+                            )
+                            return
+                        }
                         tabManager.openSettingsTab(
                             section: section,
                             historyManager: historyManager,

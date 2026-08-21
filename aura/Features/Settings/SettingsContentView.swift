@@ -2,47 +2,98 @@ import AppKit
 import SwiftUI
 
 enum SettingsTab: String, Hashable, CaseIterable {
-    case general
-    case spaces
-    case passwords
+    case lookAndFeel
+    case tabManagement
     case shortcuts
-    case searchEngines
+    case search
+    case privacy
+    case passwords
+    case downloads
+    case browsing
+    case spaces
+    case accessibility
+    case languages
+    case permissions
+    case about
     case extensions
+
+    /// Raw values written by older builds. Without this a saved selection would fall
+    /// back to the first section and silently lose the user's place.
+    private static let legacyRawValues: [String: SettingsTab] = [
+        "general": .lookAndFeel,
+        "searchEngines": .search
+    ]
+
+    static func resolve(rawValue: String) -> SettingsTab? {
+        SettingsTab(rawValue: rawValue) ?? legacyRawValues[rawValue]
+    }
 
     var title: String {
         switch self {
-        case .general: return "General"
+        case .lookAndFeel: return "Look and Feel"
+        case .tabManagement: return "Tab Management"
+        case .shortcuts: return "Keyboard Shortcuts"
+        case .search: return "Search"
+        case .privacy: return "Privacy and Security"
+        case .passwords: return "Passwords and Autofill"
+        case .downloads: return "Downloads"
+        case .browsing: return "Tabs and Browsing"
         case .spaces: return "Spaces"
-        case .passwords: return "Passwords"
-        case .shortcuts: return "Shortcuts"
-        case .searchEngines: return "Search"
+        case .accessibility: return "Accessibility"
+        case .languages: return "Languages"
+        case .permissions: return "Permissions and Data"
+        case .about: return "About Aura"
         case .extensions: return "Extensions"
         }
     }
 
     var symbol: String {
         switch self {
-        case .general: return "gearshape"
+        case .lookAndFeel: return "paintpalette"
+        case .tabManagement: return "rectangle.stack"
+        case .shortcuts: return "keyboard"
+        case .search: return "magnifyingglass"
+        case .privacy: return "lock.shield"
+        case .passwords: return "key"
+        case .downloads: return "arrow.down.circle"
+        case .browsing: return "cursorarrow.rays"
         case .spaces: return "rectangle.3.group"
-        case .passwords: return "key.horizontal"
-        case .shortcuts: return "command"
-        case .searchEngines: return "magnifyingglass"
+        case .accessibility: return "accessibility"
+        case .languages: return "globe"
+        case .permissions: return "hand.raised"
+        case .about: return "info.circle"
         case .extensions: return "puzzlepiece.extension"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .general:
-            return "Browser defaults, app behavior, and software updates."
-        case .spaces:
-            return "Space-specific defaults and per-space data controls."
-        case .passwords:
-            return "Password manager integration, vault access, and autofill behavior."
+        case .lookAndFeel:
+            return "Appearance, accent colour, glass chrome, and window layout."
+        case .tabManagement:
+            return "How long tabs stay live, how many, and where new ones land."
         case .shortcuts:
             return "Keyboard shortcuts and command mappings."
-        case .searchEngines:
+        case .search:
             return "Default search providers, AI engines, and custom shortcuts."
+        case .privacy:
+            return "Blocking, JavaScript, cookies, and clearing browsing data."
+        case .passwords:
+            return "Password manager integration, vault access, and autofill behavior."
+        case .downloads:
+            return "Where files are saved and what happens once they arrive."
+        case .browsing:
+            return "The launcher, the home page, and what happens on launch and quit."
+        case .spaces:
+            return "Space-specific defaults and per-space data controls."
+        case .accessibility:
+            return "Motion, minimum text size, and scroll bars."
+        case .languages:
+            return "Spell checking and the languages sent to websites."
+        case .permissions:
+            return "Per-site rules and the data each space has stored."
+        case .about:
+            return "Version, updates, licence, and credits."
         case .extensions:
             return "Web extensions installed from unpacked folders."
         }
@@ -50,14 +101,32 @@ enum SettingsTab: String, Hashable, CaseIterable {
 }
 
 struct SettingsWindowRoot: View {
+    // The standalone window has no browser chrome behind it, so it brings its own
+    // managers. They read and write the same defaults keys as a browser window's.
+    @State private var sidebarManager = SidebarManager()
+    @State private var toolbarManager = ToolbarManager()
+    @State private var dialogManager = DialogManager()
+
     var body: some View {
         SettingsContentView(initialTab: nil)
             .environment(ToastManager.shared)
+            .environment(sidebarManager)
+            .environment(toolbarManager)
+            .environment(dialogManager)
     }
 }
 
 struct SettingsContentView: View {
     static let selectedTabDefaultsKey = "settings.selectedTab"
+
+    /// The two rules in the sidebar list: browser behaviour, then the system-level
+    /// sections, then extensions on their own.
+    private static let dividedGroups: [[SettingsTab]] = [
+        [.lookAndFeel, .tabManagement, .shortcuts, .search, .privacy,
+         .passwords, .downloads, .browsing, .spaces],
+        [.accessibility, .languages, .permissions, .about],
+        [.extensions]
+    ]
 
     /// Section to preselect, e.g. from a `aura://settings/<section>` tab URL.
     let initialTab: SettingsTab?
@@ -66,17 +135,18 @@ struct SettingsContentView: View {
     /// and floating sidebar toggle on the surrounding browser layout.
     var embedded: Bool = false
 
-    @AppStorage(Self.selectedTabDefaultsKey) private var selectionRawValue: String = SettingsTab.general.rawValue
+    @AppStorage(Self.selectedTabDefaultsKey) private var selectionRawValue: String = SettingsTab
+        .lookAndFeel.rawValue
 
     private var selection: Binding<SettingsTab> {
         Binding(
-            get: { SettingsTab(rawValue: selectionRawValue) ?? .general },
+            get: { selectedTab },
             set: { selectionRawValue = $0.rawValue }
         )
     }
 
     private var selectedTab: SettingsTab {
-        SettingsTab(rawValue: selectionRawValue) ?? .general
+        SettingsTab.resolve(rawValue: selectionRawValue) ?? .lookAndFeel
     }
 
     var body: some View {
@@ -127,10 +197,15 @@ struct SettingsContentView: View {
     }
 
     private var sidebarList: some View {
-        List(SettingsTab.allCases, id: \.self, selection: selection) { tab in
-            Label(tab.title, systemImage: tab.symbol)
-                .tag(tab)
-                .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+        List(selection: selection) {
+            ForEach(Array(Self.dividedGroups.enumerated()), id: \.offset) { index, group in
+                if index > 0 { Divider() }
+                ForEach(group, id: \.self) { tab in
+                    Label(tab.title, systemImage: tab.symbol)
+                        .tag(tab)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                }
+            }
         }
     }
 
@@ -159,16 +234,32 @@ struct SettingsContentView: View {
     @ViewBuilder
     private var detailView: some View {
         switch selectedTab {
-        case .general:
-            GeneralSettingsView()
-        case .spaces:
-            SpacesSettingsView()
-        case .passwords:
-            PasswordsSettingsView()
+        case .lookAndFeel:
+            LookAndFeelSettingsView()
+        case .tabManagement:
+            TabManagementSettingsView()
         case .shortcuts:
             ShortcutsSettingsView()
-        case .searchEngines:
+        case .search:
             SearchEngineSettingsView()
+        case .privacy:
+            PrivacySettingsView()
+        case .passwords:
+            PasswordsSettingsView()
+        case .downloads:
+            DownloadsSettingsView()
+        case .browsing:
+            BrowsingSettingsView()
+        case .spaces:
+            SpacesSettingsView()
+        case .accessibility:
+            AccessibilitySettingsView()
+        case .languages:
+            LanguagesSettingsView()
+        case .permissions:
+            PermissionsSettingsView()
+        case .about:
+            AboutSettingsView()
         case .extensions:
             ExtensionsSettingsView()
         }

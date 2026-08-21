@@ -32,6 +32,8 @@ targets:
       - path: aura/Shared/EmojiPicker/emoji-set.json
       - path: aura/Resources
         optional: true
+      # Rendered by the About section.
+      - path: THIRD_PARTY_NOTICES.md
     dependencies:
       - package: Sparkle
       - package: PublicSuffixList

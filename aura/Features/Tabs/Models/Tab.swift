@@ -332,6 +332,10 @@ class Tab: ObservableObject, Identifiable {
                 title = "New Tab"
                 favicon = nil
                 faviconLocalFile = nil
+            } else if target.isOraExtensions {
+                title = "Extensions"
+                favicon = nil
+                faviconLocalFile = nil
             }
             return
         }

@@ -2,11 +2,31 @@ import AppKit
 import SwiftUI
 
 // swiftlint:disable identifier_name
+/// The one accent colour the chrome tints itself with. Stored as a hex string so it
+/// rides in `@AppStorage` next to the glass tint.
+enum AuraAccent {
+    static let key = "ui.theme.accent"
+    /// Empty means "use the built-in orange", which still flips with the appearance.
+    static let systemDefault = ""
+
+    static let presets: [(name: String, hex: String)] = [
+        ("Aura", systemDefault),
+        ("Blue", "#4DABF7"),
+        ("Purple", "#9775FA"),
+        ("Pink", "#F06595"),
+        ("Green", "#51CF66"),
+        ("Yellow", "#FCC419"),
+        ("Graphite", "#868E96")
+    ]
+}
+
 struct Theme: Equatable {
     let colorScheme: ColorScheme
     /// Set only on the glass chrome, where readable text follows the tint's luminance
     /// rather than the system appearance.
     var forcedForeground: Color?
+    /// User-chosen accent. Empty falls back to the built-in orange.
+    var accentHex: String = AuraAccent.systemDefault
 
     var primary: Color {
         Color(hex: "#f3e5d6")
@@ -17,7 +37,8 @@ struct Theme: Equatable {
     }
 
     var accent: Color {
-        colorScheme == .dark ? Color(hex: "#FF9B51") : Color(hex: "#F16D34")
+        guard accentHex.isEmpty else { return Color(hex: accentHex) }
+        return colorScheme == .dark ? Color(hex: "#FF9B51") : Color(hex: "#F16D34")
     }
 
     var background: Color {
@@ -160,8 +181,9 @@ extension EnvironmentValues {
 
 struct ThemeProvider: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(AuraAccent.key) private var accentHex = AuraAccent.systemDefault
 
     func body(content: Content) -> some View {
-        content.environment(\.theme, Theme(colorScheme: colorScheme))
+        content.environment(\.theme, Theme(colorScheme: colorScheme, accentHex: accentHex))
     }
 }

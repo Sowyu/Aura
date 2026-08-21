@@ -23,6 +23,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return .terminateNow
         }
 
+        guard SettingsStore.shared.confirmBeforeQuit else { return .terminateNow }
+
         // Only browser windows host the quit-confirmation observer; targeting any other
         // window (Settings, Passwords) would leave the terminateLater reply unanswered.
         let browserWindows = NSApp.windows.filter { $0.isVisible && Self.isBrowserWindow($0) }
@@ -53,7 +55,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func handleIncomingURLs(_ urls: [URL]) {
-        let window = getWindow()!
+        if SettingsStore.shared.externalLinkTarget == .newWindow {
+            for url in urls {
+                DispatchQueue.main.async { WindowFactory.openWindow(with: url) }
+            }
+            return
+        }
+
+        guard let window = getWindow() else { return }
         for url in urls {
             let userInfo: [AnyHashable: Any] = ["url": url]
             DispatchQueue.main.async {

@@ -9,6 +9,7 @@ enum SettingsMetrics {
 }
 
 struct SettingsSection<Content: View>: View {
+    @AppStorage("a11y.alwaysShowScrollBars") private var alwaysShowScrollBars = false
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -19,5 +20,6 @@ struct SettingsSection<Content: View>: View {
             .padding(SettingsMetrics.pagePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollIndicators(alwaysShowScrollBars ? .visible : .automatic)
     }
 }

@@ -13,18 +13,24 @@ extension TabManager {
         return allContainers.reduce(0) { $0 + $1.tabs.filter(\.isWebViewReady).count }
     }
 
+    /// Media playback vetoes an unload, unless the user asked for media tabs to go too.
+    private func mayHibernate(_ tab: Tab) -> Bool {
+        !tab.isPlayingMedia || SettingsStore.shared.unloadMediaTabs
+    }
+
     /// Drops a tab's web view and keeps the row: URL, title, header colour, and the
-    /// scroll offset all survive. Media playback and typing the user has not submitted
-    /// both veto the unload, so nothing audible stops and nothing typed is lost.
+    /// scroll offset all survive. Typing the user has not submitted vetoes the unload,
+    /// so nothing typed is lost, and so does playback unless `unloadMediaTabs` is on.
     private func hibernate(_ tab: Tab) {
-        guard tab.isWebViewReady, tab.id != activeTab?.id, !tab.isPlayingMedia else { return }
+        guard tab.isWebViewReady, tab.id != activeTab?.id, mayHibernate(tab) else { return }
         guard hibernating.insert(tab.id).inserted else { return }
         let id = tab.id
         tab.captureHibernationState { [weak self, weak tab] hasUnsavedInput in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.hibernating.remove(id)
-                guard let tab, !hasUnsavedInput, !tab.isPlayingMedia, tab.id != self.activeTab?.id else { return }
+                guard let tab, !hasUnsavedInput, self.mayHibernate(tab), tab.id != self.activeTab?.id
+                else { return }
                 tab.destroyWebView()
             }
         }
@@ -39,7 +45,9 @@ extension TabManager {
         let allContainers = containers ?? fetchContainers()
         for container in allContainers {
             for tab in container.tabs {
-                if !tab.isAlive, tab.isWebViewReady, tab.id != activeTab?.id, !tab.isPlayingMedia, tab.type == .normal {
+                if !tab.isAlive, tab.isWebViewReady, tab.id != activeTab?.id, mayHibernate(tab),
+                   tab.type == .normal
+                {
                     hibernate(tab)
                 }
             }
@@ -63,7 +71,7 @@ extension TabManager {
         // ponytail: plain sort over the live set, not a maintained LRU list. Switch to
         // an ordered structure if the live cap is ever raised past a few hundred.
         let evictable = live
-            .filter { $0.id != activeTab?.id && !$0.isPlayingMedia && $0.type == .normal }
+            .filter { $0.id != activeTab?.id && mayHibernate($0) && $0.type == .normal }
             .sorted { ($0.lastAccessedAt ?? .distantPast) < ($1.lastAccessedAt ?? .distantPast) }
 
         for tab in evictable.prefix(excess) {

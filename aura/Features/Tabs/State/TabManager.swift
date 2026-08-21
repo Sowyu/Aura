@@ -78,6 +78,7 @@ final class TabManager {
         self.tabSearchingService = tabSearchingService
 
         self.modelContext.undoManager = UndoManager()
+        applyLaunchTabPolicy()
         initializeActiveContainerAndTab()
 
         // Start automatic cleanup timer (every minute)
@@ -272,6 +273,16 @@ final class TabManager {
 
     // MARK: - Tab Public API's
 
+    /// The sidebar sorts by `order` descending, so the top of the list is the highest
+    /// order and the bottom is one below the lowest.
+    func nextTabOrder(in container: TabContainer) -> Int {
+        let orders = container.tabs.map(\.order)
+        switch SettingsStore.shared.newTabPosition {
+        case .top: return (orders.max() ?? 0) + 1
+        case .bottom: return (orders.min() ?? 1) - 1
+        }
+    }
+
     func addTab(
         title: String = "Untitled",
         url: URL = .oraHome,
@@ -293,7 +304,7 @@ final class TabManager {
             container: container,
             type: .normal,
             isPlayingMedia: false,
-            order: container.tabs.count + 1,
+            order: nextTabOrder(in: container),
             historyManager: historyManager,
             downloadManager: downloadManager,
             tabManager: self,
@@ -381,6 +392,34 @@ final class TabManager {
         return tab
     }
 
+    /// Focuses the active space's `aura://extensions` tab, or opens one. The add-on store
+    /// renders natively in the tab, so it never gets a web view either.
+    @discardableResult
+    func openExtensionsStore(
+        historyManager: HistoryManager? = nil,
+        downloadManager: DownloadManager? = nil,
+        isPrivate: Bool
+    ) -> Tab? {
+        guard let container = activeContainer else { return nil }
+
+        if let existing = container.tabs.first(where: { $0.url.isOraExtensions }) {
+            activateTab(existing)
+            return existing
+        }
+
+        let tab = addTab(
+            url: .oraExtensions,
+            container: container,
+            historyManager: historyManager,
+            downloadManager: downloadManager,
+            isPrivate: isPrivate
+        )
+        tab.title = "Extensions"
+        tab.favicon = nil
+        try? modelContext.save()
+        return tab
+    }
+
     @discardableResult
     func openTab(
         url: URL,
@@ -403,7 +442,7 @@ final class TabManager {
                     container: container,
                     type: .normal,
                     isPlayingMedia: false,
-                    order: container.tabs.count + 1,
+                    order: nextTabOrder(in: container),
                     historyManager: historyManager,
                     downloadManager: downloadManager,
                     tabManager: self,

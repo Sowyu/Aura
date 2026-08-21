@@ -24,11 +24,16 @@ extension URL {
         isOraInternal && host?.lowercased() == "home"
     }
 
+    /// `aura://extensions`: the add-on store, rendered natively like settings.
+    var isOraExtensions: Bool {
+        isOraInternal && host?.lowercased() == "extensions"
+    }
+
     /// The settings section a `aura://settings/<section>` URL points at, if it names a known one.
     var oraSettingsSection: SettingsTab? {
         guard isOraSettings else { return nil }
         guard let raw = pathComponents.first(where: { $0 != "/" }) else { return nil }
-        return SettingsTab(rawValue: raw)
+        return SettingsTab.resolve(rawValue: raw)
     }
 
     /// `ora://x` rewritten to `aura://x`. Any other URL comes back untouched.
@@ -45,6 +50,14 @@ extension URL {
         var components = URLComponents()
         components.scheme = oraScheme
         components.host = "home"
+        return components.url ?? URL(fileURLWithPath: "/")
+    }()
+
+    /// A scheme + host always resolves; the fallback only keeps the API non-optional.
+    static let oraExtensions: URL = {
+        var components = URLComponents()
+        components.scheme = oraScheme
+        components.host = "extensions"
         return components.url ?? URL(fileURLWithPath: "/")
     }()
 

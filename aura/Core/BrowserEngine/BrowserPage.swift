@@ -67,6 +67,8 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         webConfiguration.mediaTypesRequiringUserActionForPlayback =
             configuration.mediaPlaybackRequiresUserAction ? .all : []
 
+        Self.applyUserPreferences(to: webConfiguration)
+
         let webpagePreferences = WKWebpagePreferences()
         webpagePreferences.allowsContentJavaScript = configuration.allowsJavaScript
         webConfiguration.defaultWebpagePreferences = webpagePreferences
@@ -123,6 +125,15 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
             self?.isReadyForNavigation = true
             self?.flushPendingNavigationIfNeeded()
         }
+    }
+
+    /// The one place the user's page-level preferences reach WebKit. Read from
+    /// `UserDefaults` rather than `SettingsStore` because a page is built off the main
+    /// actor. New web views pick a change up straight away; open ones on their next load.
+    static func applyUserPreferences(to configuration: WKWebViewConfiguration) {
+        let minimumFontSize = UserDefaults.standard.double(forKey: SettingsStore.minimumFontSizeKey)
+        guard minimumFontSize > 0 else { return }
+        configuration.preferences.minimumFontSize = CGFloat(minimumFontSize)
     }
 
     var contentView: NSView {

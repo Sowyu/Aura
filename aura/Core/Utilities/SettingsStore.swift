@@ -33,6 +33,34 @@ enum AutoClearTabsAfter: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+/// Where a freshly opened tab lands in the sidebar list.
+enum NewTabPosition: String, CaseIterable, Identifiable, Codable {
+    case top
+    case bottom
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .top: return "Top of the list"
+        case .bottom: return "Bottom of the list"
+        }
+    }
+}
+
+/// What happens to a link handed to Aura by another app.
+enum ExternalLinkTarget: String, CaseIterable, Identifiable, Codable {
+    case currentSpace
+    case newWindow
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .currentSpace: return "The current space"
+        case .newWindow: return "A new window"
+        }
+    }
+}
+
 struct CustomSearchEngine: Codable, Identifiable, Hashable {
     let id: String
     let name: String
@@ -167,6 +195,30 @@ class SettingsStore {
     private let passwordAutofillSubmitEnabledKey = "settings.passwords.autofillSubmitEnabled"
     private let passwordSavePromptsEnabledKey = "settings.passwords.savePromptsEnabled"
     private let suppressedPasswordSavePromptHostsKey = "settings.passwords.suppressedSavePromptHosts"
+    private let newTabPositionKey = "tabs.newTabPosition"
+    private let unloadMediaTabsKey = "tabs.unloadMedia"
+    private let foldersCollapsedByDefaultKey = "tabs.foldersCollapsedByDefault"
+    private let downloadFolderBookmarkKey = "downloads.folderBookmark"
+    private let askWhereToSaveDownloadsKey = "downloads.askWhereToSave"
+    private let openSafeDownloadsKey = "downloads.openSafeFiles"
+    private let homePageURLKey = "browser.homePage"
+    private let externalLinkTargetKey = "browser.externalLinkTarget"
+    private let restoreTabsOnLaunchKey = "browser.restoreTabsOnLaunch"
+    private let confirmBeforeQuitKey = "browser.confirmBeforeQuit"
+    private let alwaysShowScrollBarsKey = "a11y.alwaysShowScrollBars"
+    private let spellCheckEnabledKey = "languages.spellCheck"
+
+    /// Read straight from `UserDefaults` off the main actor by `AnimationSettings`
+    /// and `BrowserPage`, so both keys are public.
+    static let reduceMotionKey = "a11y.reduceMotion"
+    static let minimumFontSizeKey = "a11y.minimumFontSize"
+    /// WebKit's own UI-process default for spell checking inside web content. Undocumented
+    /// but stable since Safari 5; there is no public WKWebView API for it.
+    /// ponytail: swap for the public API if WebKit ever ships one.
+    static let webKitSpellCheckKey = "WebContinuousSpellCheckingEnabled"
+    /// AppKit reads this per-app before the global domain, so writing it here keeps
+    /// scroll bars visible in Aura without touching the system-wide setting.
+    static let appleShowScrollBarsKey = "AppleShowScrollBars"
 
     // MARK: - Per-Container
 
@@ -296,6 +348,82 @@ class SettingsStore {
         ) }
     }
 
+    // MARK: - Tab management
+
+    var newTabPosition: NewTabPosition {
+        didSet { defaults.set(newTabPosition.rawValue, forKey: newTabPositionKey) }
+    }
+
+    /// Off by default: hibernating a tab stops whatever it is playing.
+    var unloadMediaTabs: Bool {
+        didSet { defaults.set(unloadMediaTabs, forKey: unloadMediaTabsKey) }
+    }
+
+    var foldersCollapsedByDefault: Bool {
+        didSet { defaults.set(foldersCollapsedByDefault, forKey: foldersCollapsedByDefaultKey) }
+    }
+
+    // MARK: - Downloads
+
+    /// Security-scoped bookmark for the folder the user picked. Nil means the system
+    /// Downloads folder, which the sandbox grants outright.
+    private(set) var downloadFolderBookmark: Data? {
+        didSet { defaults.set(downloadFolderBookmark, forKey: downloadFolderBookmarkKey) }
+    }
+
+    var askWhereToSaveDownloads: Bool {
+        didSet { defaults.set(askWhereToSaveDownloads, forKey: askWhereToSaveDownloadsKey) }
+    }
+
+    var openSafeDownloads: Bool {
+        didSet { defaults.set(openSafeDownloads, forKey: openSafeDownloadsKey) }
+    }
+
+    // MARK: - Browsing
+
+    /// Empty means the built-in `aura://home` page.
+    var homePageURLString: String {
+        didSet { defaults.set(homePageURLString, forKey: homePageURLKey) }
+    }
+
+    var externalLinkTarget: ExternalLinkTarget {
+        didSet { defaults.set(externalLinkTarget.rawValue, forKey: externalLinkTargetKey) }
+    }
+
+    var restoreTabsOnLaunch: Bool {
+        didSet { defaults.set(restoreTabsOnLaunch, forKey: restoreTabsOnLaunchKey) }
+    }
+
+    var confirmBeforeQuit: Bool {
+        didSet { defaults.set(confirmBeforeQuit, forKey: confirmBeforeQuitKey) }
+    }
+
+    // MARK: - Accessibility and languages
+
+    var reduceMotion: Bool {
+        didSet { defaults.set(reduceMotion, forKey: Self.reduceMotionKey) }
+    }
+
+    /// Points. 0 leaves WebKit's own minimum in place. Applies to web views made after
+    /// the change, so existing tabs pick it up on their next reload.
+    var minimumFontSize: Double {
+        didSet { defaults.set(minimumFontSize, forKey: Self.minimumFontSizeKey) }
+    }
+
+    var alwaysShowScrollBars: Bool {
+        didSet {
+            defaults.set(alwaysShowScrollBars, forKey: alwaysShowScrollBarsKey)
+            defaults.set(alwaysShowScrollBars ? "Always" : "Automatic", forKey: Self.appleShowScrollBarsKey)
+        }
+    }
+
+    var spellCheckEnabled: Bool {
+        didSet {
+            defaults.set(spellCheckEnabled, forKey: spellCheckEnabledKey)
+            defaults.set(spellCheckEnabled, forKey: Self.webKitSpellCheckKey)
+        }
+    }
+
     init() {
         autoUpdateEnabled = defaults.object(forKey: autoUpdateKey) as? Bool ?? true
         blockThirdPartyTrackers = defaults.bool(forKey: trackingThirdPartyKey)
@@ -372,6 +500,27 @@ class SettingsStore {
         passwordSavePromptsEnabled = defaults.object(forKey: passwordSavePromptsEnabledKey) as? Bool ?? true
         suppressedPasswordSavePromptHosts = Set(defaults
             .stringArray(forKey: suppressedPasswordSavePromptHostsKey) ?? [])
+
+        newTabPosition = defaults.string(forKey: newTabPositionKey)
+            .flatMap(NewTabPosition.init(rawValue:)) ?? .top
+        unloadMediaTabs = defaults.bool(forKey: unloadMediaTabsKey)
+        foldersCollapsedByDefault = defaults.bool(forKey: foldersCollapsedByDefaultKey)
+
+        downloadFolderBookmark = defaults.data(forKey: downloadFolderBookmarkKey)
+        askWhereToSaveDownloads = defaults.bool(forKey: askWhereToSaveDownloadsKey)
+        openSafeDownloads = defaults.bool(forKey: openSafeDownloadsKey)
+
+        homePageURLString = defaults.string(forKey: homePageURLKey) ?? ""
+        externalLinkTarget = defaults.string(forKey: externalLinkTargetKey)
+            .flatMap(ExternalLinkTarget.init(rawValue:)) ?? .currentSpace
+        restoreTabsOnLaunch = defaults.object(forKey: restoreTabsOnLaunchKey) as? Bool ?? true
+        confirmBeforeQuit = defaults.object(forKey: confirmBeforeQuitKey) as? Bool ?? true
+
+        reduceMotion = defaults.bool(forKey: Self.reduceMotionKey)
+        minimumFontSize = defaults.double(forKey: Self.minimumFontSizeKey)
+        alwaysShowScrollBars = defaults.bool(forKey: alwaysShowScrollBarsKey)
+        spellCheckEnabled = defaults.object(forKey: spellCheckEnabledKey) as? Bool ?? true
+        defaults.set(spellCheckEnabled, forKey: Self.webKitSpellCheckKey)
     }
 
     // MARK: - Per-container helpers
@@ -442,6 +591,57 @@ class SettingsStore {
         defaults.removeObject(forKey: keyForAutoClear(for: containerId))
         defaults.removeObject(forKey: keyForPrivacySettings(for: containerId))
         containerSettingsRevision &+= 1
+    }
+
+    /// The Home button's target. A bare host gets `https://`, and anything that does not
+    /// parse falls back to the built-in page rather than navigating nowhere.
+    var homePageURL: URL {
+        let trimmed = homePageURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .oraHome }
+        if let url = URL(string: trimmed), url.scheme != nil { return url }
+        return URL(string: "https://\(trimmed)") ?? .oraHome
+    }
+
+    // MARK: - Download folder
+
+    /// The folder downloads are written to, or nil when the system Downloads folder
+    /// (granted outright by the sandbox) should be used.
+    ///
+    /// ponytail: access is started once and never stopped, which is fine for a folder
+    /// used for the app's whole lifetime. Balance it if the picker ever moves per-window.
+    func resolvedDownloadFolder() -> URL? {
+        guard let bookmark = downloadFolderBookmark else { return nil }
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: bookmark,
+            options: [.withSecurityScope],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else {
+            downloadFolderBookmark = nil
+            return nil
+        }
+        _ = url.startAccessingSecurityScopedResource()
+        if isStale { storeDownloadFolderBookmark(for: url) }
+        return url
+    }
+
+    func setDownloadFolder(_ url: URL?) {
+        guard let url else {
+            downloadFolderBookmark = nil
+            return
+        }
+        storeDownloadFolderBookmark(for: url)
+    }
+
+    private func storeDownloadFolderBookmark(for url: URL) {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        downloadFolderBookmark = try? url.bookmarkData(
+            options: [.withSecurityScope],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
     }
 
     // MARK: - Permissions

@@ -16,7 +16,12 @@ extension TabManager {
     @discardableResult
     func createFolder(name: String = "New Folder", in container: TabContainer? = nil) -> Folder? {
         guard let container = container ?? activeContainer else { return nil }
-        let folder = Folder(name: name, order: topOrder(in: container) + 1, container: container)
+        let folder = Folder(
+            name: name,
+            order: topOrder(in: container) + 1,
+            isCollapsed: SettingsStore.shared.foldersCollapsedByDefault,
+            container: container
+        )
         modelContext.insert(folder)
         try? modelContext.save()
         return folder

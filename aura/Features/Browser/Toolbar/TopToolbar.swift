@@ -209,10 +209,10 @@ struct TopToolbar: View {
         )
     }
 
-    /// Home is `aura://home`, the same page every new tab opens on. Navigating there
-    /// tears the web view down and hands the tab back to `HomePageView`.
+    /// Home is `aura://home` unless the user set an address of their own. Navigating to
+    /// the built-in page tears the web view down and hands the tab back to `HomePageView`.
     private func goHome() {
-        tabManager.activeTab?.loadURL(URL.oraHome.absoluteString)
+        tabManager.activeTab?.loadURL(SettingsStore.shared.homePageURL.absoluteString)
     }
 
     private func shareCurrentPage(tab: Tab, sourceView: NSView, sourceRect: NSRect) {

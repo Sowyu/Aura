@@ -113,6 +113,7 @@ final class DownloadManager {
         refreshRecentDownloads()
 
         toastManager?.show("Downloaded \(download.fileName)", icon: .system("checkmark.circle"))
+        openIfSafe(destinationURL: destinationURL)
     }
 
     func failDownload(_ download: Download, error: String) {
@@ -155,22 +156,12 @@ final class DownloadManager {
                 completion(nil)
                 return
             }
-
-            let downloadsDir = self.getDownloadsDirectory()
-            let destinationURL = downloadsDir.appendingPathComponent(suggestedFilename)
-            let finalURL = self.createUniqueFilename(for: destinationURL)
-            let expectedSize = response.expectedContentLength
-            let download = self.startDownload(
-                from: task,
-                originalURL: task.originalURL,
+            self.resolveDestination(
+                for: task,
                 suggestedFilename: suggestedFilename,
-                expectedSize: expectedSize
+                expectedSize: response.expectedContentLength,
+                completion: completion
             )
-
-            self.taskDownloads[task.id] = download
-            self.taskDestinationURLs[task.id] = finalURL
-            self.startProgressTimer(for: task, download: download, expectedSize: expectedSize)
-            completion(finalURL)
         }
 
         task.onRedirect = { [weak self] newURL in
@@ -197,6 +188,72 @@ final class DownloadManager {
             self.failDownload(download, error: error.localizedDescription)
             self.cleanupTask(taskID)
         }
+    }
+
+    /// Turns the destination rule into a concrete file URL, putting the save panel on
+    /// screen first when the user asked to be asked.
+    private func resolveDestination(
+        for task: BrowserDownloadTask,
+        suggestedFilename: String,
+        expectedSize: Int64,
+        completion: @escaping (URL?) -> Void
+    ) {
+        switch destination() {
+        case let .folder(directory):
+            let finalURL = createUniqueFilename(for: directory.appendingPathComponent(suggestedFilename))
+            beginDownload(
+                task: task,
+                suggestedFilename: suggestedFilename,
+                finalURL: finalURL,
+                expectedSize: expectedSize,
+                completion: completion
+            )
+        case .ask:
+            askForDestination(suggestedFilename: suggestedFilename) { [weak self] chosenURL in
+                guard let self else { return }
+                guard let chosenURL else {
+                    completion(nil)
+                    self.cleanupTask(task.id)
+                    return
+                }
+                self.beginDownload(
+                    task: task,
+                    suggestedFilename: chosenURL.lastPathComponent,
+                    finalURL: chosenURL,
+                    expectedSize: expectedSize,
+                    completion: completion
+                )
+            }
+        }
+    }
+
+    /// The current destination rule: the folder the user picked, the system Downloads
+    /// folder, or a save panel per file.
+    func destination() -> DownloadDestination {
+        DownloadDestination.resolve(
+            askWhereToSave: SettingsStore.shared.askWhereToSaveDownloads,
+            chosenFolder: SettingsStore.shared.resolvedDownloadFolder(),
+            systemDownloads: getDownloadsDirectory()
+        )
+    }
+
+    private func beginDownload(
+        task: BrowserDownloadTask,
+        suggestedFilename: String,
+        finalURL: URL,
+        expectedSize: Int64,
+        completion: @escaping (URL?) -> Void
+    ) {
+        let download = startDownload(
+            from: task,
+            originalURL: task.originalURL,
+            suggestedFilename: suggestedFilename,
+            expectedSize: expectedSize
+        )
+        taskDownloads[task.id] = download
+        taskDestinationURLs[task.id] = finalURL
+        startProgressTimer(for: task, download: download, expectedSize: expectedSize)
+        completion(finalURL)
     }
 
     func clearCompletedDownloads() {

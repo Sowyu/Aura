@@ -1,15 +1,76 @@
 import Foundation
 
+/// The add-on kinds AMO serves. Raw values are the API's `type=` values.
+enum FirefoxAddonType: String, CaseIterable, Identifiable {
+    case `extension`
+    case statictheme
+    case dictionary
+    case language
+
+    var id: String { rawValue }
+
+    /// Filter-chip label.
+    var pluralTitle: String {
+        switch self {
+        case .extension: return "Extensions"
+        case .statictheme: return "Themes"
+        case .dictionary: return "Dictionaries"
+        case .language: return "Language packs"
+        }
+    }
+}
+
+/// The AMO `sort=` values the store exposes.
+enum FirefoxAddonSort: String, CaseIterable, Identifiable {
+    case relevance
+    case users
+    case rating
+    case updated
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .relevance: return "Relevance"
+        case .users: return "Users"
+        case .rating: return "Rating"
+        case .updated: return "Recently updated"
+        }
+    }
+}
+
 /// One add-on listing from addons.mozilla.org.
 struct FirefoxAddon: Identifiable, Equatable {
     let id: Int
     let slug: String
     let name: String
-    let summary: String?
-    let version: String?
-    let iconURL: URL?
-    let downloadURL: URL?
-    let dailyUsers: Int
+    var summary: String?
+    var version: String?
+    var iconURL: URL?
+    var downloadURL: URL?
+    var dailyUsers: Int = 0
+    var authors: [String] = []
+    var averageRating: Double = 0
+    var type: FirefoxAddonType = .extension
+    var permissions: [String] = []
+    var optionalPermissions: [String] = []
+    var hostPermissions: [String] = []
+    var lastUpdated: Date?
+
+    var authorLine: String? {
+        authors.isEmpty ? nil : authors.joined(separator: ", ")
+    }
+
+    /// Everything the add-on can ever ask for, which is what compatibility is judged on.
+    var requestedPermissions: [String] {
+        permissions + optionalPermissions + hostPermissions
+    }
+}
+
+/// One page of search results plus whether AMO has another one.
+struct FirefoxAddonPage: Equatable {
+    var addons: [FirefoxAddon] = []
+    var hasMore = false
 }
 
 enum FirefoxAddonStoreError: LocalizedError {
@@ -35,6 +96,8 @@ enum FirefoxAddonStoreError: LocalizedError {
 struct FirefoxAddonStore {
     static let shared = FirefoxAddonStore()
 
+    static let pageSize = 20
+
     private let apiBase = URL(string: "https://addons.mozilla.org/api/v5/addons/")!
 
     /// Extracts the slug from an AMO listing URL like
@@ -48,24 +111,40 @@ struct FirefoxAddonStore {
         return parts[addonIndex + 1]
     }
 
+    /// The one-argument form the rest of the app was built on: popular extensions only.
     func search(_ query: String) async throws -> [FirefoxAddon] {
+        try await search(query, type: .extension, sort: .users, page: 1, pageSize: 10).addons
+    }
+
+    /// `type: nil` searches every add-on kind.
+    func search(
+        _ query: String,
+        type: FirefoxAddonType?,
+        sort: FirefoxAddonSort,
+        page: Int,
+        pageSize: Int = FirefoxAddonStore.pageSize
+    ) async throws -> FirefoxAddonPage {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Relevance has nothing to rank against without a query, and AMO rejects it.
+        let effectiveSort: FirefoxAddonSort = (trimmed.isEmpty && sort == .relevance) ? .users : sort
+
+        var items = [
+            URLQueryItem(name: "app", value: "firefox"),
+            URLQueryItem(name: "sort", value: effectiveSort.rawValue),
+            URLQueryItem(name: "page", value: String(max(page, 1))),
+            URLQueryItem(name: "page_size", value: String(pageSize))
+        ]
+        if !trimmed.isEmpty { items.append(URLQueryItem(name: "q", value: trimmed)) }
+        if let type { items.append(URLQueryItem(name: "type", value: type.rawValue)) }
+
         var components = URLComponents(
             url: apiBase.appendingPathComponent("search/"),
             resolvingAgainstBaseURL: false
         )
-        components?.queryItems = [
-            URLQueryItem(name: "q", value: query),
-            URLQueryItem(name: "app", value: "firefox"),
-            URLQueryItem(name: "type", value: "extension"),
-            URLQueryItem(name: "sort", value: "users"),
-            URLQueryItem(name: "page_size", value: "10")
-        ]
-        guard let searchURL = components?.url else { return [] }
+        components?.queryItems = items
+        guard let searchURL = components?.url else { return FirefoxAddonPage() }
         let (data, _) = try await URLSession.shared.data(from: searchURL)
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let results = json["results"] as? [[String: Any]]
-        else { return [] }
-        return results.compactMap(Self.parseAddon)
+        return Self.parsePage(data)
     }
 
     func addon(slug: String) async throws -> FirefoxAddon {
@@ -93,6 +172,15 @@ struct FirefoxAddonStore {
 
     // MARK: - Response parsing
 
+    /// Internal so a fixture payload can be decoded without touching the network.
+    static func parsePage(_ data: Data) -> FirefoxAddonPage {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return FirefoxAddonPage()
+        }
+        let results = json["results"] as? [[String: Any]] ?? []
+        return FirefoxAddonPage(addons: results.compactMap(parseAddon), hasMore: json["next"] is String)
+    }
+
     private static func parseAddon(_ json: [String: Any]) -> FirefoxAddon? {
         guard let id = json["id"] as? Int,
               let slug = json["slug"] as? String,
@@ -103,6 +191,7 @@ struct FirefoxAddonStore {
         // API v5 uses a single "file" object; older shapes used a "files" array.
         let file = currentVersion?["file"] as? [String: Any]
             ?? (currentVersion?["files"] as? [[String: Any]])?.first
+        let ratings = json["ratings"] as? [String: Any]
 
         return FirefoxAddon(
             id: id,
@@ -112,8 +201,25 @@ struct FirefoxAddonStore {
             version: currentVersion?["version"] as? String,
             iconURL: (json["icon_url"] as? String).flatMap(URL.init(string:)),
             downloadURL: (file?["url"] as? String).flatMap(URL.init(string:)),
-            dailyUsers: json["average_daily_users"] as? Int ?? 0
+            dailyUsers: json["average_daily_users"] as? Int ?? 0,
+            authors: (json["authors"] as? [[String: Any]])?.compactMap { $0["name"] as? String } ?? [],
+            averageRating: (ratings?["average"] as? NSNumber)?.doubleValue ?? 0,
+            type: (json["type"] as? String).flatMap(FirefoxAddonType.init(rawValue:)) ?? .extension,
+            permissions: file?["permissions"] as? [String] ?? [],
+            optionalPermissions: file?["optional_permissions"] as? [String] ?? [],
+            hostPermissions: file?["host_permissions"] as? [String] ?? [],
+            lastUpdated: (json["last_updated"] as? String).flatMap(parseDate)
         )
+    }
+
+    /// AMO stamps are ISO-8601, sometimes with fractional seconds and no zone suffix.
+    private static func parseDate(_ text: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: text) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        if let date = formatter.date(from: text) { return date }
+        return formatter.date(from: text + "Z")
     }
 
     /// AMO localizes text fields as {"en-US": "..."} maps; some endpoints
@@ -168,5 +274,46 @@ enum XPIUnpacker {
             }
         }
         return nil
+    }
+
+    /// A .crx is a zip behind a signature header. Strips the header and writes the plain
+    /// zip to a temporary file. The signature is not checked: a file the user picked by
+    /// hand is trusted the same way an unpacked folder is.
+    static func zipFromCRX(_ archiveURL: URL) throws -> URL {
+        let data = try Data(contentsOf: archiveURL)
+        let payload = try crxPayload(data)
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ora-crx-\(UUID().uuidString).zip")
+        try payload.write(to: destination)
+        return destination
+    }
+
+    /// CRX3: "Cr24", version 3, header length, header, zip. CRX2 instead stores a public
+    /// key length and a signature length before its two blobs.
+    static func crxPayload(_ data: Data) throws -> Data {
+        guard data.count > 16, Array(data.prefix(4)) == Array("Cr24".utf8) else {
+            throw FirefoxAddonStoreError.unpackFailed("Not a Chrome extension archive (no Cr24 header).")
+        }
+        let offset: Int
+        switch littleEndian(data, at: 4) {
+        case 3:
+            offset = 12 + Int(littleEndian(data, at: 8))
+        case 2:
+            offset = 16 + Int(littleEndian(data, at: 8)) + Int(littleEndian(data, at: 12))
+        case let version:
+            throw FirefoxAddonStoreError.unpackFailed("Unsupported CRX version \(version).")
+        }
+        guard offset > 0, offset < data.count else {
+            throw FirefoxAddonStoreError.unpackFailed("CRX header runs past the end of the file.")
+        }
+        return data.subdata(in: offset ..< data.count)
+    }
+
+    private static func littleEndian(_ data: Data, at offset: Int) -> UInt32 {
+        var value: UInt32 = 0
+        for index in (0 ..< 4).reversed() {
+            value = (value << 8) | UInt32(data[data.startIndex + offset + index])
+        }
+        return value
     }
 }

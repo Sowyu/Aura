@@ -50,6 +50,22 @@ struct OraInternalURLTests {
         #expect(!web.isOraHome)
     }
 
+    @Test("aura://extensions is the store page, ora:// spelling included")
+    func extensionsStoreURL() throws {
+        #expect(URL.oraExtensions.absoluteString == "aura://extensions")
+        #expect(URL.oraExtensions.isOraExtensions)
+        #expect(!URL.oraExtensions.isOraSettings)
+        #expect(!URL.oraExtensions.isOraHome)
+
+        let legacy = try #require(URL(string: "ora://extensions"))
+        #expect(legacy.isOraExtensions)
+        #expect(legacy.canonicalOraInternal == URL.oraExtensions)
+        #expect(constructURL(from: "aura://extensions") == URL.oraExtensions)
+
+        let web = try #require(URL(string: "https://example.com/extensions"))
+        #expect(!web.isOraExtensions)
+    }
+
     @Test("legacy ora:// addresses still resolve and normalise to aura://")
     func legacySchemeIsAccepted() throws {
         let legacy = try #require(URL(string: "ora://settings/spaces"))

@@ -37,7 +37,7 @@ struct AuraMenuHost: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
         .background(WindowOriginReader { hostOrigin = $0 })
-        .animation(.easeOut(duration: 0.1), value: controller.levels.map(\.id))
+        .animation(AnimationSettings.easeOut(0.1), value: controller.levels.map(\.id))
         .onChange(of: isMine, initial: true) { _, open in
             if open { startTracking() } else { stopTracking() }
         }

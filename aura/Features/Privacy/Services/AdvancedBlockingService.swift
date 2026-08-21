@@ -113,6 +113,14 @@ final class AdvancedBlockingService: @unchecked Sendable {
         return !isDisabled(host: host)
     }
 
+    /// Every site advanced blocking has been switched off for, alphabetically, for the
+    /// per-site rules table in settings.
+    var disabledHostList: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return disabledHosts.sorted()
+    }
+
     func isDisabled(host: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }

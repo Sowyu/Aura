@@ -274,18 +274,49 @@ final class ExtensionManager {
         start()
 
         let archive = try await FirefoxAddonStore.shared.downloadXPI(from: downloadURL)
+        defer { try? FileManager.default.removeItem(at: archive) }
+        try installArchive(at: archive)
+    }
+
+    /// A folder holding manifest.json, or a packaged extension (.xpi, .zip, .crx).
+    func installExtension(fromFile url: URL) throws {
+        if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            try installExtension(from: url)
+            return
+        }
+        start()
+        guard url.pathExtension.lowercased() == "crx" else {
+            try installArchive(at: url)
+            return
+        }
+        // Chrome packs the same zip behind a signature header; drop the header.
+        let zipURL = try XPIUnpacker.zipFromCRX(url)
+        defer { try? FileManager.default.removeItem(at: zipURL) }
+        try installArchive(at: zipURL)
+    }
+
+    /// Unpacks a zip-shaped archive into a temporary folder and installs what it holds.
+    private func installArchive(at archive: URL) throws {
         let staging = FileManager.default.temporaryDirectory
             .appendingPathComponent("ora-addon-unpack-\(UUID().uuidString)", isDirectory: true)
-        defer {
-            try? FileManager.default.removeItem(at: archive)
-            try? FileManager.default.removeItem(at: staging)
-        }
-
+        defer { try? FileManager.default.removeItem(at: staging) }
         try XPIUnpacker.unpack(archive, to: staging)
         guard let root = XPIUnpacker.manifestRoot(in: staging) else {
             throw ExtensionInstallError.missingManifest
         }
         try installExtension(from: root)
+    }
+
+    /// The installed entry an AMO listing produced, matched on the name the install
+    /// path names its folder after.
+    func installedExtension(matching addon: FirefoxAddon) -> InstalledExtension? {
+        installedExtensions.first { $0.displayName.caseInsensitiveCompare(addon.name) == .orderedSame }
+    }
+
+    /// The extension's own options page, when it declares one. Nil until it has loaded.
+    func optionsPageURL(for id: String) -> URL? {
+        guard #available(macOS 15.4, *) else { return nil }
+        return loadedEngine?.context(for: id)?.optionsPageURL
     }
 
     func removeExtension(_ id: String) {
@@ -381,23 +412,20 @@ final class ExtensionManager {
         return (name, json["version"] as? String)
     }
 
-    /// Permissions Firefox grants that WebKit has no implementation of. An extension
-    /// asking for one installs, but its background script will fail on first use.
-    private static let firefoxOnlyPermissions: Set<String> = [
-        "webRequestBlocking", "proxy", "dns", "browserSettings", "contextualIdentities",
-        "pkcs11", "captivePortal", "networkStatus", "geckoProfiler", "theme", "urlbar",
-    ]
-
-    static func compatibilityNote(at directory: URL) -> String? {
+    /// The same verdict the store shows, read from the installed manifest instead of AMO.
+    static func compatibility(at directory: URL) -> ExtensionCompatibility {
         let url = directory.appendingPathComponent("manifest.json")
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
+        else { return .supported }
         let requested = ((json["permissions"] as? [String]) ?? [])
             + ((json["optional_permissions"] as? [String]) ?? [])
-        let missing = requested.filter { firefoxOnlyPermissions.contains($0) }
-        guard !missing.isEmpty else { return nil }
-        return "Needs Firefox-only APIs WebKit lacks: " + missing.joined(separator: ", ") + "."
+            + ((json["host_permissions"] as? [String]) ?? [])
+        return ExtensionCompatibility.evaluate(permissions: requested)
+    }
+
+    static func compatibilityNote(at directory: URL) -> String? {
+        compatibility(at: directory).detail
     }
 
     private static func sanitizedID(from name: String) -> String {

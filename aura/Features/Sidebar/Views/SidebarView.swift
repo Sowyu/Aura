@@ -139,7 +139,7 @@ struct SidebarView: View {
                 NotificationCenter.default.post(
                     name: .openSettingsTab,
                     object: window,
-                    userInfo: ["tab": SettingsTab.general.rawValue]
+                    userInfo: ["tab": SettingsTab.lookAndFeel.rawValue]
                 )
             }
         }
@@ -200,12 +200,12 @@ struct SidebarView: View {
                     if value.translation.width > threshold
                         || value.predictedEndTranslation.width > threshold * 2
                     {
-                        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+                        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.85)) {
                             downloadManager.isShowingDownloadsHistory = false
                             dragOffset = 0
                         }
                     } else {
-                        withAnimation(.spring(response: 0.18, dampingFraction: 0.9)) {
+                        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.9)) {
                             dragOffset = 0
                         }
                     }
@@ -213,12 +213,12 @@ struct SidebarView: View {
                     if -value.translation.width > threshold
                         || -value.predictedEndTranslation.width > threshold * 2
                     {
-                        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+                        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.85)) {
                             downloadManager.isShowingDownloadsHistory = true
                             dragOffset = 0
                         }
                     } else {
-                        withAnimation(.spring(response: 0.18, dampingFraction: 0.9)) {
+                        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.9)) {
                             dragOffset = 0
                         }
                     }
@@ -293,7 +293,7 @@ struct SidebarView: View {
     }
 
     private func onContainerSelected(container: TabContainer) {
-        withAnimation(.easeOut(duration: 0.1)) {
+        withAnimation(AnimationSettings.easeOut(0.1)) {
             tabManager.activateContainer(container)
         }
     }

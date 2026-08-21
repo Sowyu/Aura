@@ -49,6 +49,14 @@ final class BrowserEngineProfile {
         }
     }
 
+    /// Sites this profile has stored data for, alphabetically.
+    @MainActor
+    func dataRecordDisplayNames() async -> [String] {
+        let types = WKWebsiteDataStore.allWebsiteDataTypes()
+        let records = await dataStore.dataRecords(ofTypes: types)
+        return records.map(\.displayName).sorted()
+    }
+
     private func mapWebsiteDataTypes(_ types: Set<BrowserWebsiteDataType>) -> Set<String> {
         if types.contains(.all) {
             return WKWebsiteDataStore.allWebsiteDataTypes()

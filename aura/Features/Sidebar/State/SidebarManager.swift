@@ -83,7 +83,7 @@ final class SidebarManager {
 
     func toggleSidebar() {
         let targetSide = sidebarPosition == .primary ? SplitSide.primary : .secondary
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.9)) {
+        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.9)) {
             hiddenSidebar.side = (hiddenSidebar.side == targetSide) ? nil : targetSide
             updateSidebarHidden()
         }
@@ -124,7 +124,7 @@ final class SidebarManager {
     private func applyCompactMode(toolbar: ToolbarManager) {
         let hideSidebar = isCompactEnabled && compactHides.hidesSidebar
         let hideToolbar = isCompactEnabled && compactHides.hidesToolbar
-        withAnimation(.easeOut(duration: 0.15)) {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             setSidebarHidden(hideSidebar)
             toolbar.setHidden(hideToolbar)
         }

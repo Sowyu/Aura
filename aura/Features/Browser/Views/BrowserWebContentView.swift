@@ -36,6 +36,11 @@ struct BrowserWebContentView: View {
                 .id(tab.id)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+        } else if tab.url.isOraExtensions {
+            ExtensionStoreView()
+                .id(tab.id)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
         } else if tab.url.isOraSettings {
             SettingsContentView(
                 initialTab: tab.url.oraSettingsSection,
