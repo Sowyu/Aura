@@ -47,38 +47,6 @@ struct TopToolbar: View {
         return histories.filter { $0.container?.id == containerId }.prefix(10).map { $0 }
     }
 
-    @State private var fieldFrame: CGRect = .zero
-
-    /// While the address field is edited everything but the field softens: two blur
-    /// slabs, left and right of the measured field frame, over the single real row.
-    @ViewBuilder
-    private var editingBlur: some View {
-        if appState.isURLBarEditing {
-            GeometryReader { proxy in
-                let gap: CGFloat = 6
-                let leftWidth = max(0, fieldFrame.minX - gap)
-                let rightStart = fieldFrame.maxX + gap
-                ZStack(alignment: .leading) {
-                    blurSlab.frame(width: leftWidth)
-                    blurSlab
-                        .frame(width: max(0, proxy.size.width - rightStart))
-                        .offset(x: rightStart)
-                }
-            }
-            .transition(.opacity)
-            .animation(AnimationSettings.easeOut(0.12), value: appState.isURLBarEditing)
-        }
-    }
-
-    private var blurSlab: some View {
-        ZStack {
-            BlurEffectView(material: .hudWindow, blendingMode: .withinWindow, isClickThrough: true)
-            Color.black.opacity(0.12)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { appState.isURLBarEditing = false }
-    }
-
     var body: some View {
         HStack(spacing: Self.groupSpacing) {
             HStack(spacing: Self.groupSpacing) {
@@ -97,7 +65,6 @@ struct TopToolbar: View {
             // max width and they only split what is left, centring it.
             .layoutPriority(1)
             .zIndex(1)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("toolbarRow")) } action: { fieldFrame = $0 }
             Spacer(minLength: Self.groupSpacing)
 
             HStack(spacing: Self.groupSpacing) {
@@ -116,8 +83,6 @@ struct TopToolbar: View {
                 windowGroup
             }
         }
-        .coordinateSpace(name: "toolbarRow")
-        .overlay { editingBlur }
         // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
         .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
         .padding(.trailing, Self.edgeInset)

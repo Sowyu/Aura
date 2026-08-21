@@ -15,13 +15,13 @@ struct GlassChromeTests {
 
     @Test func everyBlurStepPicksItsOwnMaterial() {
         #expect(AuraGlass.material(forBlur: 0) == nil)
-        #expect(AuraGlass.material(forBlur: 0.25) == .titlebar)
-        #expect(AuraGlass.material(forBlur: 0.5) == .sidebar)
-        #expect(AuraGlass.material(forBlur: 0.75) == .hudWindow)
-        #expect(AuraGlass.material(forBlur: 1) == .underWindowBackground)
+        #expect(AuraGlass.material(forBlur: 0.25) == .hudWindow)
+        #expect(AuraGlass.material(forBlur: 0.5) == .titlebar)
+        #expect(AuraGlass.material(forBlur: 0.75) == .sidebar)
+        #expect(AuraGlass.material(forBlur: 1) == .fullScreenUI)
         // Out of range values land on the nearest end rather than crashing the switch.
         #expect(AuraGlass.material(forBlur: -0.5) == nil)
-        #expect(AuraGlass.material(forBlur: 9) == .underWindowBackground)
+        #expect(AuraGlass.material(forBlur: 9) == .fullScreenUI)
     }
 
     @MainActor

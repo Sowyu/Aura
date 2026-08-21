@@ -61,21 +61,40 @@ struct BrowserView: View {
         }
     }
 
-    /// While the address field is being edited, everything under the toolbar softens so
-    /// the suggestions read as the foreground. Clicking it ends the edit.
+    /// Editing-mode holes in window coordinates: the address pill and, when shown, its
+    /// suggestions. Grown by 2pt so the pill's hairline stroke stays sharp.
+    private var editingHoles: [CGRect] {
+        [appState.urlFieldFrame, appState.urlSuggestionsFrame]
+            .filter { !$0.isEmpty }
+            .map { $0.insetBy(dx: -2, dy: -2) }
+    }
+
+    /// One surface over the whole window while the address field is edited: toolbar row,
+    /// sidebar and page blur and dim together, with the field and its suggestions cut out
+    /// so they stay sharp and clickable. Clicking the surface ends the edit.
     @ViewBuilder
     private var urlEditingBackdrop: some View {
         if appState.isURLBarEditing {
-            ZStack {
-                BlurEffectView(material: .hudWindow, blendingMode: .withinWindow, isClickThrough: true)
-                Color.black.opacity(0.12)
+            GeometryReader { proxy in
+                let origin = proxy.frame(in: .global).origin
+                let holes = editingHoles.map { $0.offsetBy(dx: -origin.x, dy: -origin.y) }
+                let cutout = CutoutShape(holes: holes, radius: Self.holeRadius)
+                ZStack {
+                    BlurEffectView(
+                        material: .hudWindow, blendingMode: .withinWindow,
+                        isClickThrough: true, holes: holes, holeRadius: Self.holeRadius
+                    )
+                    Color.black.opacity(0.12)
+                        .mask(cutout.fill(style: FillStyle(eoFill: true)))
+                }
+                .contentShape(.interaction, cutout, eoFill: true)
+                .onTapGesture { appState.isURLBarEditing = false }
             }
-            .contentShape(Rectangle())
-            .onTapGesture { appState.isURLBarEditing = false }
             .transition(.opacity)
-            .animation(AnimationSettings.easeOut(0.12), value: appState.isURLBarEditing)
         }
     }
+
+    private static let holeRadius: CGFloat = 15
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -90,8 +109,9 @@ struct BrowserView: View {
                         .zIndex(1)
                 }
                 BrowserSplitView()
-                    .overlay { urlEditingBackdrop }
             }
+            .overlay { urlEditingBackdrop }
+            .animation(AnimationSettings.easeOut(0.12), value: appState.isURLBarEditing)
             .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isToolbarHidden)
             .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isFloatingToolbarVisible)
             .ignoresSafeArea(.all)
@@ -226,5 +246,19 @@ private struct FloatingTopToolbar: View {
         }
         .animation(AnimationSettings.easeOut(0.15), value: isVisible)
         .onDisappear { toolbarManager.isFloatingToolbarVisible = false }
+    }
+}
+
+/// The full rect plus the holes; filled even-odd it is everything except the holes.
+private struct CutoutShape: Shape {
+    let holes: [CGRect]
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path(rect)
+        for hole in holes {
+            path.addRoundedRect(in: hole, cornerSize: CGSize(width: radius, height: radius), style: .continuous)
+        }
+        return path
     }
 }

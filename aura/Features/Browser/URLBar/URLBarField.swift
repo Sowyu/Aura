@@ -68,10 +68,15 @@ struct URLBarField: View {
 
     var body: some View {
         field
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { appState.urlFieldFrame = $0 }
         .overlay(alignment: .top) {
             if isEditing {
                 suggestionsOverlay()
                     .offset(y: 38)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                        appState.urlSuggestionsFrame = $0
+                    }
+                    .onDisappear { appState.urlSuggestionsFrame = .zero }
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }

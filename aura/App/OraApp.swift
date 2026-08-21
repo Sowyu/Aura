@@ -91,6 +91,10 @@ final class AppState {
     var isFloatingTabSwitchVisible: Bool = false
     var isFullscreen: Bool = false
     var isURLBarEditing: Bool = false
+    /// Window (`.global`) frames the address field reports while mounted, so the
+    /// editing backdrop can cut holes for the pill and its suggestions.
+    var urlFieldFrame: CGRect = .zero
+    var urlSuggestionsFrame: CGRect = .zero
 }
 
 @main

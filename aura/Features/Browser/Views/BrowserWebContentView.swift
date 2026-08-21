@@ -9,24 +9,9 @@ struct BrowserWebContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ZStack {
-                webContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                if appState.isURLBarEditing {
-                    Color.black.opacity(0.15)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            DispatchQueue.main.async {
-                                appState.isURLBarEditing = false
-                            }
-                        }
-                        .transition(.opacity)
-                }
-            }
+            webContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .animation(.easeOut(duration: 0.2), value: appState.isURLBarEditing)
     }
 
     @ViewBuilder
