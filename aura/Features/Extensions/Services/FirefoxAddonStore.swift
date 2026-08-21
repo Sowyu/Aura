@@ -62,8 +62,10 @@ struct FirefoxAddon: Identifiable, Equatable {
     }
 
     /// Everything the add-on can ever ask for, which is what compatibility is judged on.
+    /// Permissions the add-on cannot run without. Optional ones are requested at use time
+    /// and a missing optional API degrades one feature, not the add-on, so they don't count.
     var requestedPermissions: [String] {
-        permissions + optionalPermissions + hostPermissions
+        permissions + hostPermissions
     }
 }
 
