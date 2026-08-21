@@ -9,6 +9,7 @@
 
 #import "AuraBlockRules.h"
 #import "AuraWebBundleWK.h"
+#import "AuraWebRequestChannel.h"
 
 #define AURA_EXPORT __attribute__((visibility("default")))
 
@@ -20,24 +21,34 @@ static os_log_t AuraBundleLog(void)
     return log;
 }
 
-/// `…/NativeBlocking/AuraWebBundle.wkbundle/Contents/Resources/rules-v1.json`.
+/// `…/NativeBlocking/AuraWebBundle.wkbundle/Contents/Resources/`.
 ///
 /// Found relative to this dylib rather than passed in: the WebContent process
 /// gets a read-only sandbox extension for the injected bundle's directory and
-/// for nothing else, so the rule file has to live inside it.
-static NSString *AuraRulesPath(void)
+/// for nothing else, so anything the host wants to hand over has to live inside
+/// it.
+static NSString *AuraResourcePath(NSString *fileName)
 {
-    static NSString *path;
+    static NSString *directory;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         Dl_info info;
-        if (dladdr((const void *)&AuraRulesPath, &info) == 0 || !info.dli_fname) { return; }
+        if (dladdr((const void *)&AuraResourcePath, &info) == 0 || !info.dli_fname) { return; }
         NSString *executable = @(info.dli_fname);
         NSString *contents = executable.stringByDeletingLastPathComponent.stringByDeletingLastPathComponent;
-        path = [[contents stringByAppendingPathComponent:@"Resources"]
-            stringByAppendingPathComponent:AuraBlockRulesFileName];
+        directory = [contents stringByAppendingPathComponent:@"Resources"];
     });
-    return path;
+    return [directory stringByAppendingPathComponent:fileName];
+}
+
+static NSString *AuraRulesPath(void)
+{
+    return AuraResourcePath(AuraBlockRulesFileName);
+}
+
+static NSString *AuraWebRequestStatePath(void)
+{
+    return AuraResourcePath(AuraWebRequestStateFileName);
 }
 
 #pragma mark - Main-document tracking
@@ -71,7 +82,7 @@ static NSURL *AuraURLFromRequest(WKURLRequestRef request)
     return url;
 }
 
-static NSString *AuraMainFrameHost(WKBundlePageRef page)
+static NSURL *AuraMainFrameURL(WKBundlePageRef page)
 {
     WKBundleFrameRef mainFrame = WKBundlePageGetMainFrame(page);
     if (!mainFrame) { return nil; }
@@ -79,7 +90,57 @@ static NSString *AuraMainFrameHost(WKBundlePageRef page)
     if (!wkURL) { return nil; }
     NSURL *url = AuraURLFromWKURL(wkURL);
     WKRelease((WKTypeRef)wkURL);
-    return url.host;
+    return url;
+}
+
+/// The verdict a blocking `webRequest` listener returned, or Allow when no
+/// extension registered one. Costs a synchronous IPC hop plus the extension's
+/// JS, so the caller checks `AuraWebRequestChannelIsActive` first.
+static AuraBlockDecision AuraExtensionDecision(
+    WKBundlePageRef page,
+    WKBundleFrameRef frame,
+    uint64_t resourceIdentifier,
+    WKURLRequestRef request,
+    NSURL *url,
+    uint32_t typeMask,
+    BOOL isMainFrame,
+    BOOL isMainDocument,
+    NSURL *__autoreleasing *outURL)
+{
+    NSString *method = CFBridgingRelease(WKURLRequestCopyHTTPMethod(request)) ?: @"GET";
+    // Frames have no id in the injected-bundle API. The frame pointer is stable
+    // for the frame's lifetime, which is all a listener uses frameId for.
+    const int32_t frameID = isMainFrame ? 0 : (int32_t)(((uintptr_t)frame >> 4) & 0x7fffffff);
+    NSMutableDictionary *ask = [@{
+        @"url": url.absoluteString ?: @"",
+        @"type": AuraWebRequestTypeName(typeMask, isMainDocument, !isMainFrame),
+        @"method": method,
+        @"frameId": @(frameID),
+        @"parentFrameId": @(isMainFrame ? -1 : 0),
+        @"requestId": @(resourceIdentifier),
+    } mutableCopy];
+
+    // `pageUrl` is Aura's own: the shim maps it to the tab id WebKit gave the
+    // extension. It stays the *current* main-frame URL even for a navigation,
+    // which is what makes the mapping resolvable before the load commits.
+    NSString *pageURL = AuraMainFrameURL(page).absoluteString;
+    if (pageURL.length > 0) {
+        ask[@"pageUrl"] = pageURL;
+        // Chrome leaves documentUrl unset on a top-level navigation.
+        if (!isMainDocument) { ask[@"documentUrl"] = pageURL; }
+    }
+
+    NSDictionary *verdict = AuraWebRequestChannelDecide(ask);
+    if ([verdict[@"cancel"] boolValue]) { return AuraBlockDecisionBlock; }
+    NSString *redirect = verdict[@"redirectUrl"];
+    if ([redirect isKindOfClass:NSString.class] && redirect.length > 0) {
+        NSURL *target = [NSURL URLWithString:redirect];
+        if (target) {
+            if (outURL) { *outURL = target; }
+            return AuraBlockDecisionRedirect;
+        }
+    }
+    return AuraBlockDecisionAllow;
 }
 
 /// A retained request pointing at `url`, or NULL if WebKit refuses the URL.
@@ -131,14 +192,21 @@ static WKURLRequestRef AuraWillSendRequestForFrame(
             && mainDocumentIdentifier.unsignedLongLongValue == resourceIdentifier;
 
         const uint32_t typeMask = [AuraBlockRules typeMaskForURL:url acceptHeader:nil isMainFrame:isMainFrame];
-        NSString *documentHost = isMainDocument ? url.host : AuraMainFrameHost(page);
+        NSString *documentHost = isMainDocument ? url.host : AuraMainFrameURL(page).host;
 
         NSURL *replacement = nil;
-        const AuraBlockDecision decision = [AuraBlockRules.sharedRules decisionForURL:url
+        AuraBlockDecision decision = [AuraBlockRules.sharedRules decisionForURL:url
                                                                         documentHost:documentHost
                                                                             typeMask:typeMask
                                                                          isMainFrame:isMainDocument
                                                                           resultURL:&replacement];
+
+        // Aura's own rules win outright; an extension only gets asked about
+        // requests that would otherwise go through untouched.
+        if (decision == AuraBlockDecisionAllow && AuraWebRequestChannelIsActive(AuraWebRequestStatePath())) {
+            decision = AuraExtensionDecision(page, frame, resourceIdentifier, request, url,
+                                             typeMask, isMainFrame, isMainDocument, &replacement);
+        }
 
         switch (decision) {
         case AuraBlockDecisionBlock:
@@ -203,6 +271,7 @@ void WKBundleInitialize(WKBundleRef bundle, WKTypeRef initializationUserData)
     client.didCreatePage = AuraDidCreatePage;
     client.willDestroyPage = AuraWillDestroyPage;
     WKBundleSetClient(bundle, &client.base);
+    AuraWebRequestChannelSetBundle(bundle);
     os_log(AuraBundleLog(), "WKBundleInitialize: injected bundle loaded in pid %d rules=%{public}@",
            getpid(), AuraRulesPath() ?: @"(unknown path)");
 }

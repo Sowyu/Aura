@@ -33,6 +33,7 @@ typedef const struct OpaqueWKURL *WKURLRef;
 typedef const struct OpaqueWKURLRequest *WKURLRequestRef;
 typedef const struct OpaqueWKURLResponse *WKURLResponseRef;
 typedef const struct OpaqueWKError *WKErrorRef;
+typedef uint32_t WKTypeID;
 
 #pragma mark - WKBundle client
 
@@ -98,9 +99,24 @@ extern void WKBundlePageSetResourceLoadClient(WKBundlePageRef page, WKBundlePage
 extern WKBundleFrameRef WKBundlePageGetMainFrame(WKBundlePageRef page);
 extern WKURLRef WKBundleFrameCopyURL(WKBundleFrameRef frame);
 
+#pragma mark - Injected-bundle messaging
+
+/// Blocks the calling (web) thread until the UI process answers. `returnData`
+/// receives a retained reply, or NULL when no host handler is installed.
+extern void WKBundlePostSynchronousMessage(WKBundleRef bundle, WKStringRef messageName, WKTypeRef messageBody, WKTypeRef *returnData);
+extern void WKBundlePostMessage(WKBundleRef bundle, WKStringRef messageName, WKTypeRef messageBody);
+
+#pragma mark - Strings
+
+extern WKStringRef WKStringCreateWithCFString(CFStringRef string);
+extern CFStringRef WKStringCopyCFString(CFAllocatorRef allocator, WKStringRef string) CF_RETURNS_RETAINED;
+extern WKTypeID WKStringGetTypeID(void);
+extern WKTypeID WKGetTypeID(WKTypeRef object);
+
 #pragma mark - Value types
 
 extern WKURLRef WKURLRequestCopyURL(WKURLRequestRef request);
+extern CFStringRef WKURLRequestCopyHTTPMethod(WKURLRequestRef request) CF_RETURNS_RETAINED;
 extern WKURLRequestRef WKURLRequestCreateWithWKURL(WKURLRef url);
 extern CFURLRef WKURLCopyCFURL(CFAllocatorRef allocator, WKURLRef url) CF_RETURNS_RETAINED;
 extern WKURLRef WKURLCreateWithCFURL(CFURLRef url);

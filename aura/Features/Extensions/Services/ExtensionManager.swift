@@ -113,6 +113,14 @@ final class ExtensionManager {
         guard !hasStarted else { return }
         hasStarted = true
 
+        if #available(macOS 15.4, *) {
+            // Clears any state file left behind by the last run, before a page
+            // can make the injected bundle act on it.
+            WebRequestBroker.prepare()
+        }
+
+        BundledExtensions.installIfNeeded(into: extensionsDirectory)
+
         let fileManager = FileManager.default
         try? fileManager.createDirectory(at: extensionsDirectory, withIntermediateDirectories: true)
         let directories = (try? fileManager.contentsOfDirectory(
@@ -351,6 +359,11 @@ final class ExtensionManager {
         let id = directory.lastPathComponent
         guard !installedExtensions.contains(where: { $0.id == id }) else { return }
 
+        // Before the manifest is read: patching rewrites it, and a shim version
+        // bump has to take effect on the next launch rather than the next
+        // install.
+        let shimError = ExtensionShim.patch(at: directory)
+
         let manifest = Self.parseManifest(at: directory.appendingPathComponent("manifest.json"))
         let entry = InstalledExtension(
             id: id,
@@ -359,7 +372,7 @@ final class ExtensionManager {
             displayVersion: manifest.version,
             isEnabled: !disabledIDs.contains(id),
             icon: nil,
-            loadError: Self.compatibilityNote(at: directory)
+            loadError: shimError ?? Self.compatibilityNote(at: directory)
         )
         installedExtensions.append(entry)
 
@@ -434,51 +447,5 @@ final class ExtensionManager {
         }
         return String(allowed).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
             + "-" + UUID().uuidString.prefix(8).lowercased()
-    }
-}
-
-/// The 15.4+ half: owns the WKWebExtensionController shared by every
-/// non-private page and the loaded contexts.
-@available(macOS 15.4, *)
-@MainActor
-final class ExtensionEngine: NSObject {
-    let controller = WKWebExtensionController(configuration: .default())
-    private var contexts: [String: WKWebExtensionContext] = [:]
-
-    override init() {
-        super.init()
-        controller.delegate = self
-    }
-
-    func context(for id: String) -> WKWebExtensionContext? {
-        contexts[id]
-    }
-
-    func load(directory: URL, id: String) async throws -> WKWebExtension {
-        if let existing = contexts[id] {
-            return existing.webExtension
-        }
-
-        let webExtension = try await WKWebExtension(resourceBaseURL: directory)
-        let context = WKWebExtensionContext(for: webExtension)
-        // Stable identifier keeps chrome.storage data attached across launches.
-        context.uniqueIdentifier = id
-
-        // v1 trust model: installing an extension grants everything it asks for.
-        for permission in webExtension.requestedPermissions {
-            context.setPermissionStatus(.grantedExplicitly, for: permission)
-        }
-        for pattern in webExtension.allRequestedMatchPatterns {
-            context.setPermissionStatus(.grantedExplicitly, for: pattern)
-        }
-
-        try controller.load(context)
-        contexts[id] = context
-        return webExtension
-    }
-
-    func unload(id: String) {
-        guard let context = contexts.removeValue(forKey: id) else { return }
-        try? controller.unload(context)
     }
 }

@@ -47,6 +47,12 @@ typedef NS_ENUM(uint32_t, AuraBlockDecision) {
 /// Name of the rule file the host writes and the injected bundle reads.
 extern NSString *const AuraBlockRulesFileName;
 
+/// Name of the marker file the host writes while an extension has a blocking
+/// `webRequest` listener registered. Its absence is what keeps the bundle out
+/// of IPC when no extension cares, and its modification date is the bundle's
+/// cue to drop cached verdicts.
+extern NSString *const AuraWebRequestStateFileName;
+
 @interface AuraBlockRules: NSObject
 
 /// The rule set the injected bundle consults. Thread-safe for evaluation.

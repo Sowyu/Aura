@@ -56,8 +56,27 @@ enum AuraWebBundle {
             return nil
         }
         log.info("injected bundle process pool created for \(installedURL.path, privacy: .public)")
+        installWebRequestHandler(on: pool)
         return pool
     }()
+
+    /// Answers the bundle's synchronous block/allow questions out of
+    /// `WebRequestBroker`. Called once, right after the pool is built, because
+    /// the client is per-pool and the bundle starts asking as soon as an
+    /// extension registers a blocking listener.
+    private static func installWebRequestHandler(on pool: WKProcessPool) {
+        guard #available(macOS 15.4, *) else { return }
+        let installed = AuraSetInjectedBundleMessageHandler(pool) { name, body in
+            // WebKit delivers injected-bundle messages on the main thread; the
+            // guard is there so a future change to that lands as an allow
+            // rather than a crash.
+            guard Thread.isMainThread else { return nil }
+            return MainActor.assumeIsolated { WebRequestBroker.shared.handle(name: name, body: body) }
+        }
+        if !installed {
+            log.error("injected-bundle message client unavailable; blocking webRequest disabled")
+        }
+    }
 
     /// Points `configuration` at the injected-bundle process pool. No-op when disabled.
     static func apply(to configuration: WKWebViewConfiguration) {

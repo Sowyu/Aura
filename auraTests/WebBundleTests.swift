@@ -136,34 +136,41 @@ struct WebBundleTests {
 
     @MainActor
     private func pollUntilSettled(_ webView: WKWebView) async throws -> [String: Any] {
-        let script = """
-        JSON.stringify({
-            ok: window.__okState || "pending",
-            ad: window.__adState || "pending",
-            script: window.__scriptState || "pending",
-            fetch: window.__fetchState || "pending",
-            scriptDefined: window.__loadedScript === true
-        })
-        """
-
-        let deadline = Date().addingTimeInterval(20)
-        var last: [String: Any] = [:]
-        while Date() < deadline {
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            guard let json = try? await webView.evaluateJavaScript(script) as? String,
-                  let data = json.data(using: .utf8),
-                  let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { continue }
-            last = parsed
-            if ["ok", "ad", "script", "fetch"].allSatisfy({ parsed[$0] as? String != "pending" }) {
-                // One more beat so the rewritten fetch reaches the server.
-                try? await Task.sleep(nanoseconds: 400_000_000)
-                return parsed
-            }
-        }
-        Issue.record("page never settled; last state: \(last)")
-        return last
+        try await settledPageState(of: webView)
     }
+}
+
+/// Polls the fixture page's four load flags until none of them is still
+/// pending. Shared with WebRequestBrokerTests, which serves the same page.
+@MainActor
+func settledPageState(of webView: WKWebView) async throws -> [String: Any] {
+    let script = """
+    JSON.stringify({
+        ok: window.__okState || "pending",
+        ad: window.__adState || "pending",
+        script: window.__scriptState || "pending",
+        fetch: window.__fetchState || "pending",
+        scriptDefined: window.__loadedScript === true
+    })
+    """
+
+    let deadline = Date().addingTimeInterval(20)
+    var last: [String: Any] = [:]
+    while Date() < deadline {
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        guard let json = try? await webView.evaluateJavaScript(script) as? String,
+              let data = json.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { continue }
+        last = parsed
+        if ["ok", "ad", "script", "fetch"].allSatisfy({ parsed[$0] as? String != "pending" }) {
+            // One more beat so the rewritten fetch reaches the server.
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            return parsed
+        }
+    }
+    Issue.record("page never settled; last state: \(last)")
+    return last
 }
 
 // MARK: - Rule parsing and matching
@@ -359,7 +366,7 @@ struct NativeBlockingRuleTests {
 /// One-shot HTTP/1.1 server, just enough to serve the fixture paths and record
 /// which ones were actually requested. `Connection: close` on every response so
 /// there is no keep-alive framing to parse.
-private final class LocalHTTPServer {
+final class LocalHTTPServer {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "com.aurabrowser.test.httpserver")
     private let lock = NSLock()
@@ -370,7 +377,11 @@ private final class LocalHTTPServer {
             + "GAhKmMIQAAAABJRU5ErkJggg=="
     ) ?? Data()
 
-    private static let html = """
+    /// The page this server serves for any `.html` path. Defaults to the
+    /// injected-bundle fixture; WebRequestBrokerTests swaps in its own.
+    private let html: String
+
+    private static let fixtureHTML = """
     <!doctype html><meta charset="utf-8"><body>
     <img id="ok" src="/ads/ok.png" onload="window.__okState='load'" onerror="window.__okState='error'">
     <img id="ad" src="/ads/pixel.png" onload="window.__adState='load'" onerror="window.__adState='error'">
@@ -384,7 +395,8 @@ private final class LocalHTTPServer {
     </body>
     """
 
-    init() throws {
+    init(html: String = LocalHTTPServer.fixtureHTML) throws {
+        self.html = html
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
         listener = try NWListener(using: parameters)
@@ -444,13 +456,13 @@ private final class LocalHTTPServer {
             self.requested.append(path)
             self.lock.unlock()
 
-            connection.send(content: Self.response(for: path), completion: .contentProcessed { _ in
+            connection.send(content: self.response(for: path), completion: .contentProcessed { _ in
                 connection.cancel()
             })
         }
     }
 
-    private static func response(for path: String) -> Data {
+    private func response(for path: String) -> Data {
         let body: Data
         let type: String
         let basePath = String(path.split(separator: "?").first ?? "")
@@ -465,7 +477,7 @@ private final class LocalHTTPServer {
             body = Data("{}".utf8)
             type = "application/json"
         case "png":
-            body = pixel
+            body = Self.pixel
             type = "image/png"
         default:
             body = Data("ok".utf8)

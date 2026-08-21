@@ -33,6 +33,22 @@ by a global assignment so the file can be evaluated in a JavaScriptCore context.
 
 Copied verbatim.
 
+## uBlock Origin
+
+- Upstream project: [gorhill/uBlock](https://github.com/gorhill/uBlock)
+- Upstream source: `ublock_origin-1.73.0.xpi`, the Firefox build published on
+  [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/ublock-origin/)
+- Local path: `aura/Resources/Extensions/ublock-origin.xpi`
+- Version: 1.73.0 (SHA-256 `bccc51a773150af4af6e1fd62c7bfdeb7238b79ff2381b998fa9f2e38f64786a`)
+- License: GPL-3.0
+- Included license text: `aura/Resources/Extensions/LICENSE-ublock-origin.txt`
+
+The archive is the signed AMO build, unmodified. Aura unpacks it into the profile
+on first launch and installs it like any other extension. The installed copy is
+then patched the same way every extension is: `aura-shim.js` is copied in and
+made the first script the background page runs, and `manifest.json` is rewritten
+to load it (the untouched original stays as `manifest.original.json`).
+
 ## Zen Browser space icons (Ionicons)
 
 - Upstream project: [zen-browser/desktop](https://github.com/zen-browser/desktop)

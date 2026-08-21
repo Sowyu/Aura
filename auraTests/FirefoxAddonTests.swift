@@ -60,16 +60,21 @@ struct FirefoxAddonTests {
         #expect(addon.hostPermissions == ["<all_urls>"])
         #expect(addon.lastUpdated != nil)
         // The badge is decided from the record, before anything is downloaded.
-        #expect(!ExtensionCompatibility.evaluate(addon).allowsInstall)
+        // Aura answers blocking webRequest itself now, so uBlock installs.
+        #expect(ExtensionCompatibility.evaluate(addon) == .supported)
     }
 
     @Test func compatibilityBadgeFollowsRequestedPermissions() {
         #expect(ExtensionCompatibility.evaluate(permissions: ["storage", "tabs"]) == .supported)
         #expect(ExtensionCompatibility.evaluate(permissions: ["proxy", "storage"]) == .partial(["proxy"]))
 
+        // Blocking webRequest stopped being a WebKit gap once the injected
+        // bundle started asking the extension. It follows the same setting the
+        // native request filter does.
         let blocking = ExtensionCompatibility.evaluate(permissions: ["webRequest", "webRequestBlocking"])
-        #expect(blocking.title == "Not supported")
-        #expect(!blocking.allowsInstall)
+        #expect(ExtensionCompatibility.supportsBlockingWebRequest)
+        #expect(blocking == .supported)
+        #expect(blocking.title == "Works on WebKit")
 
         // Themes list, but WebKit has no theme API, so they never install.
         let theme = ExtensionCompatibility.evaluate(FirefoxAddon(id: 1, slug: "dark", name: "Dark", type: .statictheme))

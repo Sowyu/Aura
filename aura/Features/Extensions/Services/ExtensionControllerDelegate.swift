@@ -11,7 +11,6 @@ import Foundation
 ///   implementing it makes WebKit report `windows.create` as unsupported instead
 ///   of hanging.
 /// - `openOptionsPageFor`: no options-page UI yet.
-/// - `sendMessage`/`connectUsingMessagePort`: native messaging is out of scope.
 /// - `didUpdate action:` is implemented, and only bumps a counter the toolbar
 ///   observes so the icon and badge redraw.
 @available(macOS 15.4, *)
@@ -98,6 +97,43 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         completionHandler(matchPatterns, nil)
     }
 
+    // MARK: - Native messaging
+
+    /// The only thing that connects here is Aura's own shim, prepended to the
+    /// extension's background scripts at install time. It announces blocking
+    /// `webRequest` listeners and answers the questions the injected bundle
+    /// asks while a page load waits.
+    func webExtensionController(
+        _ controller: WKWebExtensionController,
+        connectUsing port: WKWebExtension.MessagePort,
+        for context: WKWebExtensionContext,
+        completionHandler: @escaping ((any Error)?) -> Void
+    ) {
+        guard port.applicationIdentifier == WebRequestBroker.applicationIdentifier else {
+            completionHandler(ExtensionActionError.unknownNativeApplication)
+            return
+        }
+        WebRequestBroker.shared.attach(port: port, extensionID: context.uniqueIdentifier)
+        completionHandler(nil)
+    }
+
+    /// One-shot `runtime.sendNativeMessage`. The shim reports what it managed to
+    /// wire up through this before it starts using the port.
+    func webExtensionController(
+        _ controller: WKWebExtensionController,
+        sendMessage message: Any,
+        toApplicationWithIdentifier applicationIdentifier: String?,
+        for context: WKWebExtensionContext,
+        replyHandler: @escaping (Any?, (any Error)?) -> Void
+    ) {
+        guard applicationIdentifier == nil || applicationIdentifier == WebRequestBroker.applicationIdentifier else {
+            replyHandler(nil, ExtensionActionError.unknownNativeApplication)
+            return
+        }
+        let reply = WebRequestBroker.shared.receiveOneShot(message, from: context.uniqueIdentifier)
+        replyHandler(reply, nil)
+    }
+
     // MARK: - Action popup
 
     func webExtensionController(
@@ -140,6 +176,7 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
 enum ExtensionActionError: LocalizedError {
     case noBrowserWindow
     case noPopup
+    case unknownNativeApplication
 
     var errorDescription: String? {
         switch self {
@@ -147,6 +184,8 @@ enum ExtensionActionError: LocalizedError {
             return "No browser window is available."
         case .noPopup:
             return "This extension action has no popup."
+        case .unknownNativeApplication:
+            return "Aura has no native application with that identifier."
         }
     }
 }

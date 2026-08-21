@@ -4,6 +4,7 @@
 #import <string.h>
 
 NSString *const AuraBlockRulesFileName = @"rules-v1.json";
+NSString *const AuraWebRequestStateFileName = @"webrequest-v1.json";
 
 typedef NS_ENUM(uint8_t, AuraRuleKind) {
     AuraRuleKindBlock = 0,

@@ -59,10 +59,22 @@ extension ExtensionCompatibility {
         }
     }
 
+    /// Whether Aura answers blocking `webRequest` itself. The injected bundle
+    /// does the blocking and `WebRequestBroker` asks the extension, so the
+    /// verdict follows the same setting that governs native request blocking.
+    /// Read straight from defaults: the store list is built off the main actor.
+    static var supportsBlockingWebRequest: Bool {
+        guard #available(macOS 15.4, *) else { return false }
+        return UserDefaults.standard.object(forKey: SettingsStore.nativeRequestBlockingEnabledKey) as? Bool ?? true
+    }
+
     /// The permission scan on its own, so an unpacked manifest can use the same rules.
     static func evaluate(permissions: [String]) -> ExtensionCompatibility {
+        var unsupported = firefoxOnlyPermissions
+        if supportsBlockingWebRequest { unsupported.remove("webRequestBlocking") }
+
         var seen: Set<String> = []
-        let missing = permissions.filter { firefoxOnlyPermissions.contains($0) && seen.insert($0).inserted }
+        let missing = permissions.filter { unsupported.contains($0) && seen.insert($0).inserted }
         guard !missing.isEmpty else { return .supported }
 
         // A theme permission with nothing else missing means theming is the whole add-on.
