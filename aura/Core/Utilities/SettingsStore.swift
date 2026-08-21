@@ -179,6 +179,8 @@ class SettingsStore {
     private let blockJavaScriptByDefaultKey = "privacy.javascript.blockedByDefault"
     private let launcherRisesForSuggestionsKey = "launcher.risesForSuggestions"
     private let advancedBlockingEnabledKey = "privacy.advancedBlocking.enabled"
+    /// Read straight from `UserDefaults` by `AuraWebBundle`, which runs off the main actor.
+    static let nativeRequestBlockingEnabledKey = "privacy.nativeRequestBlocking.enabled"
     private let adBlockFilterListsKey = "settings.adBlock.filterLists"
     private let sitePermissionsKey = "settings.permissions.sitePermissions"
     private let customSearchEnginesKey = "settings.customSearchEngines"
@@ -274,6 +276,16 @@ class SettingsStore {
     var advancedBlockingEnabled: Bool {
         didSet {
             defaults.set(advancedBlockingEnabled, forKey: advancedBlockingEnabledKey)
+            NotificationCenter.default.post(name: AdvancedBlockingService.didChangeNotification, object: nil)
+        }
+    }
+
+    /// Runs the filter rules WebKit's content blocking cannot express (`$removeparam`,
+    /// `$redirect`, unsupported resource types) inside the WebContent process, through
+    /// the `AuraWebBundle` injected bundle. Takes effect on the next launch.
+    var nativeRequestBlockingEnabled: Bool {
+        didSet {
+            defaults.set(nativeRequestBlockingEnabled, forKey: Self.nativeRequestBlockingEnabledKey)
             NotificationCenter.default.post(name: AdvancedBlockingService.didChangeNotification, object: nil)
         }
     }
@@ -440,6 +452,8 @@ class SettingsStore {
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
         launcherRisesForSuggestions = defaults.object(forKey: launcherRisesForSuggestionsKey) as? Bool ?? true
         advancedBlockingEnabled = defaults.object(forKey: advancedBlockingEnabledKey) as? Bool ?? true
+        nativeRequestBlockingEnabled = defaults
+            .object(forKey: Self.nativeRequestBlockingEnabledKey) as? Bool ?? true
 
         sitePermissions =
             Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]

@@ -41,6 +41,11 @@ struct PrivacySettingsView: View {
                 + "per space under Spaces."
         ) {
             Toggle("Advanced blocking (scriptlets and cosmetic rules)", isOn: $settings.advancedBlockingEnabled)
+            Toggle("Native request blocking (experimental)", isOn: $settings.nativeRequestBlockingEnabled)
+            Text("Applies $removeparam, $redirect and the block rules Safari's format drops, "
+                + "inside the web process. Takes effect on the next launch.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             Divider()
 

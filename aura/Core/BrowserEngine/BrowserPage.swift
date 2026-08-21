@@ -68,6 +68,9 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
             configuration.mediaPlaybackRequiresUserAction ? .all : []
 
         Self.applyUserPreferences(to: webConfiguration)
+        // Private tabs get the injected bundle too: request blocking is not
+        // privacy-sensitive, and the pool carries no website data.
+        AuraWebBundle.apply(to: webConfiguration)
 
         let webpagePreferences = WKWebpagePreferences()
         webpagePreferences.allowsContentJavaScript = configuration.allowsJavaScript

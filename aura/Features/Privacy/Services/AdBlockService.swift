@@ -40,6 +40,7 @@ actor AdBlockService {
         }
 
         scheduleBackgroundRefresh()
+        await rebuildNativeRules()
     }
 
     func registerSpace(containerId: UUID) {
@@ -184,6 +185,7 @@ actor AdBlockService {
         for affectedContainerID in containerIDsToRefresh {
             await postPrivacyRefresh(for: affectedContainerID)
         }
+        await rebuildNativeRules()
 
         return !changedListIDs.isEmpty
     }
@@ -380,6 +382,14 @@ actor AdBlockService {
             guard var storedRecord = SettingsStore.shared.adBlockFilterList(id: record.id) else { return }
             mutate(&storedRecord)
             SettingsStore.shared.upsertAdBlockFilterList(storedRecord)
+        }
+    }
+
+    /// Recompiles the rule file the `AuraWebBundle` injected bundle reads.
+    private func rebuildNativeRules() async {
+        let containerIDs = Array(knownContainerIDs)
+        await MainActor.run {
+            NativeBlockingRuleStore.shared.scheduleRebuild(containerIDs: containerIDs)
         }
     }
 

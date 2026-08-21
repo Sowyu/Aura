@@ -56,18 +56,38 @@ struct TopToolbar: View {
                 BlurEffectView(material: .hudWindow, blendingMode: .withinWindow, isClickThrough: true)
                 Color.black.opacity(0.12)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { appState.isURLBarEditing = false }
             .transition(.opacity)
             .animation(AnimationSettings.easeOut(0.12), value: appState.isURLBarEditing)
         }
     }
 
     var body: some View {
+        // Two copies of the same row: buttons below the editing blur, the field above it.
+        // Each copy keeps its counterpart laid out but invisible, so both align exactly.
+        ZStack {
+            row(showsButtons: true, showsField: false)
+            editingBlur
+            row(showsButtons: false, showsField: true)
+        }
+        // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
+        .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
+        .padding(.trailing, Self.edgeInset)
+        .frame(height: Self.rowHeight)
+        .frame(maxWidth: .infinity)
+        .auraGlassChromeForeground()
+    }
+
+
+    private func row(showsButtons: Bool, showsField: Bool) -> some View {
         HStack(spacing: Self.groupSpacing) {
             HStack(spacing: Self.groupSpacing) {
                 navigationGroup
                 historyGroup
             }
-            .overlay { editingBlur }
+            .opacity(showsButtons ? 1 : 0)
+            .allowsHitTesting(showsButtons)
 
             Spacer(minLength: Self.groupSpacing)
             URLBarField(
@@ -79,7 +99,8 @@ struct TopToolbar: View {
             // Beats the two Spacers to the free space, so the field reaches its
             // max width and they only split what is left, centring it.
             .layoutPriority(1)
-            .zIndex(1)
+            .opacity(showsField ? 1 : 0)
+            .allowsHitTesting(showsField)
             Spacer(minLength: Self.groupSpacing)
 
             HStack(spacing: Self.groupSpacing) {
@@ -97,14 +118,9 @@ struct TopToolbar: View {
 
                 windowGroup
             }
-            .overlay { editingBlur }
+            .opacity(showsButtons ? 1 : 0)
+            .allowsHitTesting(showsButtons)
         }
-        // The traffic lights sit at x = 12/32/52, so the first button starts at 78.
-        .padding(.leading, appState.isFullscreen ? Self.edgeInset : Self.trafficLightGap)
-        .padding(.trailing, Self.edgeInset)
-        .frame(height: Self.rowHeight)
-        .frame(maxWidth: .infinity)
-        .auraGlassChromeForeground()
     }
 
     // MARK: - Button groups

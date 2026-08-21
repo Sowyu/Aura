@@ -28,6 +28,10 @@ targets:
       - path: aura
         excludes:
           - "Assets/Icons/**"
+      # The matcher is shared verbatim with the injected bundle so the host and
+      # its tests exercise exactly the code that runs in the WebContent process.
+      - path: auraWebBundle/AuraBlockRules.h
+      - path: auraWebBundle/AuraBlockRules.m
     resources:
       - path: aura/Shared/EmojiPicker/emoji-set.json
       - path: aura/Resources
@@ -41,6 +45,11 @@ targets:
       - package: FaviconFinder
       - package: SafariConverterLib
         product: ContentBlockerConverter
+      - target: AuraWebBundle
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
 
     preBuildScripts:
       - name: "Copy Icon Bundle"
@@ -128,6 +137,8 @@ targets:
         PRODUCT_NAME: Aura
         PRODUCT_BUNDLE_IDENTIFIER: com.aurabrowser.app
         GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_BRIDGING_HEADER: aura/Core/BrowserEngine/AuraWebBundleSupport.h
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/auraWebBundle"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SUFeedURL: "https://the-aura.github.io/browser/appcast.xml"
         SUPublicEDKey: "Ozj+rezzbJAD76RfajtfQ7rFojJbpFSCl/0DcFSBCTI="
@@ -153,6 +164,30 @@ targets:
           PROVISIONING_PROFILE_SPECIFIER: ora-profile-working
           ENABLE_HARDENED_RUNTIME: YES
 
+  AuraWebBundle:
+    type: bundle
+    platform: "macOS"
+    deploymentTarget: "15.0"
+    sources:
+      - path: auraWebBundle
+    settings:
+      base:
+        PRODUCT_NAME: AuraWebBundle
+        PRODUCT_BUNDLE_IDENTIFIER: com.aurabrowser.app.webbundle
+        WRAPPER_EXTENSION: wkbundle
+        GENERATE_INFOPLIST_FILE: YES
+        MACH_O_TYPE: mh_bundle
+        SKIP_INSTALL: YES
+        # WKBundleInitialize is looked up with dlsym, so it must stay exported.
+        GCC_SYMBOLS_PRIVATE_EXTERN: NO
+        # No entitlements: this loads into WebKit's WebContent process, not Aura.
+        CODE_SIGN_ENTITLEMENTS: ""
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        PROVISIONING_PROFILE_SPECIFIER: ""
+        OTHER_LDFLAGS: "-framework WebKit"
+
   auraTests:
     type: bundle.unit-test
     platform: "macOS"
@@ -165,6 +200,8 @@ targets:
       base:
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Aura.app/Contents/MacOS/Aura"
         BUNDLE_LOADER: "$(TEST_HOST)"
+        SWIFT_OBJC_BRIDGING_HEADER: aura/Core/BrowserEngine/AuraWebBundleSupport.h
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/auraWebBundle"
 
 schemes:
   aura:
