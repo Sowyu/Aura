@@ -24,6 +24,7 @@ struct NormalTabsList: View {
     @Environment(TabManager.self) private var tabManager
     @State private var previousTabIds: [UUID] = []
     @State private var dropTargetFolderID: UUID?
+    @State private var dropIndicator: TabDropIndicator?
 
     /// Folders and top-level tabs share one `order` scale, so they interleave.
     private enum Row: Identifiable {
@@ -94,12 +95,21 @@ struct NormalTabsList: View {
             onMoveToContainer: { onMoveToContainer(tab, $0) },
             availableContainers: containers
         )
+        .overlay(alignment: dropIndicator?.below == true ? .bottom : .top) {
+            if dropIndicator?.targetID == tab.id {
+                Capsule()
+                    .fill(Color.accentColor)
+                    .frame(height: 2)
+                    .padding(.horizontal, 6)
+            }
+        }
         .onDrag { onDrag(tab.id) }
         .onDrop(
             of: [.text],
             delegate: TabDropDelegate(
                 item: tab,
-                draggedItem: $draggedItem
+                draggedItem: $draggedItem,
+                dropIndicator: $dropIndicator
             )
         )
         .transition(.asymmetric(

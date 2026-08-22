@@ -4,6 +4,7 @@ import SwiftUI
 struct PinnedTabsList: View {
     let tabs: [Tab]
     @Binding var draggedItem: UUID?
+    @State private var dropIndicator: TabDropIndicator?
     let onDrag: (UUID) -> NSItemProvider
     let onSelect: (Tab) -> Void
     let onPinToggle: (Tab) -> Void
@@ -41,10 +42,7 @@ struct PinnedTabsList: View {
                     .onDrag { onDrag(tab.id) }
                     .onDrop(
                         of: [.text],
-                        delegate: TabDropDelegate(
-                            item: tab,
-                            draggedItem: $draggedItem
-                        )
+                        delegate: TabDropDelegate(item: tab, draggedItem: $draggedItem, dropIndicator: $dropIndicator)
                     )
                 }
             }

@@ -6,6 +6,7 @@ struct FavTabsGrid: View {
     @Environment(TabManager.self) private var tabManager
     let tabs: [Tab]
     @Binding var draggedItem: UUID?
+    @State private var dropIndicator: TabDropIndicator?
     let onDrag: (UUID) -> NSItemProvider
     let selectedContainerId: String
     let onSelect: (Tab) -> Void
@@ -58,10 +59,7 @@ struct FavTabsGrid: View {
                     .onDrag { onDrag(tab.id) }
                     .onDrop(
                         of: [.text],
-                        delegate: TabDropDelegate(
-                            item: tab,
-                            draggedItem: $draggedItem
-                        )
+                        delegate: TabDropDelegate(item: tab, draggedItem: $draggedItem, dropIndicator: $dropIndicator)
                     )
                 }
             }

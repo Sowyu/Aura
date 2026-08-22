@@ -134,18 +134,9 @@ struct TabItem: View {
             }
         }
         .padding(8)
-        .opacity(isDragging ? 0.0 : 1.0)
+        .opacity(isDragging ? 0.45 : 1.0)
         .background(backgroundColor, in: .rect(cornerRadius: 10))
         .overlay(alignment: .leading) { spaceStripe }
-        .overlay(
-            isDragging ?
-                ConditionallyConcentricRectangle(cornerRadius: 10)
-                .stroke(
-                    theme.invertedSolidWindowBackgroundColor.opacity(0.25),
-                    style: StrokeStyle(lineWidth: 1, dash: [5, 5])
-                )
-                : nil
-        )
         .contentShape(ConditionallyConcentricRectangle(cornerRadius: 10))
         // `activateTab` rebuilds the web view for a hibernated tab on the way in, so
         // there is nothing to chase here.

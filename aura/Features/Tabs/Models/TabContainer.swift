@@ -40,7 +40,9 @@ class TabContainer: ObservableObject, Identifiable {
     /// Moves `from` next to `to` inside the group they share: same section, same folder.
     /// The group's existing `order` values are dealt back out in the new arrangement,
     /// so the set of values is unchanged and no two rows can end up with the same one.
-    func reorderTabs(from: Tab, to: Tab) {
+    /// `placeBelow` pins the landing side when the caller knows it (a drop indicator);
+    /// nil keeps the drag-direction heuristic.
+    func reorderTabs(from: Tab, to: Tab, placeBelow: Bool? = nil) {
         // Callers that cross sections (`moveTabBetweenSections`) retype the tab first.
         guard from.id != to.id, from.type == to.type else { return }
         var group = tabs
@@ -50,7 +52,7 @@ class TabContainer: ObservableObject, Identifiable {
 
         // The sidebar sorts descending, so a tab above the target (higher order) is
         // being dragged down past it and lands below.
-        let movingDown = from.order > to.order
+        let movingDown = placeBelow ?? (from.order > to.order)
         var values = group.map(\.order)
         values.append(from.order)
         values.sort(by: >)
