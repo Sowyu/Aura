@@ -15,7 +15,7 @@ struct LocalFavIcon: View {
                 .antialiased(true)
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 16, height: 16)
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
         } else {
             Image(systemName: "globe")
                 .resizable()

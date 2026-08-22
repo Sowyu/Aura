@@ -34,16 +34,19 @@ enum FaviconCandidates {
     // swiftlint:disable:next cyclomatic_complexity
     private static func fallbackDimension(for format: FaviconFormatType) -> Double {
         switch format {
-        case .appleTouchIcon, .appleTouchIconPrecomposed: return 180
-        case .launcherIcon4x: return 192
-        case .launcherIcon3x: return 144
-        case .launcherIcon2x: return 96
-        case .launcherIcon1_5x: return 72
-        case .launcherIcon1x: return 48
-        case .launcherIcon0_75x: return 36
-        case .icon: return 32
-        case .shortcutIcon: return 24
-        case .ico: return 16
+        // Touch and launcher icons are home-screen tiles: a logo on a solid rounded
+        // square. They look like app badges at 16pt, so they rank below any real favicon
+        // and only win when a site declares nothing else.
+        case .icon: return 64
+        case .shortcutIcon: return 48
+        case .ico: return 32
+        case .appleTouchIcon, .appleTouchIconPrecomposed: return 18
+        case .launcherIcon4x: return 17
+        case .launcherIcon3x: return 16
+        case .launcherIcon2x: return 15
+        case .launcherIcon1_5x: return 14
+        case .launcherIcon1x: return 13
+        case .launcherIcon0_75x: return 12
         case .metaOpenGraphImage, .metaThumbnail: return 0
         }
     }
