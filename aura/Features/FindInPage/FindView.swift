@@ -9,22 +9,22 @@ import SwiftUI
 
 struct FindView: View {
     @State private var searchText = ""
-    @State private var matchCount = 0
-    @State private var currentMatch = 0
     @FocusState private var isTextFieldFocused: Bool
     @Environment(AppState.self) private var appState
-    @Environment(ToolbarManager.self) private var toolbarManager
     @Environment(\.theme) var theme
     @Environment(\.colorScheme) var colorScheme
-    private let controller: FindController
 
-    init(page: BrowserPage) {
-        self.controller = FindController(page: page)
+    let tab: Tab
+
+    private var findManager: FindManager { FindManager.shared }
+
+    /// No match badge only once a search has actually run and come back empty.
+    private var showsNoMatches: Bool {
+        !searchText.isEmpty && !findManager.session(for: tab.id).matched
     }
 
     var body: some View {
         HStack(spacing: 12) {
-            // searchIcon
             searchTextField
             matchCounter
             navigationButtons
@@ -41,22 +41,19 @@ struct FindView: View {
             y: 4
         )
         .onAppear {
-            DispatchQueue.main.async {
-                controller.injectMarkJS()
-            }
+            // The term the tab was last searched for, so reopening the bar (or coming
+            // back from another tab) picks up where it left off.
+            searchText = findManager.session(for: tab.id).query
             // Still deferred (SwiftUI needs the window's first responder to settle first),
             // just not 150 ms of dead typing time.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isTextFieldFocused = true
             }
         }
+        .onChange(of: tab.id) { _, _ in
+            searchText = findManager.session(for: tab.id).query
+        }
         .zIndex(1000)
-    }
-
-    private var searchIcon: some View {
-        Image(systemName: "magnifyingglass")
-            .font(.system(size: 14, weight: .medium))
-            .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.7))
     }
 
     private var searchTextField: some View {
@@ -72,37 +69,21 @@ struct FindView: View {
             .overlay(textFieldBorder)
             .focused($isTextFieldFocused)
             .onChange(of: searchText) { _, newValue in
-                Task { @MainActor in
-                    handleSearchTextChange(newValue)
-                }
+                findManager.search(newValue, in: tab)
             }
             .onSubmit {
-                Task { @MainActor in
-                    handleSearchSubmit()
-                }
+                findManager.step(in: tab, forward: true)
             }
             .onKeyPress(.escape) {
-                Task { @MainActor in
-                    handleEscapeKey()
-                }
+                close()
                 return .handled
             }
             .onKeyPress(.upArrow) {
-                Task { @MainActor in
-                    if !searchText.isEmpty, matchCount > 0 {
-                        controller.previousMatch()
-                        updateCurrentMatch()
-                    }
-                }
+                findManager.step(in: tab, forward: false)
                 return .handled
             }
             .onKeyPress(.downArrow) {
-                Task { @MainActor in
-                    if !searchText.isEmpty, matchCount > 0 {
-                        controller.nextMatch()
-                        updateCurrentMatch()
-                    }
-                }
+                findManager.step(in: tab, forward: true)
                 return .handled
             }
     }
@@ -122,17 +103,15 @@ struct FindView: View {
             )
     }
 
+    /// Safari's find bar shows no "3 of 17" either: `WKFindResult` carries a single
+    /// `matchFound` flag and no index or total, so the only honest states are "nothing
+    /// matched" and nothing at all.
     private var matchCounter: some View {
-        // Fixed width container to prevent jumping
         HStack {
-            if !searchText.isEmpty {
-                if matchCount > 0 {
-                    matchCounterBadge
-                } else {
-                    noMatchesBadge
-                }
+            if showsNoMatches {
+                noMatchesBadge
             } else {
-                // Invisible placeholder to maintain layout
+                // Invisible placeholder so the bar does not resize as you type.
                 Text("")
                     .font(.system(size: 12, weight: .bold))
                     .opacity(0)
@@ -140,32 +119,7 @@ struct FindView: View {
                     .padding(.vertical, 4)
             }
         }
-        .frame(minWidth: 80)  // Fixed minimum width
-    }
-
-    private var matchCounterBadge: some View {
-        HStack(spacing: 3) {
-            Text("\(currentMatch)")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(theme.foreground)
-                .monospacedDigit()  // Prevents width changes when numbers change
-            Text("/")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(theme.foreground.opacity(0.8))
-            Text("\(matchCount)")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(theme.foreground.opacity(0.9))
-                .monospacedDigit()  // Prevents width changes when numbers change
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            BlurEffectView(
-                material: .popover,
-                blendingMode: .withinWindow
-            )
-        )
-        .cornerRadius(6)
+        .frame(minWidth: 80)
     }
 
     private var noMatchesBadge: some View {
@@ -185,51 +139,22 @@ struct FindView: View {
 
     private var navigationButtons: some View {
         HStack(spacing: 2) {
-            previousButton
+            stepButton(icon: "chevron.up", forward: false)
             buttonSeparator
-            nextButton
+            stepButton(icon: "chevron.down", forward: true)
         }
         .background(navigationButtonsBackground)
     }
 
-    private var previousButton: some View {
-        Button(action: {
-            Task { @MainActor in
-                controller.previousMatch()
-                updateCurrentMatch()
-            }
-        }) {
-            Image(systemName: "chevron.up")
+    private func stepButton(icon: String, forward: Bool) -> some View {
+        let isEnabled = !searchText.isEmpty && !showsNoMatches
+        return Button(action: { findManager.step(in: tab, forward: forward) }) {
+            Image(systemName: icon)
                 .font(.system(size: 12, weight: .semibold))
                 .frame(width: 28, height: 28)
         }
-        .disabled(searchText.isEmpty || matchCount == 0)
-        .buttonStyle(
-            EnhancedFindButtonStyle(
-                colorScheme: colorScheme,
-                isEnabled: !(searchText.isEmpty || matchCount == 0)
-            )
-        )
-    }
-
-    private var nextButton: some View {
-        Button(action: {
-            Task { @MainActor in
-                controller.nextMatch()
-                updateCurrentMatch()
-            }
-        }) {
-            Image(systemName: "chevron.down")
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 28, height: 28)
-        }
-        .disabled(searchText.isEmpty || matchCount == 0)
-        .buttonStyle(
-            EnhancedFindButtonStyle(
-                colorScheme: colorScheme,
-                isEnabled: !(searchText.isEmpty || matchCount == 0)
-            )
-        )
+        .disabled(!isEnabled)
+        .buttonStyle(EnhancedFindButtonStyle(colorScheme: colorScheme, isEnabled: isEnabled))
     }
 
     private var buttonSeparator: some View {
@@ -248,12 +173,7 @@ struct FindView: View {
     }
 
     private var closeButton: some View {
-        Button(action: {
-            Task { @MainActor in
-                controller.clearMatches()
-                appState.showFinderIn = nil
-            }
-        }) {
+        Button(action: close) {
             Image(systemName: "xmark")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(theme.foreground.opacity(0.6))
@@ -276,47 +196,9 @@ struct FindView: View {
             .stroke(theme.border, lineWidth: 1)
     }
 
-    // MARK: - Action Handlers
-
-    private func handleSearchTextChange(_ newValue: String) {
-        if !newValue.isEmpty {
-            controller.highlight(newValue)
-            updateMatchCount()
-        } else {
-            controller.clearMatches()
-            matchCount = 0
-            currentMatch = 0
-        }
-    }
-
-    private func handleSearchSubmit() {
-        if !searchText.isEmpty {
-            controller.nextMatch()
-            updateCurrentMatch()
-        }
-    }
-
-    private func handleEscapeKey() {
-        controller.clearMatches()
+    private func close() {
+        findManager.close(tab)
         appState.showFinderIn = nil
-    }
-
-    private func updateMatchCount() {
-        controller.getMatchInfo { current, total in
-            DispatchQueue.main.async {
-                self.currentMatch = current
-                self.matchCount = total
-            }
-        }
-    }
-
-    private func updateCurrentMatch() {
-        controller.getMatchInfo { current, total in
-            DispatchQueue.main.async {
-                self.currentMatch = current
-                self.matchCount = total
-            }
-        }
     }
 }
 

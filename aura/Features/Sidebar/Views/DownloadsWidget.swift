@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DownloadsWidget: View {
     @Environment(DownloadManager.self) private var downloadManager
+    @Environment(SidebarManager.self) private var sidebarManager
     @Environment(\.theme) private var theme
 
     /// Aggregate progress across all active downloads (0...1)
@@ -19,7 +20,7 @@ struct DownloadsWidget: View {
     var body: some View {
         Button {
             withAnimation(AnimationSettings.easeOut(0.15)) {
-                downloadManager.isShowingDownloadsHistory.toggle()
+                sidebarManager.togglePanel(.downloads)
             }
         } label: {
             ZStack {

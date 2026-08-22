@@ -45,6 +45,9 @@ class LauncherViewModel: ObservableObject {
 
     // MARK: - Search Logic
 
+    /// Rows are merged and ranked by `LauncherResultMerger` (ported from Beam), with one
+    /// exception it enforces itself: row 0 is always what the typed text does. An open tab
+    /// that happens to match the address is a row you can arrow onto, never the default.
     func searchHandler(_ text: String) {
         guard let tabManager, let historyManager else { return }
 
@@ -63,20 +66,15 @@ class LauncherViewModel: ObservableObject {
         )
         let tabs = tabManager.search(text)
 
-        suggestions = []
-
-        var itemsCount = 0
-        appendOpenTabs(tabs, itemsCount: &itemsCount)
-        appendOpenURLSuggestionIfNeeded(text)
-        appendSearchWithDefaultEngineSuggestion(text)
-
-        let insertIndex = suggestions.count
-        requestAutoSuggestions(text, insertAt: insertIndex, requestID: requestID)
-
-        appendHistorySuggestions(histories, itemsCount: &itemsCount)
-        appendAISuggestionsIfNeeded(text)
-
+        suggestions = LauncherResultMerger.merge(
+            typed: typedTextSuggestion(text),
+            links: historySuggestions(histories, matching: text),
+            openTabs: openTabSuggestions(tabs, matching: text),
+            trailing: trailingSuggestions(text)
+        )
         focusedElement = suggestions.first?.id ?? UUID()
+
+        requestAutoSuggestions(text, requestID: requestID)
     }
 
     func reset() {
@@ -103,11 +101,16 @@ class LauncherViewModel: ObservableObject {
         ]
     }
 
+    /// Enter runs the focused row. With no usable row it falls back to the typed text:
+    /// the URL bar accepts typing for 150 ms before the first `searchHandler` runs, and
+    /// Enter in that window used to do nothing at all.
     func executeCommand() {
         if let suggestion = suggestions.first(where: { $0.id == focusedElement }) {
             suggestion.action()
-            onDismiss?()
+        } else {
+            submitPrimary()
         }
+        onDismiss?()
     }
 
     /// Runs the typed text through the caller's submit path, skipping the suggestion list.
@@ -116,8 +119,21 @@ class LauncherViewModel: ObservableObject {
         onSubmit?(nil)
     }
 
+    /// What row 0 would do: navigate when the text is an address, search it otherwise.
+    func submitPrimary() {
+        let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        typedTextSuggestion(text)?.action()
+    }
+
     func moveFocusedElement(_ dir: MoveDirection) {
-        guard let idx = suggestions.firstIndex(where: { $0.id == focusedElement }) else { return }
+        guard !suggestions.isEmpty else { return }
+        guard let idx = suggestions.firstIndex(where: { $0.id == focusedElement }) else {
+            // Focus was left on a row that no longer exists (the list arrived after a
+            // reset). Without this the arrow keys stayed dead until the next keystroke.
+            focusedElement = suggestions[0].id
+            return
+        }
         let offset = dir == .up ? -1 : 1
         let newIndex = (idx + offset + suggestions.count) % suggestions.count
         focusedElement = suggestions[newIndex].id
@@ -168,86 +184,93 @@ class LauncherViewModel: ObservableObject {
         )
     }
 
-    private func appendOpenTabs(_ tabs: [Tab], itemsCount: inout Int) {
+    private func openTabSuggestions(_ tabs: [Tab], matching text: String) -> [LauncherSuggestion] {
         guard let tabManager, let historyManager, let downloadManager, let privacyMode else {
-            return
+            return []
         }
-        for tab in tabs {
-            if itemsCount >= 2 { break }
-            suggestions.append(
-                LauncherSuggestion(
-                    type: .openedTab,
-                    title: tab.title,
-                    url: tab.url,
-                    faviconURL: tab.favicon,
-                    faviconLocalFile: tab.faviconLocalFile,
-                    action: {
-                        if !tab.isWebViewReady {
-                            tab.restoreTransientState(
-                                historyManager: historyManager,
-                                downloadManager: downloadManager,
-                                tabManager: tabManager,
-                                isPrivate: privacyMode.isPrivate
-                            )
-                        }
-                        tabManager.activateTab(tab)
-                    }
-                )
-            )
-            itemsCount += 1
-        }
-    }
-
-    private func appendOpenURLSuggestionIfNeeded(_ text: String) {
-        guard let tabManager, let historyManager, let privacyMode else {
-            return
-        }
-        let finalURL: URL? = if let candidateURL = URL(string: text), candidateURL.scheme != nil,
-                                candidateURL.host != nil
-        {
-            candidateURL
-        } else if isValidURL(text) {
-            constructURL(from: text)
-        } else {
-            nil
-        }
-        guard let url = finalURL else { return }
-        let navigateCurrent = self.navigateInCurrentTab
-        suggestions.append(
+        return tabs.prefix(6).enumerated().map { rank, tab in
             LauncherSuggestion(
-                type: .suggestedLink,
-                title: text,
-                url: url,
+                type: .openedTab,
+                title: tab.title,
+                url: tab.url,
+                faviconURL: tab.favicon,
+                faviconLocalFile: tab.faviconLocalFile,
+                score: 1 - Float(rank) * 0.01,
+                completingText: text,
                 action: {
-                    if navigateCurrent {
-                        tabManager.activeTab?.loadURL(url.absoluteString)
-                    } else {
-                        tabManager.openTab(
-                            url: url,
+                    if !tab.isWebViewReady {
+                        tab.restoreTransientState(
                             historyManager: historyManager,
+                            downloadManager: downloadManager,
+                            tabManager: tabManager,
                             isPrivate: privacyMode.isPrivate
                         )
                     }
+                    tabManager.activateTab(tab)
                 }
             )
+        }
+    }
+
+    /// The typed text as a row: an address to open, or a search for it. Always row 0.
+    private func typedTextSuggestion(_ text: String) -> LauncherSuggestion? {
+        typedURLSuggestion(text) ?? searchSuggestion(text)
+    }
+
+    private func typedURL(_ text: String) -> URL? {
+        if let candidate = URL(string: text), candidate.scheme != nil, candidate.host != nil {
+            return candidate
+        }
+        return isValidURL(text) ? constructURL(from: text) : nil
+    }
+
+    private func typedURLSuggestion(_ text: String) -> LauncherSuggestion? {
+        guard let tabManager, let historyManager, let privacyMode else { return nil }
+        guard let url = typedURL(text) else { return nil }
+        let navigateCurrent = navigateInCurrentTab
+        return LauncherSuggestion(
+            type: .suggestedLink,
+            title: text,
+            url: url,
+            completingText: text,
+            action: {
+                if navigateCurrent {
+                    tabManager.activeTab?.loadURL(url.absoluteString)
+                } else {
+                    tabManager.openTab(
+                        url: url,
+                        historyManager: historyManager,
+                        isPrivate: privacyMode.isPrivate
+                    )
+                }
+            }
         )
     }
 
-    private func appendSearchWithDefaultEngineSuggestion(_ text: String) {
-        guard let tabManager else { return }
+    private func searchSuggestion(_ text: String) -> LauncherSuggestion? {
+        guard let tabManager else { return nil }
         let containerId = tabManager.activeContainer?.id
         let searchEngine = searchEngineService.getDefaultSearchEngine(for: containerId)
         let engineName = searchEngine?.name ?? "Google"
-        suggestions.append(
-            LauncherSuggestion(
-                type: .suggestedQuery,
-                title: "\(text) - \(engineName)",
-                action: { [weak self] in self?.onSubmit?(nil) }
-            )
+        return LauncherSuggestion(
+            type: .suggestedQuery,
+            title: "\(text) - \(engineName)",
+            action: { [weak self] in self?.onSubmit?(nil) }
         )
     }
 
-    private func requestAutoSuggestions(_ text: String, insertAt: Int, requestID: Int) {
+    /// Rows that stay at the bottom: the plain search when row 0 took the address, then
+    /// the AI engines when the text reads like a question.
+    private func trailingSuggestions(_ text: String) -> [LauncherSuggestion] {
+        var trailing: [LauncherSuggestion] = []
+        if typedURL(text) != nil, let search = searchSuggestion(text) {
+            trailing.append(search)
+        }
+        trailing.append(contentsOf: aiSuggestions(for: text))
+        return trailing
+    }
+
+    private func requestAutoSuggestions(_ text: String, requestID: Int) {
         guard let tabManager else { return }
         let containerId = tabManager.activeContainer?.id
         debouncer.run { [weak self] in
@@ -260,34 +283,25 @@ class LauncherViewModel: ObservableObject {
             let searchEngine = await self.searchEngineService.getDefaultSearchEngine(
                 for: containerId
             )
-            if let autoSuggestions = searchEngine?.autoSuggestions {
-                let searchSuggestions = await autoSuggestions(text)
-                await MainActor.run {
-                    guard requestID == self.autoSuggestionRequestID, self.currentText == text else {
-                        return
-                    }
-
-                    var localCount = 0
-                    var existingTitles = Set(self.suggestions.map(\.title))
-                    for searchSuggestion in searchSuggestions {
-                        if localCount == 3 { break }
-                        if existingTitles.contains(searchSuggestion) { continue }
-
-                        let insertIndex = insertAt + localCount
-                        let suggestion = LauncherSuggestion(
-                            type: .suggestedQuery,
-                            title: searchSuggestion,
-                            action: { [weak self] in self?.onSubmit?(searchSuggestion) }
-                        )
-                        if insertIndex <= self.suggestions.count {
-                            self.suggestions.insert(suggestion, at: insertIndex)
-                        } else {
-                            self.suggestions.append(suggestion)
-                        }
-                        existingTitles.insert(searchSuggestion)
-                        localCount += 1
-                    }
+            guard let autoSuggestions = searchEngine?.autoSuggestions else { return }
+            let searchSuggestions = await autoSuggestions(text)
+            await MainActor.run {
+                guard requestID == self.autoSuggestionRequestID, self.currentText == text else {
+                    return
                 }
+                let rows = searchSuggestions.map { title in
+                    LauncherSuggestion(
+                        type: .suggestedQuery,
+                        title: title,
+                        completingText: text,
+                        action: { [weak self] in self?.onSubmit?(title) }
+                    )
+                }
+                self.suggestions = LauncherResultMerger.insertSearchResults(
+                    rows,
+                    into: self.suggestions,
+                    focused: self.focusedElement
+                )
             }
         }
     }
@@ -303,41 +317,43 @@ class LauncherViewModel: ObservableObject {
         debouncer.cancel()
     }
 
-    private func appendHistorySuggestions(_ histories: [History], itemsCount: inout Int) {
-        guard let tabManager, let historyManager, let privacyMode else { return }
-        let navigateCurrent = self.navigateInCurrentTab
-        for history in histories {
-            if itemsCount >= 5 { break }
-            suggestions.append(
-                LauncherSuggestion(
-                    type: .suggestedLink,
-                    title: history.title,
-                    url: history.url,
-                    faviconURL: history.faviconURL,
-                    faviconLocalFile: history.faviconLocalFile,
-                    action: {
-                        if navigateCurrent {
-                            tabManager.activeTab?.loadURL(history.url.absoluteString)
-                        } else {
-                            tabManager.openTab(
-                                url: history.url,
-                                historyManager: historyManager,
-                                isPrivate: privacyMode.isPrivate
-                            )
-                        }
+    private func historySuggestions(_ histories: [History], matching text: String) -> [LauncherSuggestion] {
+        guard let tabManager, let historyManager, let privacyMode else { return [] }
+        let navigateCurrent = navigateInCurrentTab
+        return histories.prefix(6).enumerated().map { rank, history in
+            LauncherSuggestion(
+                type: .suggestedLink,
+                title: history.title,
+                url: history.url,
+                faviconURL: history.faviconURL,
+                faviconLocalFile: history.faviconLocalFile,
+                // Frecency stand-in: visits lift the row, and the fetch already came back
+                // most recent first, so the position only breaks ties.
+                score: 1 + log2(1 + Float(min(history.visitCount, 50))) * 0.05 - Float(rank) * 0.01,
+                completingText: text,
+                action: {
+                    if navigateCurrent {
+                        tabManager.activeTab?.loadURL(history.url.absoluteString)
+                    } else {
+                        tabManager.openTab(
+                            url: history.url,
+                            historyManager: historyManager,
+                            isPrivate: privacyMode.isPrivate
+                        )
                     }
-                )
+                }
             )
-            itemsCount += 1
         }
     }
 
-    private func appendAISuggestionsIfNeeded(_ text: String) {
-        guard isAISuitableQuery(text) else { return }
-        suggestions.append(createAISuggestion(engineName: .grok, query: text))
-        suggestions.append(createAISuggestion(engineName: .chatgpt, query: text))
-        suggestions.append(createAISuggestion(engineName: .claude, query: text))
-        suggestions.append(createAISuggestion(engineName: .gemini, query: text))
+    private func aiSuggestions(for text: String) -> [LauncherSuggestion] {
+        guard isAISuitableQuery(text) else { return [] }
+        return [
+            createAISuggestion(engineName: .grok, query: text),
+            createAISuggestion(engineName: .chatgpt, query: text),
+            createAISuggestion(engineName: .claude, query: text),
+            createAISuggestion(engineName: .gemini, query: text)
+        ]
     }
 
     private func isAISuitableQuery(_ query: String) -> Bool {

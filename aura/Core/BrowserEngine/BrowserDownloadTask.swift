@@ -7,7 +7,12 @@ final class BrowserDownloadTask: NSObject, WKDownloadDelegate {
     var onDestinationRequest: ((URLResponse, String, @escaping (URL?) -> Void) -> Void)?
     var onRedirect: ((URL) -> Void)?
     var onFinish: (() -> Void)?
-    var onFail: ((Error) -> Void)?
+    /// The error plus WebKit's resume blob, when it produced one.
+    var onFail: ((Error, Data?) -> Void)?
+
+    /// Set when a failure carried resume data, so a retry can pick the transfer up
+    /// instead of starting over.
+    private(set) var resumeData: Data?
 
     private let download: WKDownload
 
@@ -56,7 +61,12 @@ final class BrowserDownloadTask: NSObject, WKDownloadDelegate {
         onFinish?()
     }
 
-    func download(_ download: WKDownload, didFailWithError error: Error) {
-        onFail?(error)
+    /// The three-argument form is the WKDownloadDelegate selector. The two-argument
+    /// `download(_:didFailWithError:)` this replaces is not one, so WebKit never called
+    /// it: a failed download stayed "downloading" for good and its 10 Hz progress timer
+    /// ran until the app quit.
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        self.resumeData = resumeData
+        onFail?(error, resumeData)
     }
 }

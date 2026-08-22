@@ -90,5 +90,12 @@ extension TabManager {
         for tab in container.tabs where tab.type == snapshot.type && tab.order >= snapshot.order {
             tab.order += 1
         }
+        // Folders sit among the normal tabs and share `Tab.order`'s scale, so shifting only
+        // the tabs left the restored tab sharing an order with a folder and the sidebar
+        // resolved the tie however the fetch happened to come back.
+        guard snapshot.type == .normal else { return }
+        for folder in container.folders where folder.order >= snapshot.order {
+            folder.order += 1
+        }
     }
 }

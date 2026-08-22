@@ -7,6 +7,10 @@ protocol BrowserPageDelegate: AnyObject {
         decidePolicyFor navigationAction: BrowserNavigationAction
     ) -> BrowserNavigationActionDisposition
     func browserPage(_ page: BrowserPage, didRequestOpenInNewTab url: URL)
+    /// A `window.open()` popup, already built on the configuration WebKit demanded so
+    /// that `window.opener` survives. Return true once it is hosted in a tab; false
+    /// makes the page fall back to `didRequestOpenInNewTab`, which loses the opener.
+    func browserPage(_ page: BrowserPage, didRequestAdopt popup: BrowserPage, for url: URL?) -> Bool
     func browserPage(_ page: BrowserPage, didUpdateNavigation event: BrowserNavigationEvent)
     func browserPage(_ page: BrowserPage, didFailNavigationWith error: Error, failingURL: URL?)
     func browserPage(_ page: BrowserPage, didReceiveScriptMessage message: BrowserScriptMessage)
@@ -49,6 +53,10 @@ extension BrowserPageDelegate {
     }
 
     func browserPage(_ page: BrowserPage, didRequestOpenInNewTab url: URL) {}
+
+    func browserPage(_ page: BrowserPage, didRequestAdopt popup: BrowserPage, for url: URL?) -> Bool {
+        false
+    }
 
     func browserPage(_ page: BrowserPage, didUpdateNavigation event: BrowserNavigationEvent) {}
 

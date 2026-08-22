@@ -48,6 +48,25 @@ struct TabManagementSettingsView: View {
                 }
             }
 
+            SettingsCard(
+                header: "Under memory pressure",
+                description: settings.hibernationPreset.summary
+            ) {
+                HStack {
+                    Text("When memory runs short")
+                    Spacer()
+                    Picker("", selection: $settings.hibernationPreset) {
+                        ForEach(TabHibernationPreset.allCases) { preset in
+                            Text(preset.title).tag(preset)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 180)
+                }
+
+                Toggle("Unload idle tabs when Aura goes to the background", isOn: $settings.unloadTabsOnResign)
+            }
+
             SettingsCard(header: "New tabs and folders") {
                 HStack {
                     Text("New tabs open at the")

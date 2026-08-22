@@ -8,9 +8,7 @@ struct BrowserSplitView: View {
     @Environment(ToastManager.self) private var toastManager
 
     private var splitFraction: FractionHolder {
-        sidebarManager.sidebarPosition == .primary
-            ? sidebarManager.currentFraction
-            : sidebarManager.currentFraction.inverted()
+        sidebarManager.currentSplitFraction
     }
 
     /// The same bounds the revealed sidebar clamps to, so dragging the pinned splitter

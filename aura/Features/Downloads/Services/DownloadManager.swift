@@ -7,7 +7,6 @@ import SwiftUI
 final class DownloadManager {
     var activeDownloads: [Download] = []
     var recentDownloads: [Download] = []
-    var isShowingDownloadsHistory = false
 
     let modelContainer: ModelContainer
     let modelContext: ModelContext
@@ -19,6 +18,8 @@ final class DownloadManager {
     @ObservationIgnored private var taskDownloads: [UUID: Download] = [:]
     @ObservationIgnored private var taskDestinationURLs: [UUID: URL] = [:]
     @ObservationIgnored private var progressTimers: [UUID: Timer] = [:]
+    /// WebKit's resume blob for a failed download, keyed by the download's id.
+    @ObservationIgnored private var failedResumeData: [UUID: Data] = [:]
     @ObservationIgnored weak var toastManager: ToastManager?
 
     init(
@@ -190,8 +191,13 @@ final class DownloadManager {
             self.cleanupTask(taskID)
         }
 
-        task.onFail = { [weak self] error in
+        task.onFail = { [weak self] error, resumeData in
             guard let self, let download = self.taskDownloads[taskID] else { return }
+            // ponytail: kept, not used. Resuming needs a WKWebView to call
+            // `resumeDownload(fromResumeData:)` on; wire it when Retry gets a page.
+            if let resumeData {
+                self.failedResumeData[download.id] = resumeData
+            }
             self.failDownload(download, error: error.localizedDescription)
             self.cleanupTask(taskID)
         }
@@ -286,6 +292,7 @@ final class DownloadManager {
     }
 
     func deleteDownload(_ download: Download) {
+        failedResumeData.removeValue(forKey: download.id)
         // If it's an active download, cancel it first
         if download.status == .downloading {
             cancelDownload(download)

@@ -70,9 +70,9 @@ struct URLBarMenuButton: View {
 
     private func librarySection(hostWindow: NSWindow?) -> [AuraMenuItem] {
         [
-            historyItem(),
+            historyItem(hostWindow: hostWindow),
             .item("Downloads", icon: "arrow.down.circle") {
-                downloadManager.isShowingDownloadsHistory = true
+                NotificationCenter.default.post(name: .showDownloadsPanel, object: hostWindow)
             },
             .item("Passwords", icon: "key.horizontal") {
                 openPasswordsWindow()
@@ -149,26 +149,23 @@ struct URLBarMenuButton: View {
         ]
     }
 
-    /// History submenu. There is no all-history window in the app yet, so the submenu
-    /// lists recent entries only.
-    private func historyItem() -> AuraMenuItem {
-        let entries = recentHistory()
-        guard !entries.isEmpty else {
-            return .submenu(
-                "History",
-                icon: "clock.arrow.circlepath",
-                items: [.disabled("No recent history")]
-            )
+    /// History submenu: the full panel first, then the space's recent entries.
+    private func historyItem(hostWindow: NSWindow?) -> AuraMenuItem {
+        let showAll = AuraMenuItem.item("Show All History", icon: "clock", shortcut: "⌘Y") {
+            NotificationCenter.default.post(name: .showHistoryPanel, object: hostWindow)
         }
-        return .submenu(
-            "History",
-            icon: "clock.arrow.circlepath",
-            items: entries.map { entry in
+        let entries = recentHistory()
+        var items: [AuraMenuItem] = [showAll, .separator]
+        if entries.isEmpty {
+            items.append(.disabled("No recent history"))
+        } else {
+            items += entries.map { entry in
                 .item(entry.title.isEmpty ? entry.urlString : entry.title) {
                     openInNewTab(entry.url)
                 }
             }
-        )
+        }
+        return .submenu("History", icon: "clock.arrow.circlepath", items: items)
     }
 
     // MARK: - Actions

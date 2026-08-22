@@ -11,6 +11,8 @@ extension Notification.Name {
     static let closeActiveTab = Notification.Name("CloseActiveTab")
     static let restoreLastTab = Notification.Name("RestoreLastTab")
     static let findInPage = Notification.Name("FindInPage")
+    static let findNext = Notification.Name("FindNext")
+    static let findPrevious = Notification.Name("FindPrevious")
     static let toggleFullURL = Notification.Name("ToggleFullURL")
     static let reloadPage = Notification.Name("ReloadPage")
     static let goBack = Notification.Name("GoBack")

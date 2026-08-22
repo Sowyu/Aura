@@ -269,7 +269,7 @@ struct DownloadsHistoryView: View {
 
     private func dismissDownloads() {
         withAnimation(AnimationSettings.easeOut(0.15)) {
-            downloadManager.isShowingDownloadsHistory = false
+            sidebarManager.panel = .none
         }
     }
 }

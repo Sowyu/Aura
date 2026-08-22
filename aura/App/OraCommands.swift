@@ -49,6 +49,16 @@ struct OraCommands: Commands {
             }
             .keyboardShortcut(KeyboardShortcuts.Edit.find.keyboardShortcut)
 
+            Button(KeyboardShortcuts.Edit.findNext.name) {
+                NotificationCenter.default.post(name: .findNext, object: NSApp.keyWindow)
+            }
+            .keyboardShortcut(KeyboardShortcuts.Edit.findNext.keyboardShortcut)
+
+            Button(KeyboardShortcuts.Edit.findPrevious.name) {
+                NotificationCenter.default.post(name: .findPrevious, object: NSApp.keyWindow)
+            }
+            .keyboardShortcut(KeyboardShortcuts.Edit.findPrevious.keyboardShortcut)
+
             Divider()
 
             Button("Copy URL") {
@@ -183,6 +193,13 @@ struct OraCommands: Commands {
                 }
                 .keyboardShortcut(KeyboardShortcuts.Tabs.keyboardShortcut(for: index))
             }
+        }
+
+        CommandMenu("History") {
+            Button("Show All History") {
+                NotificationCenter.default.post(name: .showHistoryPanel, object: NSApp.keyWindow)
+            }
+            .keyboardShortcut(KeyboardShortcuts.History.show.keyboardShortcut)
         }
 
         CommandMenu("Passwords") {

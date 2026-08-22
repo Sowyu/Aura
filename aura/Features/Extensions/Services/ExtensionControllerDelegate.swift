@@ -10,7 +10,6 @@ import Foundation
 ///   hands back no `NSWindow`, so there is nothing to return to WebKit. Not
 ///   implementing it makes WebKit report `windows.create` as unsupported instead
 ///   of hanging.
-/// - `openOptionsPageFor`: no options-page UI yet.
 /// - `didUpdate action:` is implemented, and only bumps a counter the toolbar
 ///   observes so the icon and badge redraw.
 @available(macOS 15.4, *)
@@ -151,6 +150,46 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         ExtensionManager.shared.actionDidUpdate()
     }
 
+    // MARK: - Options page
+
+    /// `runtime.openOptionsPage()`, and the Options row in Settings. Without this the
+    /// call was a silent no-op: the URL was there on the context all along, but nothing
+    /// answered WebKit when an extension asked for its own settings screen.
+    ///
+    /// The page opens as an ordinary tab. Every non-private page already gets the
+    /// extension controller attached to its configuration, so the `webkit-extension://`
+    /// document loads there with the `browser` and `chrome` APIs in place.
+    ///
+    /// Ported from Nook, `Nook/Managers/ExtensionManager/ExtensionManager+Delegate.swift`
+    /// by Maciek Bagiński (GPL-3.0).
+    func webExtensionController(
+        _ controller: WKWebExtensionController,
+        openOptionsPageFor context: WKWebExtensionContext,
+        completionHandler: @escaping ((any Error)?) -> Void
+    ) {
+        guard let url = context.optionsPageURL else {
+            completionHandler(ExtensionActionError.noOptionsPage)
+            return
+        }
+        guard let target = ExtensionWindowAdapter.focusedAdapter(),
+              let manager = target.tabManager,
+              let container = manager.activeContainer
+        else {
+            completionHandler(ExtensionActionError.noBrowserWindow)
+            return
+        }
+
+        target.window?.makeKeyAndOrderFront(nil)
+        _ = manager.addTab(
+            url: url,
+            container: container,
+            historyManager: manager.activeTab?.historyManager,
+            downloadManager: manager.activeTab?.downloadManager,
+            isPrivate: false
+        )
+        completionHandler(nil)
+    }
+
     /// WebKit builds the popover (web view, sizing, dismissal) for us; all the
     /// browser does is anchor it to the toolbar button that was clicked.
     func webExtensionController(
@@ -170,10 +209,23 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
 
         // Clicking outside dismisses, and NSPopover dismissal calls closePopup(),
         // which unloads the popup web view. Nothing else to tear down.
+        // An MV3 service worker stops itself after roughly five minutes idle. A popup that
+        // opens against a stopped one calls `runtime.sendMessage` and waits forever, which
+        // is what an extension popup stuck on its spinner actually is. Waking it first
+        // costs nothing when it is already up.
+        // Ported from Nook, `Nook/Managers/ExtensionManager/ExtensionManager+Delegate.swift`
+        // by Maciek Bagiński (GPL-3.0).
+        if context.webExtension.hasBackgroundContent {
+            Task { try? await context.loadBackgroundContent() }
+        }
+
         popover.behavior = .transient
         // Right-click > Inspect Element inside a popup. Extensions that need APIs WebKit
         // lacks (uBlock Origin: webRequestBlocking) show up as errors there, not as UI.
         action.popupWebView?.isInspectable = true
+        if let popupWebView = action.popupWebView {
+            ExtensionPopupClipboard.install(on: popupWebView)
+        }
         // AppKit's y axis points up, so the toolbar button's minY edge is below it.
         popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
         completionHandler(nil)
@@ -183,6 +235,7 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
 enum ExtensionActionError: LocalizedError {
     case noBrowserWindow
     case noPopup
+    case noOptionsPage
     case unknownNativeApplication
 
     var errorDescription: String? {
@@ -191,6 +244,8 @@ enum ExtensionActionError: LocalizedError {
             return "No browser window is available."
         case .noPopup:
             return "This extension action has no popup."
+        case .noOptionsPage:
+            return "This extension declares no options page."
         case .unknownNativeApplication:
             return "Aura has no native application with that identifier."
         }

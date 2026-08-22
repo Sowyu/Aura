@@ -33,14 +33,59 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     /// Written only by `cacheContextMenuInfo`, which lives in BrowserPage+Actions.swift.
     var lastContextMenuInfo = BrowserContextMenuInfo()
 
-    init(
+    /// Kept so a `window.open()` popup adopted from this page can be rebuilt with the
+    /// same message handlers, user scripts and preferences.
+    private let profile: BrowserEngineProfile
+    private let pageConfiguration: BrowserPageConfiguration
+
+    convenience init(
         profile: BrowserEngineProfile,
         configuration: BrowserPageConfiguration,
         delegate: BrowserPageDelegate?
     ) {
         let webConfiguration = WKWebViewConfiguration()
-        webConfiguration.applicationNameForUserAgent = configuration.userAgent
         webConfiguration.websiteDataStore = profile.dataStore
+        // Private tabs get the injected bundle too: request blocking is not
+        // privacy-sensitive, and the pool carries no website data.
+        AuraWebBundle.apply(to: webConfiguration)
+        self.init(
+            profile: profile,
+            configuration: configuration,
+            webConfiguration: webConfiguration,
+            delegate: delegate
+        )
+    }
+
+    /// A `window.open()` popup. WebKit hands over the configuration the new window has
+    /// to be built on, and only a web view created from *that object* keeps
+    /// `window.opener` wired up, which is how OAuth and SSO popups hand their result
+    /// back to the page that opened them. The opener's data store and process pool ride
+    /// along inside it and are left untouched; everything else is registered again here.
+    ///
+    /// Ported from Nook, `Nook/Models/Tab/Tab.swift` by Maciek Bagiński (GPL-3.0).
+    convenience init(
+        adopting webConfiguration: WKWebViewConfiguration,
+        profile: BrowserEngineProfile,
+        configuration: BrowserPageConfiguration,
+        delegate: BrowserPageDelegate?
+    ) {
+        self.init(
+            profile: profile,
+            configuration: configuration,
+            webConfiguration: webConfiguration,
+            delegate: delegate
+        )
+    }
+
+    private init(
+        profile: BrowserEngineProfile,
+        configuration: BrowserPageConfiguration,
+        webConfiguration: WKWebViewConfiguration,
+        delegate: BrowserPageDelegate?
+    ) {
+        self.profile = profile
+        self.pageConfiguration = configuration
+        webConfiguration.applicationNameForUserAgent = configuration.userAgent
         webConfiguration.allowsAirPlayForMediaPlayback = configuration.allowsAirPlayForMediaPlayback
         webConfiguration.preferences.setValue(
             configuration.allowsInspectableDebugging,
@@ -62,14 +107,15 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
             configuration.mediaPlaybackRequiresUserAction ? .all : []
 
         Self.applyUserPreferences(to: webConfiguration)
-        // Private tabs get the injected bundle too: request blocking is not
-        // privacy-sensitive, and the pool carries no website data.
-        AuraWebBundle.apply(to: webConfiguration)
 
         let webpagePreferences = WKWebpagePreferences()
         webpagePreferences.allowsContentJavaScript = configuration.allowsJavaScript
         webConfiguration.defaultWebpagePreferences = webpagePreferences
 
+        // A fresh controller, also on the adopting path: the configuration WebKit hands
+        // over for a popup shares the opener's controller, so adding our handlers to it
+        // would register them on the opener a second time (and `add` throws on a name
+        // that is already taken).
         let contentController = WKUserContentController()
         webConfiguration.userContentController = contentController
 
@@ -304,6 +350,14 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     ) {
         applyJavaScriptPolicy(to: preferences, for: navigationAction, in: webView)
 
+        // `<a download>` and anything else WebKit has already decided is a file rather
+        // than a page. Without this the link just navigated and the download never
+        // reached `navigationAction:didBecome:`.
+        if navigationAction.shouldPerformDownload {
+            decisionHandler(.download, preferences)
+            return
+        }
+
         let action = BrowserNavigationAction(
             request: navigationAction.request,
             modifierFlags: navigationAction.modifierFlags,
@@ -450,7 +504,16 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         decidePolicyFor navigationResponse: WKNavigationResponse,
         decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
     ) {
-        if navigationResponse.canShowMIMEType {
+        // A server can force a download of something WebKit is perfectly able to render
+        // (a PDF, an image, plain text) by marking it an attachment. Checked before
+        // `canShowMIMEType`, which would otherwise display it inline.
+        // Ported from Nook, `Nook/Models/Tab/Tab.swift` by Maciek Bagiński (GPL-3.0).
+        let isAttachment = (navigationResponse.response as? HTTPURLResponse)?
+            .value(forHTTPHeaderField: "Content-Disposition")?
+            .lowercased()
+            .contains("attachment") ?? false
+
+        if navigationResponse.canShowMIMEType, !isAttachment {
             if navigationResponse.isForMainFrame {
                 isDownloadNavigation = false
                 originalURL = nil
@@ -472,6 +535,15 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
             )
         }
         decisionHandler(.download)
+    }
+
+    /// A download that never produced a response: `<a download>`, or a policy decision
+    /// of `.download` taken on the navigation action.
+    @available(macOS 11.3, *)
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        guard let downloadURL = navigationAction.request.url else { return }
+        let task = BrowserDownloadTask(download: download, originalURL: downloadURL)
+        delegate?.browserPage(self, didStartDownload: task)
     }
 
     @available(macOS 11.3, *)
@@ -521,16 +593,82 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         )
     }
 
+    /// Returning nil here is what severed `window.opener`: the page that called
+    /// `window.open()` got back a null handle, and an OAuth or SSO popup that posts its
+    /// token to `window.opener` had nowhere to post it. The popup is built on WebKit's
+    /// own configuration instead and handed to the delegate to host in a tab; only if
+    /// nobody takes it does this fall back to opening a plain new tab.
+    ///
+    /// Ported from Nook, `Nook/Models/Tab/Tab.swift` by Maciek Bagiński (GPL-3.0).
     func webView(
         _ webView: WKWebView,
         createWebViewWith configuration: WKWebViewConfiguration,
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
+        let popup = BrowserPage(
+            adopting: configuration,
+            profile: profile,
+            configuration: pageConfiguration,
+            delegate: nil
+        )
+        if delegate?.browserPage(self, didRequestAdopt: popup, for: navigationAction.request.url) == true {
+            return popup.auraWebView
+        }
+
+        popup.teardown()
         if let url = navigationAction.request.url {
             delegate?.browserPage(self, didRequestOpenInNewTab: url)
         }
         return nil
+    }
+
+    // MARK: - WebContent crashes
+
+    /// Consecutive crashes inside the 30 s window below. Reset once the page manages to
+    /// stay up that long.
+    private var webProcessCrashCount = 0
+    private var lastWebProcessCrash = Date.distantPast
+
+    /// How long to wait before reloading after the nth crash in a burst, or nil to stop
+    /// retrying: after four the machine is in a bad state (XPC services still restarting
+    /// after a wake, usually) and each reload only spawns another doomed process.
+    static func crashReloadDelay(forCrashCount crashCount: Int) -> TimeInterval? {
+        guard crashCount <= 4 else { return nil }
+        return Double(crashCount) * 2.0
+    }
+
+    /// A crashed WebContent process leaves the tab showing nothing at all, with no
+    /// navigation callback to say so. Reload it, backing off each time so a page that
+    /// crashes on load cannot spin.
+    ///
+    /// Ported from Nook, `Nook/Models/Tab/Tab.swift` by Maciek Bagiński (GPL-3.0).
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        let now = Date()
+        if now.timeIntervalSince(lastWebProcessCrash) > 30 {
+            webProcessCrashCount = 0
+        }
+        webProcessCrashCount += 1
+        lastWebProcessCrash = now
+
+        emitNavigationEvent(
+            phase: .finished,
+            url: webView.url,
+            title: webView.title,
+            progress: 0,
+            isLoading: false
+        )
+
+        guard let delay = Self.crashReloadDelay(forCrashCount: webProcessCrashCount) else {
+            // about:blank rather than another reload: it stops WebKit putting the
+            // crashing document straight back into the next process it spawns.
+            webView.load(URLRequest(url: URL(string: "about:blank")!))
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak webView] in
+            webView?.reload()
+        }
     }
 
     func webView(

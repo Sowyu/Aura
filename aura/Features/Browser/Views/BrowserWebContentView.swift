@@ -59,13 +59,6 @@ struct BrowserWebContentView: View {
                             PasswordAutofillOverlayView(overlay: passwordOverlayState, tab: tab)
                         }
                     }
-                    .overlay(alignment: .topTrailing) {
-                        if appState.showFinderIn == tab.id {
-                            FindView(page: page)
-                                .padding(.top, 16)
-                                .padding(.trailing, 16)
-                        }
-                    }
                     .overlay(alignment: .bottomLeading) {
                         if let hovered = tab.hoveredLinkURL, !hovered.isEmpty {
                             LinkPreview(text: hovered)

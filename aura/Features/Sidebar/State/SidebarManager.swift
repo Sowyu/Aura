@@ -5,6 +5,16 @@ enum SidebarPosition: String, Hashable {
     case secondary
 }
 
+/// What the sidebar shows in place of the spaces list. The panel slides over the spaces
+/// and the spaces blur back behind it; `.none` is the ordinary sidebar.
+enum SidebarPanel: String, Hashable {
+    case none
+    case downloads
+    case history
+
+    var isOpen: Bool { self != .none }
+}
+
 /// Which chrome compact mode takes away while it is on.
 enum CompactModeHides: String, Hashable, CaseIterable {
     case sidebar
@@ -27,6 +37,14 @@ extension Notification.Name {
     /// View menu → `BrowserView` flips compact mode.
     /// `newTabFolder` lives in `TabNotifications.swift`, posted by the sidebar context menu.
     static let toggleCompactMode = Notification.Name("ToggleCompactMode")
+
+    /// Open the sidebar's history panel. Posted by the History menu (⌘Y) and by the
+    /// "…" menu's "Show All History" item. Handled in `BrowserView`.
+    static let showHistoryPanel = Notification.Name("ShowHistoryPanel")
+
+    /// Same, for the downloads panel: the "…" menu has no `SidebarManager` to set the
+    /// panel on directly.
+    static let showDownloadsPanel = Notification.Name("ShowDownloadsPanel")
 }
 
 @Observable
@@ -58,9 +76,24 @@ final class SidebarManager {
         didSet { defaults.set(compactHides.rawValue, forKey: Self.compactHidesKey) }
     }
 
+    /// Not persisted: a panel is a place you are, not a preference. Reopening a window
+    /// puts you back on the spaces list.
+    var panel: SidebarPanel = .none
+
+    /// Tapping the panel you are already in goes back to the spaces list.
+    func togglePanel(_ target: SidebarPanel) {
+        panel = panel == target ? .none : target
+    }
+
     var primaryFraction = FractionHolder.usingUserDefaults(0.2, key: "ui.sidebar.fraction.primary")
     var secondaryFraction = FractionHolder.usingUserDefaults(0.2, key: "ui.sidebar.fraction.secondary")
     var hiddenSidebar = SideHolder.usingUserDefaults(key: "ui.sidebar.visibility")
+
+    /// The split view measures from the left, so a sidebar on the right needs the
+    /// inverted fraction. Held here because `inverted()` returns a new holder, and
+    /// minting one per body evaluation gave the splitter a fresh observable object to
+    /// bind to on every redraw: the drag lost its position mid-gesture.
+    @ObservationIgnored private(set) lazy var invertedSecondaryFraction = secondaryFraction.inverted()
 
     init() {
         isSidebarHidden = defaults.object(forKey: Self.sidebarHiddenKey) as? Bool ?? false
@@ -73,6 +106,11 @@ final class SidebarManager {
 
     var currentFraction: FractionHolder {
         sidebarPosition == .primary ? primaryFraction : secondaryFraction
+    }
+
+    /// `currentFraction` as the split view wants it, measured from the leading edge.
+    var currentSplitFraction: FractionHolder {
+        sidebarPosition == .primary ? primaryFraction : invertedSecondaryFraction
     }
 
     func updateSidebarHidden() {

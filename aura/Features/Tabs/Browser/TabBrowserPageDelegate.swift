@@ -55,6 +55,29 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
     }
 
+    /// The popup keeps the opener alive only while it is the tab's own page, so the tab
+    /// is handed the page WebKit made rather than building a second one of its own.
+    /// `isWebViewReady` is set here so `restoreTransientState` leaves it alone.
+    func browserPage(_ page: BrowserPage, didRequestAdopt popup: BrowserPage, for url: URL?) -> Bool {
+        guard let tab, let tabManager = tab.tabManager else { return false }
+
+        return MainActor.assumeIsolated {
+            guard let container = tabManager.activeContainer else { return false }
+            let newTab = tabManager.addTab(
+                url: url ?? URL(string: "about:blank")!,
+                container: container,
+                historyManager: tab.historyManager,
+                downloadManager: tab.downloadManager,
+                isPrivate: tab.isPrivate
+            )
+            newTab.browserPage = popup
+            newTab.setupBrowserPageDelegate(for: popup)
+            newTab.syncBackgroundColorFromHex()
+            newTab.isWebViewReady = true
+            return true
+        }
+    }
+
     func browserPage(_ page: BrowserPage, didUpdateNavigation event: BrowserNavigationEvent) {
         guard let tab else { return }
 

@@ -99,6 +99,14 @@ struct BrowserView: View {
         !toolbarManager.isToolbarHidden || toolbarManager.isFloatingToolbarVisible
     }
 
+    /// ⌘G / ⇧⌘G. With nothing searched yet there is nothing to step to, so this opens
+    /// the bar and lets the user type instead.
+    private func stepFind(forward: Bool) {
+        guard let tab = tabManager.activeTab, tab.browserPage != nil else { return }
+        appState.showFinderIn = tab.id
+        FindManager.shared.step(in: tab, forward: forward)
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
@@ -139,7 +147,7 @@ struct BrowserView: View {
                     showFloatingSidebar: $showFloatingSidebar,
                     isMouseOverSidebar: $isMouseOverSidebar,
                     sidebarFraction: sidebarManager.currentFraction,
-                    isDownloadsOpen: downloadManager.isShowingDownloadsHistory
+                    isDownloadsOpen: sidebarManager.panel.isOpen
                 )
                 .padding(.top, isToolbarRowUp ? TopToolbar.rowHeight : 0)
             }
@@ -147,6 +155,16 @@ struct BrowserView: View {
             // One hidden-toolbar behaviour, compact or not: the real row hover-reveals.
             if toolbarManager.isToolbarHidden {
                 FloatingTopToolbar()
+            }
+
+            // Mounted once per window, not per tab: inside the web content view SwiftUI
+            // tore the bar down on every tab switch, taking the search term and the
+            // keyboard focus with it.
+            if let tab = tabManager.activeTab, appState.showFinderIn == tab.id, tab.browserPage != nil {
+                FindView(tab: tab)
+                    .padding(.top, (isToolbarRowUp ? TopToolbar.rowHeight : 0) + 16)
+                    .padding(.trailing, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
 
             // Last in the stack so every menu draws over the chrome and the page. Renders
@@ -159,6 +177,12 @@ struct BrowserView: View {
         .onChange(of: showFloatingSidebar) { _, visible in
             injectSidebarMouseShield(visible: visible)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .findNext)) { _ in
+            stepFind(forward: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .findPrevious)) { _ in
+            stepFind(forward: false)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
             sidebarManager.toggleSidebar()
         }
@@ -168,9 +192,19 @@ struct BrowserView: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleCompactMode)) { _ in
             sidebarManager.setCompactEnabled(!sidebarManager.isCompactEnabled, toolbar: toolbarManager)
         }
-        .onChange(of: downloadManager.isShowingDownloadsHistory) { _, isOpen in
+        .onReceive(NotificationCenter.default.publisher(for: .showHistoryPanel)) { _ in
+            withAnimation(AnimationSettings.easeOut(0.15)) {
+                sidebarManager.togglePanel(.history)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showDownloadsPanel)) { _ in
+            withAnimation(AnimationSettings.easeOut(0.15)) {
+                sidebarManager.panel = .downloads
+            }
+        }
+        .onChange(of: sidebarManager.panel) { _, panel in
             if sidebarManager.isSidebarHidden {
-                if isOpen {
+                if panel.isOpen {
                     showFloatingSidebar = true
                 } else if !isMouseOverSidebar {
                     showFloatingSidebar = false

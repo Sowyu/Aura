@@ -1,198 +1,49 @@
 import Foundation
-import os.log
+@preconcurrency import WebKit
 
-private let logger = Logger(subsystem: "com.aurabrowser.app", category: "FindController")
-
-class FindController: NSObject {
-    let page: BrowserPage
+/// Find in page, on WebKit's own search rather than a DOM walker.
+///
+/// `WKWebView.find(_:configuration:)` (macOS 11.3+) is the same code path Safari's find
+/// bar uses: it searches rendered text, so it sees shadow DOM, `<iframe>` content and
+/// text a CSS transform moved, and it selects and scrolls to each hit without rewriting
+/// the page. The mark.js injection this replaces wrapped every hit in a `<mark>` element,
+/// which mutated the live DOM of whatever the user was reading and lost every match
+/// inside an iframe or a shadow root.
+///
+/// What is gone with it: `WKFindResult` reports only whether a match was found, with no
+/// index and no total, so there is no "3 / 17". Safari shows no counter either.
+final class FindController {
+    private weak var page: BrowserPage?
 
     init(page: BrowserPage) {
         self.page = page
-        super.init()
     }
 
-    // MARK: - Inject mark.js
-
-    func injectMarkJS() {
-        guard let jsPath = Bundle.main.path(forResource: "mark", ofType: "js"),
-              let jsCode = try? String(contentsOfFile: jsPath, encoding: .utf8)
-        else {
-            logger.error("mark.js not found or failed to load")
+    /// Searches from the current match, wrapping at the end of the document, and reports
+    /// on the main queue whether anything matched.
+    func find(_ term: String, forward: Bool = true, completion: @escaping (Bool) -> Void) {
+        guard let page, !term.isEmpty else {
+            completion(false)
             return
         }
 
-        page.evaluateJavaScript(jsCode) { _, error in
-            if let error {
-                logger.error("Error injecting mark.js: \(error.localizedDescription)")
-            }
+        let configuration = WKFindConfiguration()
+        configuration.backwards = !forward
+        configuration.caseSensitive = false
+        configuration.wraps = true
+
+        page.auraWebView.find(term, configuration: configuration) { result in
+            let matchFound = result.matchFound
+            DispatchQueue.main.async { completion(matchFound) }
         }
     }
 
-    // MARK: - Highlight Text
-
-    func highlight(_ searchTerm: String) {
-        // JSON-encode the term so backslashes, quotes, and newlines can't break the script.
-        guard let termData = try? JSONSerialization.data(withJSONObject: searchTerm, options: .fragmentsAllowed),
-              let termLiteral = String(data: termData, encoding: .utf8)
-        else {
-            return
-        }
-        let js = """
-        (function() {
-            // Inject CSS if missing
-            if (!document.getElementById('highlight-style')) {
-                const style = document.createElement('style');
-                style.id = 'highlight-style';
-                style.textContent = `
-                    mark.search-highlight {
-                        background-color: yellow;
-                        color: black;
-                    }
-                    mark.search-highlight.current {
-                        background-color: orange !important;
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-
-            if (!window.findController) {
-                window.findController = {
-                    markInstance: new Mark(document.body),
-                    matches: [],
-                    currentIndex: -1
-                };
-            }
-
-            // Unmark existing highlights and apply new
-            findController.markInstance.unmark({
-                done: function() {
-                    findController.markInstance.mark(\(termLiteral), {
-                        className: "search-highlight",
-                        separateWordSearch: false,
-                        done: function() {
-                            findController.matches = Array.from(document.querySelectorAll("mark.search-highlight"));
-                            if (findController.matches.length > 0) {
-                                findController.currentIndex = 0;
-                                let el = findController.matches[0];
-                                el.classList.add("current");
-                                el.scrollIntoView({behavior: "smooth", block: "center"});
-                            }
-                        }
-                    });
-                }
-            });
-        })();
-        """
-        page.evaluateJavaScript(js)
-    }
-
-    // MARK: - Next Match
-
-    func nextMatch() {
-        let js = """
-        (function() {
-            const fc = window.findController;
-            if (fc && fc.matches.length > 0) {
-                fc.matches[fc.currentIndex].classList.remove("current");
-                fc.currentIndex = (fc.currentIndex + 1) % fc.matches.length;
-                const el = fc.matches[fc.currentIndex];
-                el.classList.add("current");
-                el.scrollIntoView({behavior: "smooth", block: "center"});
-            }
-        })();
-        """
-        page.evaluateJavaScript(js)
-    }
-
-    // MARK: - Previous Match
-
-    func previousMatch() {
-        let js = """
-        (function() {
-            const fc = window.findController;
-            if (fc && fc.matches.length > 0) {
-                fc.matches[fc.currentIndex].classList.remove("current");
-                fc.currentIndex = (fc.currentIndex - 1 + fc.matches.length) % fc.matches.length;
-                const el = fc.matches[fc.currentIndex];
-                el.classList.add("current");
-                el.scrollIntoView({behavior: "smooth", block: "center"});
-            }
-        })();
-        """
-        page.evaluateJavaScript(js)
-    }
-
-    // MARK: - Clear All Matches
-
-    func clearMatches() {
-        let js = """
-        (function() {
-            const fc = window.findController;
-            if (fc) {
-                fc.markInstance.unmark();
-                fc.matches = [];
-                fc.currentIndex = -1;
-            }
-        })();
-        """
-        page.evaluateJavaScript(js)
-    }
-
-    // MARK: - Count Matches
-
-    func countMatches(completion: @escaping (Int) -> Void) {
-        let js = """
-        (function() {
-            return window.findController && findController.matches
-                ? findController.matches.length
-                : 0;
-        })();
-        """
-        page.evaluateJavaScript(js) { result, _ in
-            let count = result as? Int ?? 0
-            completion(count)
-        }
-    }
-
-    // MARK: - Get Current Match Index
-
-    func getCurrentMatchIndex(completion: @escaping (Int) -> Void) {
-        let js = """
-        (function() {
-            return window.findController
-                ? findController.currentIndex + 1
-                : 0;
-        })();
-        """
-        page.evaluateJavaScript(js) { result, _ in
-            let index = result as? Int ?? 0
-            completion(index)
-        }
-    }
-
-    // MARK: - Get Match Info
-
-    func getMatchInfo(completion: @escaping (Int, Int) -> Void) {
-        let js = """
-        (function() {
-            if (window.findController) {
-                return {
-                    total: findController.matches.length,
-                    current: findController.currentIndex + 1
-                };
-            }
-            return { total: 0, current: 0 };
-        })();
-        """
-        page.evaluateJavaScript(js) { result, _ in
-            if let dict = result as? [String: Any],
-               let total = dict["total"] as? Int,
-               let current = dict["current"] as? Int
-            {
-                completion(current, total)
-            } else {
-                completion(0, 0)
-            }
-        }
+    /// Drops the highlight the last search left behind.
+    ///
+    /// ponytail: WebKit exposes no public call to hide its find highlight (Safari uses
+    /// `_hideFindUI`), and the highlight *is* the document selection, so clearing the
+    /// selection clears it. Swap this for the real call if it ever ships.
+    func clear() {
+        page?.evaluateJavaScript("window.getSelection() && window.getSelection().removeAllRanges();")
     }
 }

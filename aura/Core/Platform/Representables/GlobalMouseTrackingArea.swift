@@ -108,6 +108,11 @@ private final class EdgeRevealView: NSView {
 
     deinit {
         hideWork?.cancel()
+        // `viewDidMoveToWindow` only drops the listener when the view moves to a nil
+        // window. A view released while still in one left its handler in the monitor,
+        // which kept the monitor (and its catcher view) alive for the window's life.
+        let id = listenerID
+        MainActor.assumeIsolated { WindowMouseMonitor.removeListener(id) }
     }
 
     /// The window's own rect in screen coordinates, so the band sits at the window edge

@@ -54,6 +54,17 @@ struct LauncherTextField: NSViewRepresentable {
         override var acceptsFirstResponder: Bool { allowsFocus && super.acceptsFirstResponder }
         override var mouseDownCanMoveWindow: Bool { false }
 
+        /// Holds first responder here while the field is being edited, so switching to
+        /// another app and back does not drop the edit. See `AuraWindow.swift`.
+        private lazy var focusLock = FirstResponderLock(view: self)
+
+        var wantsFocus = false {
+            didSet {
+                guard wantsFocus != oldValue else { return }
+                if wantsFocus { focusLock.lock() } else { focusLock.unlock() }
+            }
+        }
+
         private func configureEditorIfNeeded() {
             guard let textView = currentEditor() as? NSTextView else { return }
             if let color = cursorColor {
@@ -107,6 +118,9 @@ struct LauncherTextField: NSViewRepresentable {
             // `selectAll` in `becomeFirstResponder`. Re-select once that has settled.
             DispatchQueue.main.async { [weak self] in
                 guard let self, currentEditor() != nil else { return }
+                // The button is still down: this is a drag, and the user is choosing a
+                // range. Selecting all here threw that selection away mid-gesture.
+                guard NSEvent.pressedMouseButtons == 0 else { return }
                 currentEditor()?.selectAll(nil)
             }
         }
@@ -153,6 +167,7 @@ struct LauncherTextField: NSViewRepresentable {
             onBeginEditing?()
             return text.wrappedValue
         }
+        if let isEditing { nsView.wantsFocus = isEditing }
         if let isEditing, isEditing != focused {
             // Outside a SwiftUI update pass: becoming first responder writes state.
             DispatchQueue.main.async {

@@ -41,6 +41,8 @@ class SettingsStore {
     private let suppressedPasswordSavePromptHostsKey = "settings.passwords.suppressedSavePromptHosts"
     private let newTabPositionKey = "tabs.newTabPosition"
     private let unloadMediaTabsKey = "tabs.unloadMedia"
+    private let hibernationPresetKey = "tabs.hibernationPreset"
+    private let unloadTabsOnResignKey = "tabs.unloadOnResign"
     private let foldersCollapsedByDefaultKey = "tabs.foldersCollapsedByDefault"
     private let downloadFolderBookmarkKey = "downloads.folderBookmark"
     private let askWhereToSaveDownloadsKey = "downloads.askWhereToSave"
@@ -193,6 +195,18 @@ class SettingsStore {
         didSet { defaults.set(unloadMediaTabs, forKey: unloadMediaTabsKey) }
     }
 
+    /// How much the memory-pressure pass unloads at once. Separate from the age and
+    /// count policies, which run on their own timer regardless of pressure.
+    var hibernationPreset: TabHibernationPreset {
+        didSet { defaults.set(hibernationPreset.rawValue, forKey: hibernationPresetKey) }
+    }
+
+    /// Off by default: giving memory back when Aura loses focus costs a reload on every
+    /// tab when it comes back.
+    var unloadTabsOnResign: Bool {
+        didSet { defaults.set(unloadTabsOnResign, forKey: unloadTabsOnResignKey) }
+    }
+
     var foldersCollapsedByDefault: Bool {
         didSet { defaults.set(foldersCollapsedByDefault, forKey: foldersCollapsedByDefaultKey) }
     }
@@ -314,6 +328,9 @@ class SettingsStore {
         newTabPosition = defaults.string(forKey: newTabPositionKey)
             .flatMap(NewTabPosition.init(rawValue:)) ?? .top
         unloadMediaTabs = defaults.bool(forKey: unloadMediaTabsKey)
+        hibernationPreset = defaults.string(forKey: hibernationPresetKey)
+            .flatMap(TabHibernationPreset.init(rawValue:)) ?? .balanced
+        unloadTabsOnResign = defaults.bool(forKey: unloadTabsOnResignKey)
         foldersCollapsedByDefault = defaults.bool(forKey: foldersCollapsedByDefaultKey)
 
         downloadFolderBookmark = defaults.data(forKey: downloadFolderBookmarkKey)

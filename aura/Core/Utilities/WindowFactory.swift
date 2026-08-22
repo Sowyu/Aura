@@ -3,7 +3,7 @@ import SwiftUI
 
 enum WindowFactory {
     static func makeMainWindow(rootView: some View, size: CGSize = CGSize(width: 1440, height: 900)) -> NSWindow {
-        let window = NSWindow(
+        let window = AuraWindow(
             contentRect: NSRect(x: 0, y: 0, width: size.width, height: size.height),
             // `.fullSizeContentView` matches the SwiftUI-made windows. Without it a
             // transparent window stops drawing the frame's rounded corners and shadow.
@@ -26,7 +26,15 @@ enum WindowFactory {
 
         let hostingController = NSHostingController(rootView: rootView)
         window.contentViewController = hostingController
-        window.center()
+        // Restores the last position and size. AppKit writes the frame to defaults on
+        // every change, so it survives closing the window, not just quitting.
+        // From Nook (GPL-3.0), `App/NookApp.swift`, by the Nook authors.
+        //
+        // A second window cannot claim the same name and keeps the frame set above, so
+        // it still centres, which is what every window did before.
+        let unplaced = window.frame
+        window.setFrameAutosaveName("AuraBrowserWindow")
+        if window.frame == unplaced { window.center() }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         return window

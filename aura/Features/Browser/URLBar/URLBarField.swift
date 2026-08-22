@@ -21,6 +21,7 @@ struct URLBarField: View {
     @EnvironmentObject var privacyMode: PrivacyMode
 
     @Environment(\.theme) private var theme
+    @Environment(\.window) private var window
 
     @State private var showCopiedAnimation = false
     @State private var startWheelAnimation = false
@@ -31,6 +32,8 @@ struct URLBarField: View {
     @State private var mouseHasMoved = false
     @State private var mouseMonitor: Any?
     @State private var suppressInitialSearch = false
+    /// Natural height of the suggestion list, measured so it can be capped to the window.
+    @State private var suggestionsHeight: CGFloat = 0
 
     private var isEditing: Bool {
         appState.isURLBarEditing
@@ -57,21 +60,51 @@ struct URLBarField: View {
     private static let iconSpacing: CGFloat = 8
     private static let suggestionsPadding: CGFloat = 8
     static var textInset: CGFloat { leadingPadding + iconWidth + iconSpacing }
+    /// Field height plus the gap, so the list clears the pill.
+    private static let suggestionsGap: CGFloat = height + 8
+    /// Below this the list is not worth showing downwards; flip it above the field.
+    private static let suggestionsMinHeight: CGFloat = 160
+    private static let windowInset: CGFloat = 12
+
+    /// Space between the field and the window's edges. The list is anchored to the field
+    /// and never wider than it, so only the vertical fit needs checking.
+    private var suggestionsSpace: (above: CGFloat, below: CGFloat)? {
+        guard let contentHeight = window?.contentView?.bounds.height, contentHeight > 0 else { return nil }
+        let field = appState.urlFieldFrame
+        guard !field.isEmpty else { return nil }
+        return (
+            above: field.minY - Self.suggestionsGap - Self.windowInset,
+            below: contentHeight - field.maxY - Self.windowInset - (Self.suggestionsGap - Self.height)
+        )
+    }
+
+    /// A floating URL bar near the bottom of the window would drop its list off-screen.
+    private var suggestionsFlipUp: Bool {
+        guard let space = suggestionsSpace else { return false }
+        return space.below < Self.suggestionsMinHeight && space.above > space.below
+    }
+
+    private var suggestionsMaxHeight: CGFloat {
+        guard let space = suggestionsSpace else { return .infinity }
+        return max(Self.suggestionsMinHeight, suggestionsFlipUp ? space.above : space.below)
+    }
 
     // MARK: - Body
 
     var body: some View {
         field
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { appState.urlFieldFrame = $0 }
-        .overlay(alignment: .top) {
+        .overlay(alignment: suggestionsFlipUp ? .bottom : .top) {
             if isEditing {
                 suggestionsOverlay()
-                    .offset(y: 38)
+                    .offset(y: suggestionsFlipUp ? -Self.suggestionsGap : Self.suggestionsGap)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
-                        appState.urlSuggestionsFrame = $0
+                        // Only while the list is really up. The old `.onDisappear` ran a
+                        // frame late and raced the transition, leaving a live hole punched
+                        // in `BrowserView`'s backdrop over nothing.
+                        appState.urlSuggestionsFrame = isEditing ? $0 : .zero
                     }
-                    .onDisappear { appState.urlSuggestionsFrame = .zero }
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(.move(edge: suggestionsFlipUp ? .bottom : .top).combined(with: .opacity))
             }
         }
         .animation(AnimationSettings.easeOut(0.15), value: isEditing)
@@ -212,25 +245,39 @@ struct URLBarField: View {
 
     // MARK: - Suggestions Overlay
 
+    private var suggestionRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(launcherViewModel.suggestions) { suggestion in
+                LauncherSuggestionItem(
+                    suggestion: suggestion,
+                    focusedElement: $launcherViewModel.focusedElement,
+                    leadingInset: LauncherRowMetrics.leadingInset(
+                        textInset: Self.textInset,
+                        panelPadding: Self.suggestionsPadding,
+                        iconWidth: Self.iconWidth
+                    ),
+                    iconWidth: Self.iconWidth
+                )
+            }
+        }
+        .padding(Self.suggestionsPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { suggestionsHeight = $0 }
+    }
+
     @ViewBuilder
     private func suggestionsOverlay() -> some View {
         if !launcherViewModel.suggestions.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(launcherViewModel.suggestions) { suggestion in
-                    LauncherSuggestionItem(
-                        suggestion: suggestion,
-                        focusedElement: $launcherViewModel.focusedElement,
-                        leadingInset: LauncherRowMetrics.leadingInset(
-                            textInset: Self.textInset,
-                            panelPadding: Self.suggestionsPadding,
-                            iconWidth: Self.iconWidth
-                        ),
-                        iconWidth: Self.iconWidth
-                    )
+            Group {
+                // Measured first, scrolled only once it does not fit: a `ScrollView` takes
+                // every point offered, so it cannot size itself to a short list.
+                if suggestionsHeight > suggestionsMaxHeight {
+                    ScrollView(.vertical) { suggestionRows }
+                        .frame(height: suggestionsMaxHeight)
+                } else {
+                    suggestionRows
                 }
             }
-            .padding(Self.suggestionsPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.launcherMainBackground)
             .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
             .clipShape(ConditionallyConcentricRectangle(cornerRadius: 14, style: .continuous))
@@ -291,6 +338,11 @@ extension URLBarField {
     }
 
     private func cleanupInlineLauncher() {
+        // Synchronously, in the same pass that ended editing. Left to the overlay's
+        // `.onDisappear` it outlived the list by a frame and `BrowserView` kept a hole
+        // cut in its backdrop with nothing behind it.
+        appState.urlSuggestionsFrame = .zero
+        suggestionsHeight = 0
         if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)
             mouseMonitor = nil

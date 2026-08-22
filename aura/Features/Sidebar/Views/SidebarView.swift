@@ -25,11 +25,15 @@ struct SidebarView: View {
 
     @State private var isHoveringSidebarToggle = false
 
-    /// Downloads transition state
+    /// Which panel was last open, so the outgoing panel keeps its own content while it
+    /// slides away instead of swapping to the other one mid-animation.
+    @State private var lastPanel: SidebarPanel = .none
+
+    /// Panel transition state
     @State private var dragOffset: CGFloat = 0
 
-    private var isShowingDownloads: Bool {
-        downloadManager.isShowingDownloadsHistory
+    private var isShowingPanel: Bool {
+        sidebarManager.panel.isOpen
     }
 
     private var shouldShowMediaWidget: Bool {
@@ -62,7 +66,7 @@ struct SidebarView: View {
             let progress = transitionProgress(for: width)
 
             ZStack(alignment: .leading) {
-                // Spaces content - pushes back and blurs out when downloads is shown
+                // Spaces content - pushes back and blurs out while a panel is shown
                 spacesContent
                     .frame(width: width)
                     .offset(x: width * 0.12 * progress)
@@ -70,22 +74,36 @@ struct SidebarView: View {
                     .opacity(CGFloat(1.0) - 0.5 * progress)
                     .allowsHitTesting(progress < 0.5)
 
-                // Downloads history - slides in from leading edge
-                DownloadsHistoryView()
+                // Downloads or history - slides in from the leading edge
+                panelContent
                     .frame(width: width)
                     .offset(x: -width + width * progress)
                     .shadow(color: .black.opacity(0.08 * Double(progress)), radius: 8, x: 4, y: 0)
                     .allowsHitTesting(progress >= 0.5)
             }
             .clipped()
-            // Swipe-to-dismiss gesture on the whole sidebar when downloads is showing
-            .simultaneousGesture(downloadsNavigationGesture(width: width))
+            // Swipe-to-dismiss gesture on the whole sidebar while a panel is showing
+            .simultaneousGesture(panelNavigationGesture(width: width))
         }
         .auraGlassChromeForeground()
         // Behind the content, so a tab row's own catcher takes the click first and this
         // only fires on empty sidebar background.
         .auraBackgroundContextMenu { sidebarContextMenu }
+        .onChange(of: sidebarManager.panel) { _, panel in
+            if panel.isOpen { lastPanel = panel }
+        }
         .enableInjection()
+    }
+
+    /// The panel keeps rendering through the dismiss animation, so the switch reads the
+    /// last open panel rather than collapsing to downloads as soon as `panel` is `.none`.
+    @ViewBuilder
+    private var panelContent: some View {
+        if sidebarManager.panel == .history || lastPanel == .history {
+            HistoryPanelView()
+        } else {
+            DownloadsHistoryView()
+        }
     }
 
     // MARK: - Background context menu
@@ -168,29 +186,29 @@ struct SidebarView: View {
         return items
     }
 
-    /// Computes transition progress (0 = spaces visible, 1 = downloads visible)
+    /// Computes transition progress (0 = spaces visible, 1 = panel visible)
     /// incorporating both the boolean state and any interactive drag offset.
     private func transitionProgress(for width: CGFloat) -> CGFloat {
-        let base: CGFloat = isShowingDownloads ? 1.0 : 0.0
-        // dragOffset > 0 means dragging right (toward spaces), < 0 means dragging left (toward downloads)
+        let base: CGFloat = isShowingPanel ? 1.0 : 0.0
+        // dragOffset > 0 means dragging right (toward spaces), < 0 means dragging left (toward the panel)
         let dragContribution = -dragOffset / max(width, 1)
         return min(1, max(0, base + dragContribution))
     }
 
     // MARK: - Gesture
 
-    /// Handles swipe-to-dismiss (right swipe when in downloads) and
-    /// swipe-to-enter (left swipe from first container).
-    private func downloadsNavigationGesture(width: CGFloat) -> some Gesture {
+    /// Handles swipe-to-dismiss (right swipe while a panel is up) and
+    /// swipe-to-enter (left swipe from first container, which opens downloads).
+    private func panelNavigationGesture(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 30)
             .onChanged { value in
-                if isShowingDownloads {
-                    // Swipe right to dismiss downloads
+                if isShowingPanel {
+                    // Swipe right to dismiss the panel
                     if value.translation.width > 0 {
                         dragOffset = value.translation.width
                     }
                 } else if selectedContainerIndex.wrappedValue == 0 {
-                    // Swipe left from first container to show downloads
+                    // Swipe left from the first container to show downloads
                     if value.translation.width < 0 {
                         dragOffset = value.translation.width
                     }
@@ -198,12 +216,12 @@ struct SidebarView: View {
             }
             .onEnded { value in
                 let threshold = width * 0.25
-                if isShowingDownloads {
+                if isShowingPanel {
                     if value.translation.width > threshold
                         || value.predictedEndTranslation.width > threshold * 2
                     {
                         withAnimation(AnimationSettings.easeOut(0.15)) {
-                            downloadManager.isShowingDownloadsHistory = false
+                            sidebarManager.panel = .none
                             dragOffset = 0
                         }
                     } else {
@@ -216,7 +234,7 @@ struct SidebarView: View {
                         || -value.predictedEndTranslation.width > threshold * 2
                     {
                         withAnimation(AnimationSettings.easeOut(0.15)) {
-                            downloadManager.isShowingDownloadsHistory = true
+                            sidebarManager.panel = .downloads
                             dragOffset = 0
                         }
                     } else {
