@@ -117,11 +117,13 @@ struct LauncherView: View {
     /// so the dim below it is what takes the dismissing click.
     private var backdrop: some View {
         ZStack {
-            BlurEffectView(
-                material: .hudWindow,
-                blendingMode: .withinWindow,
-                isClickThrough: true
-            )
+            if SettingsStore.shared.launcherBlur {
+                BlurEffectView(
+                    material: .hudWindow,
+                    blendingMode: .withinWindow,
+                    isClickThrough: true
+                )
+            }
             Color.black.opacity(0.25)
         }
         .ignoresSafeArea()

@@ -22,6 +22,8 @@ class SettingsStore {
     private let blockJavaScriptByDefaultKey = "privacy.javascript.blockedByDefault"
     private let launcherRisesForSuggestionsKey = "launcher.risesForSuggestions"
     private let extensionRequestBlockingKey = "privacy.extensionRequestBlocking"
+    private let launcherBlurKey = "ui.launcher.blur"
+    private let addressEditingBlurKey = "ui.addressEditing.blur"
     private let sitePermissionsKey = "settings.permissions.sitePermissions"
     private let customSearchEnginesKey = "settings.customSearchEngines"
     private let globalDefaultSearchEngineKey = "settings.globalDefaultSearchEngine"
@@ -102,6 +104,16 @@ class SettingsStore {
     /// layers get purged a second after they paint. Takes effect on the next launch.
     var extensionRequestBlocking: Bool {
         didSet { defaults.set(extensionRequestBlocking, forKey: extensionRequestBlockingKey) }
+    }
+
+    /// Blur the window behind the Cmd+T launcher.
+    var launcherBlur: Bool {
+        didSet { defaults.set(launcherBlur, forKey: launcherBlurKey) }
+    }
+
+    /// Blur the window while the address field is being edited.
+    var addressEditingBlur: Bool {
+        didSet { defaults.set(addressEditingBlur, forKey: addressEditingBlurKey) }
     }
 
     var customSearchEngines: [CustomSearchEngine] {
@@ -269,6 +281,8 @@ class SettingsStore {
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
         launcherRisesForSuggestions = defaults.object(forKey: launcherRisesForSuggestionsKey) as? Bool ?? true
         extensionRequestBlocking = defaults.bool(forKey: extensionRequestBlockingKey)
+        launcherBlur = defaults.object(forKey: launcherBlurKey) as? Bool ?? true
+        addressEditingBlur = defaults.object(forKey: addressEditingBlurKey) as? Bool ?? true
         sitePermissions = Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]
         customSearchEngines = Self.loadCodable([CustomSearchEngine].self, key: customSearchEnginesKey) ?? []
         globalDefaultSearchEngine = defaults.string(forKey: globalDefaultSearchEngineKey)

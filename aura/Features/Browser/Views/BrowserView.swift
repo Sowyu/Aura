@@ -72,7 +72,7 @@ struct BrowserView: View {
     /// so they stay sharp and clickable. Clicking the surface ends the edit.
     @ViewBuilder
     private var urlEditingBackdrop: some View {
-        if appState.isURLBarEditing {
+        if appState.isURLBarEditing, SettingsStore.shared.addressEditingBlur {
             GeometryReader { proxy in
                 let origin = proxy.frame(in: .global).origin
                 let holes = editingHoles.map { $0.offsetBy(dx: -origin.x, dy: -origin.y) }

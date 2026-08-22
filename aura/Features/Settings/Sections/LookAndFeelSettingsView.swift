@@ -41,6 +41,14 @@ struct LookAndFeelSettingsView: View {
                 ))
 
                 Toggle("Show the full URL in the address bar", isOn: $toolbar.showFullURL)
+                Toggle("Blur the window behind the launcher", isOn: Binding(
+                    get: { SettingsStore.shared.launcherBlur },
+                    set: { SettingsStore.shared.launcherBlur = $0 }
+                ))
+                Toggle("Blur the window while editing the address", isOn: Binding(
+                    get: { SettingsStore.shared.addressEditingBlur },
+                    set: { SettingsStore.shared.addressEditingBlur = $0 }
+                ))
             }
 
             compactCard
