@@ -464,16 +464,16 @@ class Tab: ObservableObject, Identifiable {
 }
 
 extension FileManager {
-    /// Bumped to v2 when favicons started being stored as their original bytes. The old
+    /// v3: touch/launcher tiles no longer outrank real favicons, so cached tiles go. The old
     /// folder holds 16 px TIFFs written under a `.png` name, so it is dropped outright
     /// and every tab refetches at full resolution.
     var faviconDirectory: URL {
         let root = urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Favicons")
-        let dir = root.appendingPathComponent("v2")
+        let dir = root.appendingPathComponent("v3")
         if !fileExists(atPath: dir.path) {
             let legacy = (try? contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
-            for file in legacy where file.lastPathComponent != "v2" {
+            for file in legacy where file.lastPathComponent != "v3" {
                 try? removeItem(at: file)
             }
             try? createDirectory(at: dir, withIntermediateDirectories: true)
