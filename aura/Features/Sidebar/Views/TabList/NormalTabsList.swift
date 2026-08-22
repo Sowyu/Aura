@@ -4,8 +4,7 @@ struct NormalTabsList: View {
     /// Top-level normal tabs, already sorted. Tabs inside folders are not in here.
     let tabs: [Tab]
     let folders: [Folder]
-    @Binding var draggedItem: UUID?
-    let onDrag: (UUID) -> NSItemProvider
+    let zone: TabDragZone
     let onSelect: (Tab) -> Void
     let onPinToggle: (Tab) -> Void
     let onFavoriteToggle: (Tab) -> Void
@@ -22,9 +21,8 @@ struct NormalTabsList: View {
     /// re-ran, and rebuilt every row, on any change to any space.
     let containers: [TabContainer]
     @Environment(TabManager.self) private var tabManager
+    @ObservedObject private var dragSession = TabDragSession.shared
     @State private var previousTabIds: [UUID] = []
-    @State private var dropTargetFolderID: UUID?
-    @State private var dropIndicator: TabDropIndicator?
 
     /// Folders and top-level tabs share one `order` scale, so they interleave.
     private enum Row: Identifiable {
@@ -64,15 +62,7 @@ struct NormalTabsList: View {
                 }
             }
         }
-        .onDrop(
-            of: [.text],
-            delegate: SectionDropDelegate(
-                items: tabs,
-                draggedItem: $draggedItem,
-                targetSection: .normal,
-                tabManager: tabManager
-            )
-        )
+        .tabDropZone(zone)
         .onAppear {
             previousTabIds = tabs.map(\.id)
         }
@@ -86,7 +76,7 @@ struct NormalTabsList: View {
         TabItem(
             tab: tab,
             isSelected: tabManager.isActive(tab),
-            isDragging: draggedItem == tab.id,
+            isDragging: dragSession.draggedID == tab.id,
             onTap: { onSelect(tab) },
             onPinToggle: { onPinToggle(tab) },
             onFavoriteToggle: { onFavoriteToggle(tab) },
@@ -95,23 +85,15 @@ struct NormalTabsList: View {
             onMoveToContainer: { onMoveToContainer(tab, $0) },
             availableContainers: containers
         )
-        .overlay(alignment: dropIndicator?.below == true ? .bottom : .top) {
-            if dropIndicator?.targetID == tab.id {
+        .overlay(alignment: dragSession.indicator(for: tab.id, in: zone)?.below == true ? .bottom : .top) {
+            if dragSession.indicator(for: tab.id, in: zone) != nil {
                 Capsule()
                     .fill(Color.accentColor)
                     .frame(height: 2)
                     .padding(.horizontal, 6)
             }
         }
-        .onDrag { onDrag(tab.id) }
-        .onDrop(
-            of: [.text],
-            delegate: TabDropDelegate(
-                item: tab,
-                draggedItem: $draggedItem,
-                dropIndicator: $dropIndicator
-            )
-        )
+        .tabDragSource(id: tab.id, in: zone)
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .move(edge: .bottom)),
             removal: .opacity.combined(with: .move(edge: .top))
@@ -124,22 +106,21 @@ struct NormalTabsList: View {
         VStack(spacing: 8) {
             FolderItem(
                 folder: folder,
-                isDropTarget: dropTargetFolderID == folder.id && draggedItem != nil,
+                isDropTarget: dragSession.isFolderTarget(folder.id),
                 onToggle: { tabManager.toggleCollapsed(folder) },
                 onNewTab: { onNewTabInFolder(folder) },
                 onCloseTabs: { tabManager.closeAllTabs(in: folder) },
                 onDelete: { tabManager.delete(folder: folder, closeTabs: $0) }
             )
-            .onDrag { onDrag(folder.id) }
-            .onDrop(
-                of: [.text],
-                delegate: FolderDropDelegate(
-                    folder: folder,
-                    draggedItem: $draggedItem,
-                    dropTargetFolderID: $dropTargetFolderID,
-                    tabManager: tabManager
-                )
-            )
+            .tabDragSource(id: folder.id, isFolder: true, in: zone)
+            .overlay(alignment: dragSession.indicator(for: folder.id, in: zone)?.below == true ? .bottom : .top) {
+                if dragSession.indicator(for: folder.id, in: zone) != nil {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(height: 2)
+                        .padding(.horizontal, 6)
+                }
+            }
 
             if !folder.isCollapsed {
                 ForEach(folder.sortedTabs) { tab in

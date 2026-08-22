@@ -16,10 +16,7 @@ struct ContainerView: View {
     @Environment(ToastManager.self) private var toastManager
 
     @State var isDragging = false
-    @State private var draggedItem: UUID?
-    /// SwiftUI reports no drag end. The mouse-up that finishes any drag session clears the
-    /// drag state a beat later, after the drop delegates have had their turn.
-    @State private var dragEndMonitor: Any?
+    @ObservedObject private var dragSession = TabDragSession.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -27,12 +24,12 @@ struct ContainerView: View {
                 SidebarURLDisplay()
             }
             if !privacyMode.isPrivate {
-                // An empty grid still paid the VStack 16pt spacing, leaving a gap under the toolbar.
-                if !favoriteTabs.isEmpty {
+                // An empty grid still paid the VStack 16pt spacing, leaving a gap under
+                // the toolbar, so it only exists while there is something to drop in it.
+                if !favoriteTabs.isEmpty || dragSession.isDragging {
                     FavTabsGrid(
                         tabs: favoriteTabs,
-                        draggedItem: $draggedItem,
-                        onDrag: dragTab,
+                        zone: .fav(container.id),
                         selectedContainerId: selectedContainer,
                         onSelect: selectTab,
                         onFavoriteToggle: toggleFavorite,
@@ -66,11 +63,10 @@ struct ContainerView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     // An empty pinned section is pure clutter, so it only exists
                     // while a tab is being dragged.
-                    if !privacyMode.isPrivate, !pinnedTabs.isEmpty || draggedItem != nil {
+                    if !privacyMode.isPrivate, !pinnedTabs.isEmpty || dragSession.isDragging {
                         PinnedTabsList(
                             tabs: pinnedTabs,
-                            draggedItem: $draggedItem,
-                            onDrag: dragTab,
+                            zone: .pinned(container.id),
                             onSelect: selectTab,
                             onPinToggle: togglePin,
                             onFavoriteToggle: toggleFavorite,
@@ -85,8 +81,7 @@ struct ContainerView: View {
                     NormalTabsList(
                         tabs: normalTabs,
                         folders: folders,
-                        draggedItem: $draggedItem,
-                        onDrag: dragTab,
+                        zone: .normal(container.id),
                         onSelect: selectTab,
                         onPinToggle: togglePin,
                         onFavoriteToggle: toggleFavorite,
@@ -98,26 +93,20 @@ struct ContainerView: View {
                         containers: containers
                     )
                 }
-                .animation(AnimationSettings.easeOut(0.12), value: draggedItem == nil)
-                .onChange(of: draggedItem == nil, initial: true) { _, idle in
-                    if idle {
-                        if let dragEndMonitor { NSEvent.removeMonitor(dragEndMonitor) }
-                        dragEndMonitor = nil
-                    } else if dragEndMonitor == nil {
-                        dragEndMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp]) { event in
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { draggedItem = nil }
-                            return event
-                        }
-                    }
-                }
+                .animation(AnimationSettings.easeOut(0.12), value: dragSession.isDragging)
                 .adaptiveScrollElasticity()
             }
         }
         .modifier(OraWindowDragGesture(isDragging: $isDragging))
+        .onChange(of: dragSession.pendingDrop) { _, drop in
+            guard let drop, drop.zone.containerID == container.id else { return }
+            TabDropCommit.apply(drop, in: container, tabManager: tabManager)
+            dragSession.pendingDrop = nil
+        }
         .onReceive(NotificationCenter.default.publisher(for: .newTabFolder)) { note in
             // The page view keeps every space alive, so only the visible one may react,
             // and only in the window the command came from.
-            guard note.object as? NSWindow === window ?? NSApp.keyWindow else { return }
+            guard (note.object as? NSWindow) === (window ?? NSApp.keyWindow) else { return }
             guard tabManager.activeContainer?.id == container.id else { return }
             tabManager.createFolderForRenaming()
         }
@@ -194,18 +183,6 @@ struct ContainerView: View {
         )
     }
 
-    private func dragTab(_ tabId: UUID) -> NSItemProvider {
-        isDragging = true
-        draggedItem = tabId
-        let provider = TabItemProvider(object: tabId.uuidString as NSString)
-        // Fires when the drag session releases the provider: on drop and on cancel alike
-        // (macOS gives SwiftUI no cancel callback), so it doubles as the reset for both.
-        provider.didEnd = {
-            DispatchQueue.main.async { draggedItem = nil }
-        }
-        return provider
-    }
-
     private func duplicateTab(_ tab: Tab) {
         tabManager.duplicateTab(tab)
     }
@@ -213,17 +190,20 @@ struct ContainerView: View {
 
 private struct OraWindowDragGesture: ViewModifier {
     @Binding var isDragging: Bool
+    @ObservedObject private var dragSession = TabDragSession.shared
+
+    /// Masking the gesture rather than swapping it out: the old `if` rebuilt the whole
+    /// sidebar the first time a tab was dragged, and never gave window dragging back.
+    private var mask: GestureMask {
+        isDragging || dragSession.pointerOnRow || dragSession.isDragging ? .subviews : .all
+    }
 
     func body(content: Content) -> some View {
         Group {
-            if isDragging {
-                content
+            if #available(macOS 15.0, *) {
+                content.gesture(WindowDragGesture(), including: mask)
             } else {
-                if #available(macOS 15.0, *) {
-                    content.gesture(WindowDragGesture())
-                } else {
-                    content.gesture(BackportWindowDragGesture(isDragging: $isDragging))
-                }
+                content.gesture(BackportWindowDragGesture(isDragging: $isDragging), including: mask)
             }
         }
     }
@@ -257,12 +237,5 @@ private struct BackportWindowDragGesture: Gesture {
                 win.performDrag(with: event)
             }
             .map { _ in Value() }
-    }
-}
-
-class TabItemProvider: NSItemProvider {
-    var didEnd: (() -> Void)?
-    deinit {
-        didEnd?()
     }
 }

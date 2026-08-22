@@ -83,6 +83,40 @@ carries a source comment naming the upstream file.
 | `ExtensionEngine` popup wake and `openOptionsPageFor` | `Nook/Managers/ExtensionManager/ExtensionManager+Delegate.swift` |
 | `ExtensionPopupClipboard` | `Nook/Managers/ExtensionManager/PopupUIDelegate.swift` |
 
+## Nook (sidebar tab drag and drop)
+
+- Upstream project: [nook-browser/nook](https://github.com/nook-browser/nook)
+- Original author: Maciek Bagiński
+- Copyright (c) Maciek Bagiński and the Nook contributors
+- Upstream source paths: `Nook/Components/DragDrop/NookDragSessionManager.swift`,
+  `Nook/Components/DragDrop/NookDragSourceView.swift`,
+  `Nook/Components/DragDrop/NookDropZoneHostView.swift`,
+  `Nook/Components/DragDrop/NookDragItem.swift`,
+  `Nook/Components/Sidebar/SpaceSection/SpaceView.swift` (drop handling)
+- Local paths: `aura/Features/Tabs/DragAndDrop/TabDragSession.swift`,
+  `aura/Features/Tabs/DragAndDrop/TabDragSourceView.swift`,
+  `aura/Features/Tabs/DragAndDrop/TabDropZoneView.swift`,
+  `aura/Features/Tabs/DragAndDrop/TabDropResolver.swift`,
+  `aura/Features/Tabs/DragAndDrop/TabDropCommit.swift`
+- License: GPL-3.0, the same licence Aura ships under
+
+The sidebar's drag and drop is a port of Nook's, not SwiftUI's `onDrag`/`onDrop`. Taken
+from Nook: one drag session object holding the whole gesture's state, an invisible AppKit
+view behind each row that starts an `NSDraggingSession` once a global event monitor sees
+the pointer travel 4pt from the press, an invisible view per section registered as the
+dragging destination, and a drop that publishes what it would do and lets the space that
+owns the section commit it a turn later. Each ported file names its upstream in the header.
+
+Changed for Aura: Nook divides the pointer offset by a fixed cell height to get an
+insertion index, which does not survive Aura's folders, whose rows carry their open tabs
+and are not all one height, so `TabDropResolver` hit-tests the real row boxes and names a
+row rather than an index. Nook's live reorder, where the rows shuffle under the cursor and
+a floating window carries a preview, is dropped: Aura keeps its own presentation of a
+dimmed row and a 2pt insertion line, and the reorder happens on release. The commit runs
+against Aura's descending `order` scale through `reorderTabs(from:to:placeBelow:)` rather
+than Nook's index moves, and Nook's `DragLockManager` and haptic-heavy zone tracking are
+not carried over.
+
 ## Beam (autocomplete scoring)
 
 - Upstream project: [beamlegacy/beam](https://github.com/beamlegacy/beam)

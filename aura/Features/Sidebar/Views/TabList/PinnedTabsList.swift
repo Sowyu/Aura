@@ -3,9 +3,7 @@ import SwiftUI
 
 struct PinnedTabsList: View {
     let tabs: [Tab]
-    @Binding var draggedItem: UUID?
-    @State private var dropIndicator: TabDropIndicator?
-    let onDrag: (UUID) -> NSItemProvider
+    let zone: TabDragZone
     let onSelect: (Tab) -> Void
     let onPinToggle: (Tab) -> Void
     let onFavoriteToggle: (Tab) -> Void
@@ -15,6 +13,7 @@ struct PinnedTabsList: View {
     let containers: [TabContainer]
     @Environment(TabManager.self) private var tabManager
     @Environment(\.theme) var theme
+    @ObservedObject private var dragSession = TabDragSession.shared
 
     var body: some View {
         LazyVStack(spacing: 8) {
@@ -30,7 +29,7 @@ struct PinnedTabsList: View {
                     TabItem(
                         tab: tab,
                         isSelected: tabManager.isActive(tab),
-                        isDragging: draggedItem == tab.id,
+                        isDragging: dragSession.draggedID == tab.id,
                         onTap: { onSelect(tab) },
                         onPinToggle: { onPinToggle(tab) },
                         onFavoriteToggle: { onFavoriteToggle(tab) },
@@ -39,23 +38,23 @@ struct PinnedTabsList: View {
                         onMoveToContainer: { onMoveToContainer(tab, $0) },
                         availableContainers: containers
                     )
-                    .onDrag { onDrag(tab.id) }
-                    .onDrop(
-                        of: [.text],
-                        delegate: TabDropDelegate(item: tab, draggedItem: $draggedItem, dropIndicator: $dropIndicator)
-                    )
+                    .overlay(alignment: indicatorEdge(tab)) {
+                        if dragSession.indicator(for: tab.id, in: zone) != nil {
+                            Capsule()
+                                .fill(Color.accentColor)
+                                .frame(height: 2)
+                                .padding(.horizontal, 6)
+                        }
+                    }
+                    .tabDragSource(id: tab.id, in: zone)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onDrop(
-            of: [.text],
-            delegate: SectionDropDelegate(
-                items: tabs,
-                draggedItem: $draggedItem,
-                targetSection: .pinned,
-                tabManager: tabManager
-            )
-        )
+        .tabDropZone(zone)
+    }
+
+    private func indicatorEdge(_ tab: Tab) -> Alignment {
+        dragSession.indicator(for: tab.id, in: zone)?.below == true ? .bottom : .top
     }
 }
