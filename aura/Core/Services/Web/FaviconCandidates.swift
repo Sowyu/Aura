@@ -24,11 +24,23 @@ enum FaviconCandidates {
 
     /// Longest declared edge, or a guess from the format when the page declares no size.
     static func score(for url: FaviconURL) -> Double {
+        // A declared size never lifts a home-screen tile above a real favicon.
+        if isTile(url.format) { return fallbackDimension(for: url.format) }
         if let size = url.size, size.width > 0, size.height > 0 {
             return max(size.width, size.height)
         }
         if url.source.pathExtension.lowercased() == "svg" { return 512 }
         return fallbackDimension(for: url.format)
+    }
+
+    private static func isTile(_ format: FaviconFormatType) -> Bool {
+        switch format {
+        case .appleTouchIcon, .appleTouchIconPrecomposed, .launcherIcon4x, .launcherIcon3x, .launcherIcon2x,
+             .launcherIcon1_5x, .launcherIcon1x, .launcherIcon0_75x:
+            return true
+        default:
+            return false
+        }
     }
 
     // swiftlint:disable:next cyclomatic_complexity
