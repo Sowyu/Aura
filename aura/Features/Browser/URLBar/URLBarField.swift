@@ -35,6 +35,8 @@ struct URLBarField: View {
     /// Natural height of the suggestion list, measured so it can be capped to the window.
     @State private var suggestionsHeight: CGFloat = 0
 
+    @State private var clickAwayMonitor: Any?
+
     private var isEditing: Bool {
         appState.isURLBarEditing
     }
@@ -115,6 +117,24 @@ struct URLBarField: View {
                 .opacity(0)
                 .allowsHitTesting(false)
         )
+        // Clicking anywhere outside the field or its suggestions ends the edit, the way
+        // every browser's address bar behaves; AppKit alone only does it when the click
+        // lands on something that takes first responder.
+        .onChange(of: isEditing, initial: true) { _, editing in
+            if editing, clickAwayMonitor == nil {
+                clickAwayMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { event in
+                    guard let window = event.window else { return event }
+                    let height = window.contentView?.bounds.height ?? window.frame.height
+                    let point = CGPoint(x: event.locationInWindow.x, y: height - event.locationInWindow.y)
+                    let inside = appState.urlFieldFrame.contains(point) || appState.urlSuggestionsFrame.contains(point)
+                    if !inside { DispatchQueue.main.async { dismissEditing() } }
+                    return event
+                }
+            } else if !editing, let monitor = clickAwayMonitor {
+                NSEvent.removeMonitor(monitor)
+                clickAwayMonitor = nil
+            }
+        }
         .onChange(of: isEditing) { _, editing in
             if editing {
                 setupInlineLauncher()
