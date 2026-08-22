@@ -14,6 +14,13 @@ class TabContainer: ObservableObject, Identifiable {
     var iconColorHex: String?
     var createdAt: Date
     var lastAccessedAt: Date
+    /// Sidebar position. Defaults to 0 so spaces saved before this existed all tie and
+    /// fall back to `createdAt`, which is the order they already had.
+    var order: Int = 0
+
+    /// Stable page identity for the sidebar's page view. `name` used to stand in for it,
+    /// so renaming a space tore its page down.
+    var idString: String { id.uuidString }
 
     @Relationship(deleteRule: .cascade) var tabs: [Tab] = []
     @Relationship(deleteRule: .cascade) var folders: [Folder] = []
@@ -25,7 +32,8 @@ class TabContainer: ObservableObject, Identifiable {
         isActive: Bool = true,
         emoji: String = "💩",
         iconSymbol: String? = nil,
-        iconColorHex: String? = nil
+        iconColorHex: String? = nil,
+        order: Int = 0
     ) {
         let nowDate = Date()
         self.id = id
@@ -35,6 +43,7 @@ class TabContainer: ObservableObject, Identifiable {
         self.iconColorHex = iconColorHex
         self.createdAt = nowDate
         self.lastAccessedAt = nowDate
+        self.order = order
     }
 
     /// Moves `from` next to `to` inside the group they share: same section, same folder.

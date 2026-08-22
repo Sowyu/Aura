@@ -220,7 +220,8 @@ final class TabManager {
             name: name,
             emoji: emoji,
             iconSymbol: iconSymbol,
-            iconColorHex: iconColorHex
+            iconColorHex: iconColorHex,
+            order: nextContainerOrder()
         )
         modelContext.insert(newContainer)
         activeContainer = newContainer

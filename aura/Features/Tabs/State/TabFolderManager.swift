@@ -28,8 +28,8 @@ extension TabManager {
     }
 
     /// Creates a folder and puts the sidebar row straight into inline rename mode.
-    func createFolderForRenaming() {
-        guard let folder = createFolder() else { return }
+    func createFolderForRenaming(in container: TabContainer? = nil) {
+        guard let folder = createFolder(in: container) else { return }
         renamingFolderID = folder.id
     }
 

@@ -8,9 +8,9 @@ struct ContainerSwitcher: View {
     @Environment(\.theme) private var theme
     @Environment(TabManager.self) private var tabManager
     @Environment(DialogManager.self) private var dialogManager
-    /// Creation order, so the paged space switcher lands on the same space every time.
-    /// Unsorted, SwiftData returns store order, which can change after a save.
-    @Query(sort: [SortDescriptor(\TabContainer.createdAt)]) var containers: [TabContainer]
+    /// Same order as the sidebar's page view and the space header, so all three agree.
+    @Query(sort: [SortDescriptor(\TabContainer.order), SortDescriptor(\TabContainer.createdAt)])
+    var containers: [TabContainer]
 
     @State private var hoveredContainer: UUID?
 

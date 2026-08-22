@@ -15,9 +15,10 @@ struct SidebarView: View {
     @Environment(SidebarManager.self) private var sidebarManager
     @Environment(ToolbarManager.self) private var toolbarManager
 
-    /// Creation order, so the paged space switcher lands on the same space every time.
-    /// Unsorted, SwiftData returns store order, which can change after a save.
-    @Query(sort: [SortDescriptor(\TabContainer.createdAt)]) var containers: [TabContainer]
+    /// Sidebar order, then creation order for spaces that have never been moved (they
+    /// all sit at 0). Unsorted, SwiftData returns store order, which can change after a save.
+    @Query(sort: [SortDescriptor(\TabContainer.order), SortDescriptor(\TabContainer.createdAt)])
+    var containers: [TabContainer]
 
     private let columns = Array(repeating: GridItem(spacing: 10), count: 3)
 
@@ -122,7 +123,9 @@ struct SidebarView: View {
                 NotificationCenter.default.post(name: .showLauncher, object: window)
             }
             AuraMenuItem.item("New Folder", icon: "folder.badge.plus") {
-                NotificationCenter.default.post(name: .newTabFolder, object: window)
+                // Never nil: the receiving page has no window environment of its own, so
+                // both ends have to name the same window for the post to be claimed.
+                NotificationCenter.default.post(name: .newTabFolder, object: window ?? NSApp.keyWindow)
             }
             AuraMenuItem.separator
             AuraMenuItem.item(
@@ -258,10 +261,17 @@ struct SidebarView: View {
             if toolbarManager.isToolbarHidden, !toolbarManager.isFloatingToolbarVisible {
                 SidebarHeader()
             }
+            // Same 10pt gutter the page view gives `ContainerView`, so the pill is exactly
+            // as wide as a tab row and shares its leading inset.
+            if !privacyMode.isPrivate {
+                SpaceHeaderRow(containers: containers)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+            }
             NSPageView(
                 selection: selectedContainerIndex,
                 pageObjects: containers,
-                idKeyPath: \.name
+                idKeyPath: \.idString
             ) { container in
                 ContainerView(
                     container: container,

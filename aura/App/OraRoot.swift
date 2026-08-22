@@ -228,6 +228,36 @@ enum WindowEventScope {
     case anyWindow
 }
 
+@MainActor
+extension WindowEventScope {
+    /// Whether the window hosting this check should claim `note`.
+    ///
+    /// `keyWindow` is a parameter so the rule can be exercised without a running app, and
+    /// so both ends of a post agree on the same stand-in. A poster whose own `\.window`
+    /// is nil sends no sender at all, which is why `.windowOrKey` exists: views mounted
+    /// inside an `NSHostingView` (the sidebar's page view) never get the window
+    /// environment, so nil on either end has to resolve to the key window.
+    func accepts(
+        _ note: Notification,
+        window: NSWindow?,
+        keyWindow: NSWindow? = NSApp.keyWindow
+    ) -> Bool {
+        let sender = note.object as? NSWindow
+        switch self {
+        case .anyWindow:
+            return true
+        case .exactWindow:
+            guard let window else { return false }
+            return sender === window
+        case .window:
+            return sender === window ?? keyWindow
+        case .windowOrKey:
+            let target = window ?? keyWindow
+            return sender == nil ? keyWindow === target : sender === target
+        }
+    }
+}
+
 /// One row of `OraRoot`'s routing table.
 struct WindowEvent {
     let name: Notification.Name
@@ -258,29 +288,9 @@ extension OraRoot {
         let center = NotificationCenter.default
         return events.map { event in
             center.addObserver(forName: event.name, object: nil, queue: .main) { note in
-                guard Self.accepts(note, scope: event.scope, window: window) else { return }
+                guard event.scope.accepts(note, window: window) else { return }
                 event.handle(note)
             }
-        }
-    }
-
-    fileprivate static func accepts(
-        _ note: Notification,
-        scope: WindowEventScope,
-        window: NSWindow?
-    ) -> Bool {
-        let sender = note.object as? NSWindow
-        switch scope {
-        case .anyWindow:
-            return true
-        case .exactWindow:
-            guard let window else { return false }
-            return sender === window
-        case .window:
-            return sender === window ?? NSApp.keyWindow
-        case .windowOrKey:
-            let target = window ?? NSApp.keyWindow
-            return sender == nil ? NSApp.keyWindow === target : sender === target
         }
     }
 

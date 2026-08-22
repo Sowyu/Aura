@@ -24,7 +24,8 @@ struct NewContainerButton: View {
     }
 }
 
-private struct NewContainerDialog: View {
+/// Shared with the sidebar's space header, which offers the same "New Space…" row.
+struct NewContainerDialog: View {
     let dismiss: () -> Void
 
     @State private var name = ""

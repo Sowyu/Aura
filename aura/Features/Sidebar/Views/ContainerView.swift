@@ -105,8 +105,10 @@ struct ContainerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTabFolder)) { note in
             // The page view keeps every space alive, so only the visible one may react,
-            // and only in the window the command came from.
-            guard (note.object as? NSWindow) === (window ?? NSApp.keyWindow) else { return }
+            // and only in the window the command came from. `window` is always nil here:
+            // each page is hosted in its own `NSHostingView`, which starts a fresh
+            // environment, so the key window has to stand in on both ends of the post.
+            guard WindowEventScope.windowOrKey.accepts(note, window: window) else { return }
             guard tabManager.activeContainer?.id == container.id else { return }
             tabManager.createFolderForRenaming()
         }
