@@ -36,15 +36,9 @@ struct URLBarField: View {
         appState.isURLBarEditing
     }
 
-    /// The active space's colour, or nil while it is on Auto.
-    private var spaceTint: Color? {
-        guard let hex = tabManager.activeContainer?.iconColorHex, !hex.isEmpty else { return nil }
-        return Color(hex: hex)
-    }
-
-    /// One pill for both modes so entering edit mode cannot change the height. A space
-    /// with a colour rings the field in it, which is the address bar's half of the
-    /// container cue the sidebar rows carry as a stripe.
+    /// One pill for both modes so entering edit mode cannot change the height. The
+    /// space colour stays on the sidebar rows' stripe; a permanent ring here read as
+    /// the field being focused all the time.
     private var pill: some View {
         ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
             .fill(textColor.opacity(0.08))
@@ -52,13 +46,6 @@ struct URLBarField: View {
                 ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                     .stroke(textColor.opacity(0.06), lineWidth: 1)
             )
-            .overlay {
-                if let spaceTint {
-                    ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius - 1.5, style: .continuous)
-                        .stroke(spaceTint.opacity(0.85), lineWidth: 3)
-                        .padding(1.5)
-                }
-            }
     }
 
     static let height: CGFloat = 30
