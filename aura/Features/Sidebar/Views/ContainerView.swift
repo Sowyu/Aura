@@ -17,6 +17,9 @@ struct ContainerView: View {
 
     @State var isDragging = false
     @State private var draggedItem: UUID?
+    /// SwiftUI reports no drag end. The mouse-up that finishes any drag session clears the
+    /// drag state a beat later, after the drop delegates have had their turn.
+    @State private var dragEndMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -96,6 +99,17 @@ struct ContainerView: View {
                     )
                 }
                 .animation(AnimationSettings.easeOut(0.12), value: draggedItem == nil)
+                .onChange(of: draggedItem == nil, initial: true) { _, idle in
+                    if idle {
+                        if let dragEndMonitor { NSEvent.removeMonitor(dragEndMonitor) }
+                        dragEndMonitor = nil
+                    } else if dragEndMonitor == nil {
+                        dragEndMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp]) { event in
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { draggedItem = nil }
+                            return event
+                        }
+                    }
+                }
                 .adaptiveScrollElasticity()
             }
         }

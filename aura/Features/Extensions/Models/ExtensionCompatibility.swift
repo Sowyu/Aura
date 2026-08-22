@@ -87,12 +87,8 @@ extension ExtensionCompatibility {
         }
         let functional = missing
 
-        if functional.contains("webRequestBlocking") {
-            return .notSupported(
-                "Blocking webRequest is how this add-on works, and WebKit only offers "
-                    + "declarative content blocking."
-            )
-        }
+        // Blocking webRequest is available behind Settings > Privacy > Extension request
+        // blocking. Until that is on, the add-on installs and runs everything else.
         return .partial(functional)
     }
 }
