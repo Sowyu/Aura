@@ -21,11 +21,14 @@ enum AuraWebBundle {
     private static let log = Logger(subsystem: "com.aurabrowser.app", category: "webbundle")
     private static let bundleName = "AuraWebBundle.wkbundle"
 
-    /// Always on: it is the only channel a blocking `webRequest` listener has.
-    /// `AURA_WEB_BUNDLE=0` switches it off for a debugging session.
-    static var isEnabled: Bool {
-        ProcessInfo.processInfo.environment["AURA_WEB_BUNDLE"] != "0"
-    }
+    /// Opt-in (Settings → Privacy). It is the only channel a blocking `webRequest`
+    /// listener has, but hosting a bundle moves pages to WebKit's Development
+    /// WebContent service, which cannot hold a foreground assertion and gets its
+    /// layers purged after first paint. `AURA_WEB_BUNDLE=1/0` overrides for a session.
+    static let isEnabled: Bool = {
+        if let override = ProcessInfo.processInfo.environment["AURA_WEB_BUNDLE"] { return override != "0" }
+        return SettingsStore.shared.extensionRequestBlocking
+    }()
 
     /// `Aura.app/Contents/PlugIns/AuraWebBundle.wkbundle`, the bundle WebKit loads.
     static let builtInBundleURL: URL? = Bundle.main.builtInPlugInsURL?.appendingPathComponent(bundleName)

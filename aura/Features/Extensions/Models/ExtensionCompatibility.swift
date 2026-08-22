@@ -64,7 +64,10 @@ extension ExtensionCompatibility {
     /// extension, so the answer is simply whether that bundle is loaded.
     static var supportsBlockingWebRequest: Bool {
         guard #available(macOS 15.4, *) else { return false }
-        return AuraWebBundle.isEnabled
+        // The live setting, not the process-wide constant: the store badge should
+        // flip as soon as the user turns request blocking on, even before relaunch.
+        if let override = ProcessInfo.processInfo.environment["AURA_WEB_BUNDLE"] { return override != "0" }
+        return SettingsStore.shared.extensionRequestBlocking
     }
 
     /// The permission scan on its own, so an unpacked manifest can use the same rules.

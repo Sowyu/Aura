@@ -80,6 +80,14 @@ struct PrivacySettingsView: View {
             header: "Fingerprinting",
             description: "The default for new spaces. Each space can override it."
         ) {
+            Toggle("Extension request blocking (experimental)", isOn: Binding(
+                get: { SettingsStore.shared.extensionRequestBlocking },
+                set: { SettingsStore.shared.extensionRequestBlocking = $0 }
+            ))
+            Text("Lets uBlock Origin cancel requests before they leave. Pages can stop painting on this "
+                + "macOS build; turn it off if sites go blank. Applies after relaunch.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Toggle("Block fingerprinting", isOn: $settings.blockFingerprinting)
             Toggle("Block third-party trackers", isOn: $settings.blockThirdPartyTrackers)
         }

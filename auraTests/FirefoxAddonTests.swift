@@ -59,9 +59,14 @@ struct FirefoxAddonTests {
         #expect(addon.optionalPermissions == ["clipboardWrite"])
         #expect(addon.hostPermissions == ["<all_urls>"])
         #expect(addon.lastUpdated != nil)
-        // The badge is decided from the record, before anything is downloaded.
-        // Aura answers blocking webRequest itself now, so uBlock installs.
+        // The badge is decided from the record, before anything is downloaded, and
+        // follows the request-blocking setting.
+        let previous = SettingsStore.shared.extensionRequestBlocking
+        defer { SettingsStore.shared.extensionRequestBlocking = previous }
+        SettingsStore.shared.extensionRequestBlocking = true
         #expect(ExtensionCompatibility.evaluate(addon) == .supported)
+        SettingsStore.shared.extensionRequestBlocking = false
+        #expect(ExtensionCompatibility.evaluate(addon) != .supported)
     }
 
     @Test func decodesAddonGUID() throws {
@@ -135,6 +140,9 @@ struct FirefoxAddonTests {
         // Blocking webRequest stopped being a WebKit gap once the injected
         // bundle started asking the extension. It follows the same setting the
         // native request filter does.
+        let previous = SettingsStore.shared.extensionRequestBlocking
+        defer { SettingsStore.shared.extensionRequestBlocking = previous }
+        SettingsStore.shared.extensionRequestBlocking = true
         let blocking = ExtensionCompatibility.evaluate(permissions: ["webRequest", "webRequestBlocking"])
         #expect(ExtensionCompatibility.supportsBlockingWebRequest)
         #expect(blocking == .supported)

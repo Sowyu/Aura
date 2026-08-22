@@ -21,6 +21,7 @@ class SettingsStore {
     private let cookiesPolicyKey = "settings.cookies.policy"
     private let blockJavaScriptByDefaultKey = "privacy.javascript.blockedByDefault"
     private let launcherRisesForSuggestionsKey = "launcher.risesForSuggestions"
+    private let extensionRequestBlockingKey = "privacy.extensionRequestBlocking"
     private let sitePermissionsKey = "settings.permissions.sitePermissions"
     private let customSearchEnginesKey = "settings.customSearchEngines"
     private let globalDefaultSearchEngineKey = "settings.globalDefaultSearchEngine"
@@ -93,6 +94,14 @@ class SettingsStore {
     /// The floating launcher sits mid-window and slides up when suggestions appear.
     var launcherRisesForSuggestions: Bool {
         didSet { defaults.set(launcherRisesForSuggestions, forKey: launcherRisesForSuggestionsKey) }
+    }
+
+    /// Loads the injected web bundle that gives extensions a blocking `webRequest`.
+    /// Off by default: WebKit runs bundle-hosting pages in its Development WebContent
+    /// service, which cannot take RunningBoard foreground assertions, and the page's
+    /// layers get purged a second after they paint. Takes effect on the next launch.
+    var extensionRequestBlocking: Bool {
+        didSet { defaults.set(extensionRequestBlocking, forKey: extensionRequestBlockingKey) }
     }
 
     var customSearchEngines: [CustomSearchEngine] {
@@ -259,6 +268,7 @@ class SettingsStore {
             .flatMap(CookiesPolicy.init(rawValue:)) ?? .allowAll
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
         launcherRisesForSuggestions = defaults.object(forKey: launcherRisesForSuggestionsKey) as? Bool ?? true
+        extensionRequestBlocking = defaults.bool(forKey: extensionRequestBlockingKey)
         sitePermissions = Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]
         customSearchEngines = Self.loadCodable([CustomSearchEngine].self, key: customSearchEnginesKey) ?? []
         globalDefaultSearchEngine = defaults.string(forKey: globalDefaultSearchEngineKey)
