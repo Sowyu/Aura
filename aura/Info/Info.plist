@@ -131,8 +131,8 @@
 	<key>SUEnableInstallerLauncherService</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://the-aura.github.io/browser/appcast.xml</string>
+	<string>https://github.com/Sowyu/Aura/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>Ozj+rezzbJAD76RfajtfQ7rFojJbpFSCl/0DcFSBCTI=</string>
+	<string>6WPPsMkLZ3F4oa4a4IInG2gwUktIrhKAjWhhHv67e5Q=</string>
 </dict>
 </plist>

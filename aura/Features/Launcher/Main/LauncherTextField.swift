@@ -52,6 +52,17 @@ struct LauncherTextField: NSViewRepresentable {
         /// edit, so focus is only accepted after a click or an explicit `isEditing`.
         var allowsFocus = false
         override var acceptsFirstResponder: Bool { allowsFocus && super.acceptsFirstResponder }
+
+        /// Focus asked for before the field was in a window, taken the moment it is.
+        var pendingFocus = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard pendingFocus, let window else { return }
+            pendingFocus = false
+            allowsFocus = true
+            window.makeFirstResponder(self)
+        }
         override var mouseDownCanMoveWindow: Bool { false }
 
         /// Holds first responder here while the field is being edited, so switching to
@@ -174,7 +185,15 @@ struct LauncherTextField: NSViewRepresentable {
         if let isEditing, isEditing != focused {
             // Outside a SwiftUI update pass: becoming first responder writes state.
             DispatchQueue.main.async {
-                guard let window = nsView.window, isEditing != (nsView.currentEditor() != nil) else { return }
+                guard let window = nsView.window else {
+                    // A home tab opened with a shortcut asks for focus in the pass that
+                    // inserts its field, before the field is in a window. Keep the ask
+                    // and honour it from `viewDidMoveToWindow`, or the 0.1 s pulse that
+                    // carries it expires and the user has to click the field.
+                    nsView.pendingFocus = isEditing
+                    return
+                }
+                guard isEditing != (nsView.currentEditor() != nil) else { return }
                 nsView.allowsFocus = isEditing
                 window.makeFirstResponder(isEditing ? nsView : nil)
             }

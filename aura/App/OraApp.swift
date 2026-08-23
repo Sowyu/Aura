@@ -36,7 +36,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return .terminateNow
         }
 
-        guard SettingsStore.shared.confirmBeforeQuit else { return .terminateNow }
+        // Sparkle quits the app to swap the bundle in. The user agreed to that restart by
+        // pressing the update button, so a second dialog here would only stall an install
+        // that is already running.
+        guard SettingsStore.shared.confirmBeforeQuit, !UpdateService.shared.isInstalling else {
+            return .terminateNow
+        }
 
         // Only browser windows host the quit-confirmation observer; targeting any other
         // window (Settings, Passwords) would leave the terminateLater reply unanswered.

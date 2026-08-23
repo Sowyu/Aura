@@ -62,8 +62,8 @@ targets:
     info:
       path: aura/Info/Info.plist
       properties:
-        SUFeedURL: "https://the-aura.github.io/browser/appcast.xml"
-        SUPublicEDKey: "Ozj+rezzbJAD76RfajtfQ7rFojJbpFSCl/0DcFSBCTI="
+        SUFeedURL: "https://github.com/Sowyu/Aura/releases/latest/download/appcast.xml"
+        SUPublicEDKey: "6WPPsMkLZ3F4oa4a4IInG2gwUktIrhKAjWhhHv67e5Q="
         SUEnableAutomaticChecks: YES
         SUEnableInstallerLauncherService: YES
         CFBundleURLTypes:
@@ -137,23 +137,21 @@ targets:
         com.apple.security.temporary-exception.mach-lookup.global-name:
           - "$(PRODUCT_BUNDLE_IDENTIFIER)-spks"
           - "$(PRODUCT_BUNDLE_IDENTIFIER)-spki"
-        com.apple.developer.web-browser: true
-        com.apple.developer.web-browser.public-key-credential: true
 
     settings:
       base:
         SWIFT_VERSION: 5.9
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: 0.2.14
-        CURRENT_PROJECT_VERSION: 105
+        MARKETING_VERSION: 1.0.0
+        CURRENT_PROJECT_VERSION: 106
         PRODUCT_NAME: Aura
         PRODUCT_BUNDLE_IDENTIFIER: com.aurabrowser.app
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_BRIDGING_HEADER: aura/Core/BrowserEngine/AuraWebBundleSupport.h
         HEADER_SEARCH_PATHS: "$(SRCROOT)/auraWebBundle"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        SUFeedURL: "https://the-aura.github.io/browser/appcast.xml"
-        SUPublicEDKey: "Ozj+rezzbJAD76RfajtfQ7rFojJbpFSCl/0DcFSBCTI="
+        SUFeedURL: "https://github.com/Sowyu/Aura/releases/latest/download/appcast.xml"
+        SUPublicEDKey: "6WPPsMkLZ3F4oa4a4IInG2gwUktIrhKAjWhhHv67e5Q="
         SUEnableAutomaticChecks: YES
         SUEnableInstallerLauncherService: YES
       configs:
@@ -161,19 +159,19 @@ targets:
           ASSETCATALOG_COMPILER_APPICON_NAME: AuraIcon
           CODE_SIGN_ENTITLEMENTS: aura/Info/aura.entitlements
           CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: "Developer ID Application"
+          CODE_SIGN_IDENTITY: "Apple Development"
           EMIT_FRONTEND_COMMAND_LINES: YES
           OTHER_LDFLAGS: "-Xlinker -interposable"
           ENABLE_HARDENED_RUNTIME: NO
-          DEVELOPMENT_TEAM: 3Y566D2A4G
-          PROVISIONING_PROFILE_SPECIFIER: ora-profile-working
+          DEVELOPMENT_TEAM: 8Q677AYRU7
+          PROVISIONING_PROFILE_SPECIFIER: ""
         Release:
           ASSETCATALOG_COMPILER_APPICON_NAME: AuraIcon
           CODE_SIGN_ENTITLEMENTS: aura/Info/aura.entitlements
           CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: "Developer ID Application"
-          DEVELOPMENT_TEAM: 3Y566D2A4G
-          PROVISIONING_PROFILE_SPECIFIER: ora-profile-working
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 8Q677AYRU7
+          PROVISIONING_PROFILE_SPECIFIER: ""
           ENABLE_HARDENED_RUNTIME: YES
 
   AuraWebBundle:

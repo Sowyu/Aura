@@ -83,6 +83,10 @@ struct TopToolbar: View {
             Spacer(minLength: Self.groupSpacing)
 
             HStack(spacing: Self.groupSpacing) {
+                // Widens the group when there is an update to act on, which the padding
+                // below folds back into the centring, so the address field stays on the
+                // window's midline either way.
+                UpdatePill()
                 JavaScriptBlockedBadge(
                     foregroundColor: buttonForegroundColor,
                     url: tabManager.activeTab?.url,
@@ -320,6 +324,43 @@ struct TopToolbar: View {
         let picker = NSSharingServicePicker(items: items)
         DispatchQueue.main.async {
             picker.show(relativeTo: sourceRect, of: sourceView, preferredEdge: .minY)
+        }
+    }
+}
+
+// MARK: - Update pill
+
+/// The one place a waiting update reaches the user: a text button in the toolbar's
+/// right-hand group, drawn only while there is something to do about an update. Pressing
+/// it downloads, installs and relaunches; while that runs the button reports progress and
+/// takes no clicks.
+private struct UpdatePill: View {
+    @Environment(\.theme) private var theme
+    @EnvironmentObject private var updateService: UpdateService
+
+    /// Held behind the label so the pill keeps one width while the percentage counts up.
+    /// The row centres the address field by balancing its two button groups, so a label
+    /// that grows by a digit would nudge the field sideways on every downloaded chunk.
+    private static let widestProgressTitle = "Downloading 100%"
+
+    var body: some View {
+        if let title = updateService.phase.toolbarTitle {
+            Button { updateService.installAvailableUpdate() } label: {
+                ZStack {
+                    Text(Self.widestProgressTitle).hidden()
+                    Text(title)
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(theme.accent)
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .frame(height: TopToolbar.buttonSize)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.interactive(cornerRadius: URLBarButton.cornerRadius, tint: theme.accent))
+            .disabled(updateService.phase.buttonAction == .busy)
+            .help(title)
+            .accessibilityLabel(Text(title))
         }
     }
 }

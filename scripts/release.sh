@@ -1,150 +1,124 @@
 #!/bin/bash
+# release.sh: build a signed Release DMG, sign it for Sparkle, write the appcast and
+# publish a GitHub release. Every installed copy then sees the update through the feed
+# in Info.plist, https://github.com/Sowyu/Aura/releases/latest/download/appcast.xml.
+#
+# usage: scripts/release.sh <version> [--notes notes.md]
+#
+# Needs: a clean tree on the branch to release, xcodegen, gh (logged in), an
+# "Apple Development" identity, and the Sparkle EdDSA key in the login keychain
+# (Sparkle's generate_keys put it there; the matching public key is SUPublicEDKey).
+# The DMG is signed but not notarized: a first launch from the DMG needs a right-click
+# and Open. Sparkle clears quarantine on the updates it installs itself.
 set -euo pipefail
 
-# release.sh — Single entry point to build and publish an Aura Browser release.
-#
-# Usage:
-#   ./scripts/release.sh              # auto-increment patch (0.2.12 → 0.2.13)
-#   ./scripts/release.sh 0.3.0        # explicit version
-#   ./scripts/release.sh --minor      # bump minor (0.2.12 → 0.3.0)
-#   ./scripts/release.sh --major      # bump major (0.2.12 → 1.0.0)
-#   ./scripts/release.sh -y           # skip changelog confirmation
-#
-# Runs: preflight checks → version bump → build.sh → publish.sh
-#
-# You can also run build.sh and publish.sh independently:
-#   ./scripts/build.sh                # just build, sign, notarize
-#   ./scripts/publish.sh              # just publish (after build.sh)
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/_common.sh"
-
-SKIP_CONFIRM=false
-VERSION=""
-
+VERSION="${1:-}"
+NOTES=""
+shift || true
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -y|--yes)  SKIP_CONFIRM=true; shift ;;
-        --minor)   VERSION="__MINOR__"; shift ;;
-        --major)   VERSION="__MAJOR__"; shift ;;
-        -h|--help) sed -n '3,16p' "$0" | sed 's/^# \?//'; exit 0 ;;
-        *)         VERSION="$1"; shift ;;
+        --notes) NOTES="$2"; shift 2 ;;
+        *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "usage: scripts/release.sh <major.minor.patch> [--notes notes.md]" >&2; exit 2; }
 
-# ---------------------------------------------------------------------------
-# Preflight
-# ---------------------------------------------------------------------------
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+REPO="Sowyu/Aura"
+IDENTITY="Apple Development"
+TEAM="${AURA_TEAM_ID:-8Q677AYRU7}"
+ENTITLEMENTS="$ROOT/aura/Info/aura.entitlements"
+DD="$ROOT/build/dd-release"
+DMG="$ROOT/build/Aura-$VERSION.dmg"
+export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode-beta.app/Contents/Developer}"
 
-step "Preflight checks"
+step() { printf '\n\033[1;34m→ %s\033[0m\n' "$*"; }
+die()  { printf '\033[31merror: %s\033[0m\n' "$*" >&2; exit 1; }
 
-[[ -f "project.yml" ]] || die "project.yml not found. Run from the project root."
-[[ -d "aura" ]]        || die "aura/ directory not found. Run from the project root."
+step "Preflight"
+[[ -z "$(git status --porcelain)" ]] || die "uncommitted changes; commit first"
+command -v xcodegen >/dev/null || die "xcodegen missing (brew install xcodegen)"
+command -v gh >/dev/null || die "gh missing (brew install gh)"
+gh auth status >/dev/null 2>&1 || die "gh is not logged in"
+security find-identity -v -p codesigning | grep -q "$IDENTITY" || die "no \"$IDENTITY\" identity in the keychain"
+security find-generic-password -s "https://sparkle-project.org" -a ed25519 >/dev/null 2>&1 \
+    || die "no Sparkle EdDSA key in the keychain; run generate_keys from Sparkle's bin"
+git rev-parse "v$VERSION" >/dev/null 2>&1 && die "tag v$VERSION already exists"
+[[ -z "$NOTES" || -f "$NOTES" ]] || die "notes file not found: $NOTES"
 
-load_env APPLE_ID TEAM_ID SIGNING_IDENTITY DEVELOPER_ID_PROFILE APP_SPECIFIC_PASSWORD_KEYCHAIN ORA_PRIVATE_KEY
+step "Version $VERSION"
+BUILD=$(( $(grep 'CURRENT_PROJECT_VERSION:' project.yml | tr -dc '0-9') + 1 ))
+sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: $VERSION/; s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD/" project.yml
+xcodegen -q
+git add project.yml aura/Info/Info.plist
+git commit -q -m "release: v$VERSION (build $BUILD)"
+git tag "v$VERSION"
 
-MISSING_TOOLS=()
-command -v xcodegen   >/dev/null || MISSING_TOOLS+=(xcodegen)
-command -v create-dmg >/dev/null || MISSING_TOOLS+=(create-dmg)
-command -v gh         >/dev/null || MISSING_TOOLS+=(gh)
-MISSING_CASKS=()
+step "Building Release"
+rm -rf "$DD" "$ROOT/build/dmg" "$ROOT/build/sparkle"
+xcodebuild -project Aura.xcodeproj -scheme aura -configuration Release -destination 'platform=macOS' \
+    -derivedDataPath "$DD" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$IDENTITY" DEVELOPMENT_TEAM="$TEAM" \
+    PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS="$ENTITLEMENTS" build > build/release-build.log 2>&1 \
+    || { tail -40 build/release-build.log; die "build failed, see build/release-build.log"; }
+APP="$DD/Build/Products/Release/Aura.app"
+[[ -d "$APP" ]] || die "no app at $APP"
+# The scheme also builds the unit-test bundle into the app. It has no place in a release.
+rm -rf "$APP/Contents/PlugIns/auraTests.xctest"
+# Xcode re-signs Sparkle.framework on copy but not the XPC services and helpers inside
+# it, which a plain build leaves ad-hoc signed (Archive and Export would do this). The
+# sandboxed installer path needs them signed like the app, innermost first, as Sparkle's
+# sandboxing guide spells out.
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+for nested in "$SPARKLE/XPCServices/Downloader.xpc" "$SPARKLE/XPCServices/Installer.xpc" "$SPARKLE/Autoupdate" "$SPARKLE/Updater.app"; do
+    [[ -e "$nested" ]] || continue
+    codesign --force --sign "$IDENTITY" --options runtime --preserve-metadata=entitlements "$nested"
+done
+codesign --force --sign "$IDENTITY" --options runtime "$APP/Contents/Frameworks/Sparkle.framework"
+codesign --force --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$APP"
+codesign --verify --deep --strict "$APP" || die "signature check failed"
+xattr -cr "$APP"
 
-setup_sparkle_tools || prime_sparkle_tools_from_xcode || MISSING_CASKS+=(sparkle)
+step "DMG"
+mkdir -p build/dmg
+ditto "$APP" build/dmg/Aura.app
+ln -s /Applications build/dmg/Applications
+hdiutil create -volname "Aura $VERSION" -srcfolder build/dmg -ov -format UDZO "$DMG" >/dev/null
+codesign --sign "$IDENTITY" "$DMG"
 
-if [[ ${#MISSING_TOOLS[@]} -gt 0 || ${#MISSING_CASKS[@]} -gt 0 ]]; then
-    command -v brew >/dev/null || die "Homebrew is required to install missing release tooling."
+step "Sparkle appcast"
+mkdir -p build/sparkle
+cp "$DMG" build/sparkle/
+if [[ -n "$NOTES" ]]; then
+    # Sparkle shows HTML; a plain rendering of the markdown is enough.
+    python3 - "$NOTES" "build/sparkle/Aura-$VERSION.html" <<'PY'
+import html, sys
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+out, in_list = [], False
+for line in lines:
+    s = line.strip()
+    if s.startswith("- "):
+        if not in_list: out.append("<ul>"); in_list = True
+        out.append("<li>" + html.escape(s[2:]) + "</li>")
+        continue
+    if in_list: out.append("</ul>"); in_list = False
+    if s.startswith("#"): out.append("<h3>" + html.escape(s.lstrip("# ")) + "</h3>")
+    elif s: out.append("<p>" + html.escape(s) + "</p>")
+if in_list: out.append("</ul>")
+open(sys.argv[2], "w", encoding="utf-8").write("<html><body>" + "\n".join(out) + "</body></html>\n")
+PY
 fi
+GENERATE_APPCAST=$(find "$DD/SourcePackages/artifacts" -path '*/Sparkle/bin/generate_appcast' | head -1)
+[[ -x "$GENERATE_APPCAST" ]] || die "generate_appcast not found under $DD/SourcePackages"
+"$GENERATE_APPCAST" --download-url-prefix "https://github.com/$REPO/releases/download/v$VERSION/" build/sparkle >/dev/null
+[[ -f build/sparkle/appcast.xml ]] || die "appcast was not written"
+grep -q "sparkle:edSignature" build/sparkle/appcast.xml || die "appcast carries no EdDSA signature"
 
-if [[ ${#MISSING_TOOLS[@]} -gt 0 ]]; then
-    echo "Installing missing tools: ${MISSING_TOOLS[*]}"
-    HOMEBREW_NO_AUTO_UPDATE=1 brew install "${MISSING_TOOLS[@]}"
-fi
-
-if [[ ${#MISSING_CASKS[@]} -gt 0 ]]; then
-    echo "Installing missing casks: ${MISSING_CASKS[*]}"
-    HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask "${MISSING_CASKS[@]}"
-    setup_sparkle_tools || prime_sparkle_tools_from_xcode || die "generate_appcast not found after installing Sparkle or resolving package dependencies."
-fi
-
-[[ -f "aura_public_key.pem" ]] || die "aura_public_key.pem not found."
-# Check both unstaged and staged changes — staged WIP would otherwise be
-# silently swept into the release commit.
-[[ -z "$(git status --porcelain --untracked-files=no)" ]] || die "Uncommitted changes. Commit or stash first."
-
-green "All checks passed."
-
-# ---------------------------------------------------------------------------
-# Version resolution
-# ---------------------------------------------------------------------------
-
-CURRENT_VERSION=$(grep "MARKETING_VERSION:" project.yml | sed 's/.*MARKETING_VERSION: //' | tr -d ' ')
-CURRENT_BUILD=$(grep "CURRENT_PROJECT_VERSION:" project.yml | sed 's/.*CURRENT_PROJECT_VERSION: //' | tr -d ' ')
-
-IFS='.' read -r V_MAJOR V_MINOR V_PATCH <<< "$CURRENT_VERSION"
-
-if [[ -z "$VERSION" ]]; then
-    VERSION="${V_MAJOR}.${V_MINOR}.$((V_PATCH + 1))"
-elif [[ "$VERSION" == "__MINOR__" ]]; then
-    VERSION="${V_MAJOR}.$((V_MINOR + 1)).0"
-elif [[ "$VERSION" == "__MAJOR__" ]]; then
-    VERSION="$((V_MAJOR + 1)).0.0"
-fi
-
-BUILD_VERSION=$(( ${CURRENT_BUILD:-0} + 1 ))
-
-bold "Aura Browser v${VERSION} (build ${BUILD_VERSION})"
-echo "  Current: v${CURRENT_VERSION} (build ${CURRENT_BUILD})"
-
-# ---------------------------------------------------------------------------
-# Changelog preview
-# ---------------------------------------------------------------------------
-
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
-echo ""
-if [[ -n "$LAST_TAG" ]]; then
-    echo "Changes since $LAST_TAG:"
-    git log --pretty=format:"  %s" --no-merges "$LAST_TAG"..HEAD | grep -Ev "^  (release: v|chore\\(release\\): v)" || true
-else
-    echo "Recent changes:"
-    git log --pretty=format:"  %s" --no-merges --max-count=20 | grep -Ev "^  (release: v|chore\\(release\\): v)" || true
-fi
-
-if [[ "$SKIP_CONFIRM" != true ]]; then
-    echo ""
-    read -r -p "Release v${VERSION}? [Y/n]: " CONFIRM
-    if [[ "$CONFIRM" =~ ^[Nn]$ ]]; then
-        echo "Aborted."
-        exit 0
-    fi
-fi
-
-# ---------------------------------------------------------------------------
-# Bump version
-# ---------------------------------------------------------------------------
-
-step "Bumping version to ${VERSION} (build ${BUILD_VERSION})"
-
-sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: $VERSION/" project.yml
-sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD_VERSION/" project.yml
-
-# ---------------------------------------------------------------------------
-# Build → Publish
-# ---------------------------------------------------------------------------
-
-"$SCRIPT_DIR/build.sh"
-"$SCRIPT_DIR/publish.sh"
-
-# ---------------------------------------------------------------------------
-# Done
-# ---------------------------------------------------------------------------
-
-DMG_NAME="Aura-Browser-${VERSION}.dmg"
-echo ""
-green "========================================"
-green "  Release v${VERSION} published!"
-green "========================================"
-echo ""
-echo "  DMG:     build/${DMG_NAME} ($(du -h "build/${DMG_NAME}" | cut -f1))"
-echo "  Release: https://github.com/the-ora/browser/releases/tag/v$VERSION"
-echo "  Appcast: https://the-aura.github.io/browser/appcast.xml"
-echo ""
+step "Publishing"
+git push origin HEAD "v$VERSION"
+NOTES_ARGS=(--notes "Aura $VERSION")
+[[ -n "$NOTES" ]] && NOTES_ARGS=(--notes-file "$NOTES")
+gh release create "v$VERSION" "$DMG" build/sparkle/appcast.xml --repo "$REPO" --title "Aura $VERSION" "${NOTES_ARGS[@]}"
+echo
+echo "Released v$VERSION: https://github.com/$REPO/releases/tag/v$VERSION"
+echo "Installed copies pick it up on their next check (at launch, then every 6 hours)."

@@ -15,8 +15,6 @@
   <a href="LICENSE"><img src="https://badgen.net/badge/License/GPL-3.0/green" alt="GPL-3.0"></a>
 </p>
 
-> [!NOTE]
-> Aura is still in active development and is not ready for daily use yet.
 
 ## Overview
 
@@ -31,11 +29,17 @@ Aura is a macOS browser built with SwiftUI, AppKit, and WebKit. The project aims
 - URL suggestions and quick launcher
 - Developer-focused features
 
+## Install
+
+Download `Aura-<version>.dmg` from the [latest release](https://github.com/Sowyu/Aura/releases/latest), open it and drag Aura to Applications. The app is signed but not notarized, so the first launch needs a right-click on Aura.app and Open.
+
+Aura checks for updates at launch and every six hours. When a new release is out, an "Update to x.y.z" button appears in the toolbar and under Settings, About; one click downloads, installs and relaunches.
+
 ## Quick Start
 
 ```bash
-git clone https://github.com/the-ora/browser.git
-cd browser
+git clone https://github.com/Sowyu/Aura.git
+cd Aura
 ./scripts/setup.sh
 open Aura.xcodeproj
 ```
@@ -53,7 +57,6 @@ The setup script installs required tooling, installs git hooks, and regenerates 
 
 - [Contributing](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)
-- [Wiki](https://github.com/the-ora/browser/wiki)
 - [Security](SECURITY.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 

@@ -193,21 +193,20 @@ struct DebugPassRegressionTests {
 
 /// Second debug pass: updater state, password submit comparison, bridge payload encoding.
 @Suite struct DebugPassTwoRegressionTests {
-    // Bug 1: a clean "no update" result used to leave `isCheckingForUpdates` true
-    // until the 30 second fake timeout, because the delegate only implemented the
-    // error-carrying selector.
-    @Test func noUpdateOutcomeClearsTheCheckingFlag() {
-        let state = UpdateCheckState.apply(.noUpdate(currentVersion: "1.4.2"))
-        #expect(state.isChecking == false)
-        #expect(state.updateAvailable == false)
-        #expect(state.resultText.contains("1.4.2"))
+    // Bug 1: a clean "no update" result used to leave the check spinning until a 30
+    // second fake timeout, because the updater delegate only implemented the
+    // error-carrying selector. Aura's own Sparkle driver reports every outcome, so
+    // every one of them leaves `.checking`.
+    @Test func aCleanNoUpdateResultLeavesTheCheckingPhase() {
+        let checkedAt = Date()
+        #expect(UpdatePhase.checking.reducing(.upToDate(checkedAt: checkedAt))
+            == .upToDate(checkedAt: checkedAt))
     }
 
-    @Test func foundAndFailedOutcomesAlsoClearTheCheckingFlag() {
-        #expect(UpdateCheckState.apply(.found(version: "2.0")).isChecking == false)
-        #expect(UpdateCheckState.apply(.found(version: "2.0")).updateAvailable)
-        #expect(UpdateCheckState.apply(.failed(reason: "offline")).isChecking == false)
-        #expect(UpdateCheckState.apply(.failed(reason: "offline")).updateAvailable == false)
+    @Test func foundAndFailedOutcomesAlsoLeaveTheCheckingPhase() {
+        #expect(UpdatePhase.checking.reducing(.updateFound(version: "2.0", stage: .notDownloaded))
+            == .available(version: "2.0", notes: nil))
+        #expect(UpdatePhase.checking.reducing(.failed(message: "offline")) == .failed(message: "offline"))
     }
 
     // Bug 2: every form submit revealed the saved password from the keychain to

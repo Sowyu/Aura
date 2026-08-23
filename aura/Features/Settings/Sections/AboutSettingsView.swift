@@ -44,29 +44,32 @@ struct AboutSettingsView: View {
         }
     }
 
+    /// One button and one status line, both driven by `UpdateService.phase`. The button
+    /// checks when there is nothing to install and installs when there is, so the whole
+    /// update is the same single press it is in the toolbar.
     private var updatesCard: some View {
         SettingsCard(header: "Updates") {
             Toggle("Check for updates automatically", isOn: $settings.autoUpdateEnabled)
+                .onChange(of: settings.autoUpdateEnabled) { _, enabled in
+                    updateService.applyAutomaticChecks(enabled)
+                }
 
             HStack(spacing: 10) {
-                Button("Check for Updates") { updateService.checkForUpdates() }
+                Button(updateService.phase.settingsButtonTitle) {
+                    updateService.installAvailableUpdate()
+                }
+                .disabled(updateService.phase.buttonAction == .busy)
 
-                if updateService.isCheckingForUpdates {
+                if updateService.phase.buttonAction == .busy {
                     ProgressView()
                         .controlSize(.small)
                 }
-
-                if updateService.updateAvailable {
-                    Text("Update available")
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.success)
-                }
             }
 
-            if let result = updateService.lastCheckResult {
-                Text(result)
+            if let status = updateService.phase.statusText {
+                Text(status)
                     .font(.system(size: 11))
-                    .foregroundStyle(updateService.updateAvailable ? theme.success : theme.mutedForeground)
+                    .foregroundStyle(statusColor)
             }
 
             if let lastCheck = updateService.lastCheckDate {
@@ -74,6 +77,14 @@ struct AboutSettingsView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(theme.mutedForeground)
             }
+        }
+    }
+
+    private var statusColor: Color {
+        switch updateService.phase {
+        case .available, .readyToInstall: return theme.success
+        case .failed: return theme.destructive
+        default: return theme.mutedForeground
         }
     }
 
