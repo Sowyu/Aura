@@ -8,7 +8,6 @@ struct AboutSettingsView: View {
     @State private var notices = ""
 
     private static let repositoryURL = URL(string: "https://github.com/Sowyu/Aura")
-    private static let oraURL = URL(string: "https://github.com/the-ora/browser")
 
     var body: some View {
         SettingsSection {
@@ -93,14 +92,9 @@ struct AboutSettingsView: View {
             Text("Aura is free software under the GNU General Public License, version 3.")
                 .font(.system(size: 13))
 
-            HStack(spacing: 6) {
-                Text("Forked from the Ora browser.")
-                    .font(.system(size: 13))
-                if let url = Self.oraURL {
-                    Link("the-ora/browser", destination: url)
-                        .font(.system(size: 13))
-                }
-            }
+            // The GPL keeps the origin notice; the upstream project is gone, so no link.
+            Text("Aura started as a fork of the Ora browser.")
+                .font(.system(size: 13))
         }
     }
 

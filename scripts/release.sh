@@ -75,8 +75,17 @@ for nested in "$SPARKLE/XPCServices/Downloader.xpc" "$SPARKLE/XPCServices/Instal
     codesign --force --sign "$IDENTITY" --options runtime --preserve-metadata=entitlements "$nested"
 done
 codesign --force --sign "$IDENTITY" --options runtime "$APP/Contents/Frameworks/Sparkle.framework"
-codesign --force --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$APP"
+# Re-signing the app means handing codesign the entitlements ourselves, and codesign does
+# not expand build settings the way Xcode does: the Sparkle mach-lookup names would be
+# signed as the literal text "$(PRODUCT_BUNDLE_IDENTIFIER)-spks" and the sandbox would
+# deny the installer connection. Resolve them first and refuse to ship if any survive.
+BUNDLE_ID=$(defaults read "$APP/Contents/Info.plist" CFBundleIdentifier)
+RESOLVED="$ROOT/build/aura.resolved.entitlements"
+sed "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/$BUNDLE_ID/g" "$ENTITLEMENTS" > "$RESOLVED"
+codesign --force --sign "$IDENTITY" --entitlements "$RESOLVED" "$APP"
 codesign --verify --deep --strict "$APP" || die "signature check failed"
+codesign -d --entitlements - "$APP" 2>/dev/null | grep -q '\$(' && die "unresolved build setting in the signed entitlements"
+codesign -d --entitlements - "$APP" 2>/dev/null | grep -q -- "$BUNDLE_ID-spki" || die "Sparkle installer entitlement missing"
 xattr -cr "$APP"
 
 step "DMG"

@@ -13,15 +13,16 @@ This document covers the repository-specific security expectations for Aura Brow
 
 Aura uses Sparkle update signing.
 
-- `ora_public_key.pem` is the public verification key and is safe to keep in the repository.
-- `ORA_PRIVATE_KEY` is the private signing key used when generating the Sparkle appcast and must never be committed or shared.
+- `aura_public_key.pem` is the public verification key and is safe to keep in the repository. The same value ships in the app as `SUPublicEDKey`.
+- The matching EdDSA private key lives in the login keychain, where Sparkle's `generate_keys` puts it. Never commit it, export it into the repository, or share it.
 - If the private signing key is lost or replaced after releases have shipped, the existing update trust chain is broken.
 
 ## Release Credentials
 
-The release scripts expect credentials in a local `.env` file. Depending on the workflow, this includes:
+`./scripts/release.sh` is the current release flow. It needs `gh` logged in, an Apple Development signing identity, and the Sparkle EdDSA key in the login keychain. None of those belong in the repository.
 
-- `ORA_PRIVATE_KEY`
+`.env.example` lists the variables a notarized build needs on top of that:
+
 - `APPLE_ID`
 - `TEAM_ID`
 - `DEVELOPMENT_TEAM`
@@ -29,11 +30,7 @@ The release scripts expect credentials in a local `.env` file. Depending on the 
 - `SIGNING_IDENTITY`
 - `DEVELOPER_ID_PROFILE`
 
-For the current release flow, see:
-
-- `./scripts/build.sh`
-- `./scripts/publish.sh`
-- `./scripts/release.sh`
+Keep real values in a local `.env`, which is git-ignored.
 
 Contributors working on regular code or documentation changes should not need access to release credentials.
 
@@ -46,4 +43,4 @@ Contributors working on regular code or documentation changes should not need ac
 
 ## Reporting Security Issues
 
-If you discover a security issue or accidental secret exposure, do not open a public issue with exploit details or credential contents. Contact the maintainers privately through the project Discord so the issue can be handled without further exposure.
+If you discover a security issue or accidental secret exposure, do not open a public issue with exploit details or credential contents. Open a private security advisory at https://github.com/Sowyu/Aura/security/advisories/new so the issue can be handled without further exposure.

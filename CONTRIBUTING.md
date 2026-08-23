@@ -13,14 +13,14 @@ This guide covers the workflow and expectations for contributing to Aura Browser
 ### Requirements
 
 - macOS 15 or later
-- Xcode 15 or later
+- Xcode 26 or the current beta
 - Homebrew
 
 ### Getting Started
 
 ```bash
-git clone https://github.com/the-ora/browser.git
-cd browser
+git clone https://github.com/Sowyu/Aura.git
+cd Aura
 ./scripts/setup.sh
 open Aura.xcodeproj
 ```
@@ -55,7 +55,7 @@ You can run the main checks manually:
 swiftformat . --quiet
 swiftlint lint --fix
 ./scripts/xcbuild-debug.sh
-xcodebuild test -scheme ora -destination "platform=macOS"
+xcodebuild test -scheme aura -destination "platform=macOS"
 ```
 
 You can also run tests in Xcode with `Product > Test`.
@@ -83,4 +83,4 @@ If you use AI assistance for code generation, documentation, issue comments, or 
 
 ## Questions
 
-If you are unsure whether a change is a good fit, open an issue before investing significant time. For general discussion, you can also join the [Discord community](https://discord.gg/9aZWH52Zjm).
+If you are unsure whether a change is a good fit, open an issue before investing significant time.

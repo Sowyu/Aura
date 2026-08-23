@@ -118,10 +118,28 @@ final class UpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showUpdaterError(_ error: any Error, acknowledgement: @escaping () -> Void) {
-        logger.error("Update failed: \(error.localizedDescription, privacy: .public)")
+        let message = Self.describe(error)
+        logger.error("Update failed: \(message, privacy: .public)")
         reset()
-        onEvent(.failed(message: error.localizedDescription))
+        onEvent(.failed(message: message))
         acknowledgement()
+    }
+
+    /// Sparkle's top-level text is generic ("An error occurred while running the
+    /// updater"); the cause sits in the underlying error, which is what a user writing
+    /// a bug report needs to see.
+    static func describe(_ error: any Error) -> String {
+        var parts: [String] = []
+        var current: NSError? = error as NSError
+        while let failure = current {
+            var line = failure.localizedDescription
+            if let reason = failure.localizedFailureReason, !reason.isEmpty, !line.contains(reason) {
+                line += " " + reason
+            }
+            parts.append("\(line) [\(failure.domain) \(failure.code)]")
+            current = failure.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return parts.joined(separator: " ")
     }
 
     func showDownloadInitiated(cancellation: @escaping () -> Void) {

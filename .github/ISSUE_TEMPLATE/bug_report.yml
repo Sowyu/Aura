@@ -17,7 +17,7 @@ body:
       required: true
 
   - type: input
-    id: ora-version
+    id: aura-version
     attributes:
       label: Aura Browser Version
       placeholder: e.g., 0.2.7

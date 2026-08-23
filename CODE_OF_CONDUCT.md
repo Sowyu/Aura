@@ -26,7 +26,7 @@ We are committed to providing a welcoming, respectful, and inclusive environment
 This Code of Conduct applies to all project spaces, including:
 
 - GitHub repository (issues, PRs, discussions)
-- Discord community
+- GitHub Discussions
 - Any other official Aura communication channels
 
 ## Enforcement
@@ -41,7 +41,7 @@ Project maintainers are responsible for clarifying standards and will take appro
 
 If you experience or witness unacceptable behavior, please report it by:
 
-- Contacting the maintainers privately through Discord
+- Contacting the maintainers privately through a GitHub security advisory at https://github.com/Sowyu/Aura/security/advisories/new
 
 All reports will be handled confidentially and reviewed promptly.
 

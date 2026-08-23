@@ -42,7 +42,7 @@ Example: “Used Claude Code for writing <this part of the code>.”
 ### Checklist
 
 Before submitting, ensure the following:
-	•	Code builds successfully on macOS 14+
+	•	Code builds successfully on macOS 15+
 	•	All tests pass locally
 	•	Code follows Aura’s formatting and linting standards
 	•	No new warnings or errors
