@@ -11,6 +11,14 @@
   <a href="https://github.com/Sowyu/Aura/releases/latest"><img src="https://img.shields.io/github/v/release/Sowyu/Aura" alt="Latest release"></a>
 </p>
 
+## Heads up
+
+This is total AI slop. Nearly every line in this repository was written by AI coding
+agents (Claude) steered by one person over a few days: the app, the tests, the docs and
+this README. It builds, the tests pass and it has been used, but nobody has read all of
+it. Treat it as unreviewed code: expect bugs, read before you trust it with anything
+that matters, and report what you find.
+
 ## Install
 
 1. Download `Aura-<version>.dmg` from the [latest release](https://github.com/Sowyu/Aura/releases/latest).

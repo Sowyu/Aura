@@ -1,7 +1,7 @@
 # Mission: Make Aura Daily-Drivable
 
 You are working in the Aura macOS browser (SwiftUI + SwiftData + WebKit, repo root
-`/Users/aniko/Documents/Subjected/Aura`). The engine layer is solid: blocking webRequest
+the repository root). The engine layer is solid: blocking webRequest
 via an injected bundle, WKWebExtension hosting with a consent gate, a keychain password
 vault with autofill, spaces and browsing containers, tab hibernation, downloads,
 history, find-in-page on `WKWebView.find`, a launcher, private windows, per-space
@@ -195,7 +195,7 @@ http/https URLs, so typing a path searches the web instead of opening the file.
 - **The file tray**: a sidebar widget next to `DownloadsWidget` listing every file
   opened this session, persisted across launches so yesterday's chapter is one click
   away. Each row's subtitle shows the exact percent-encoded location, e.g.
-  `file:///Users/aniko/Documents/Subjects/Patrick/Year%209/Chapter-4-Worked-Solutions.pdf`
+  `file:///Users/sam/Documents/School/Year%209/Chapter-4-Worked-Solutions.pdf`
   — copyable verbatim, since users paste these paths into other tools. Clicking a row
   reopens the file in a tab; closing its tab removes the entry unless pinned to the
   tray. Row actions: Reveal in Finder, Open in Default App, Copy Path, Remove. Store

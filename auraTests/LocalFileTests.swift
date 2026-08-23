@@ -26,20 +26,20 @@ struct LocalFileURLTests {
     /// The example from the plan, both ways round: a typed path with a space and the
     /// encoded URL of the same file have to name one file.
     @Test func aSpaceInAPathEncodesOnceAndOnlyOnce() throws {
-        let typed = try #require(localFileURL(from: "/Users/aniko/Year 9/Chapter-4-Worked-Solutions.pdf", home: home))
-        #expect(typed.absoluteString == "file:///Users/aniko/Year%209/Chapter-4-Worked-Solutions.pdf")
+        let typed = try #require(localFileURL(from: "/Users/sam/Year 9/Chapter-4-Worked-Solutions.pdf", home: home))
+        #expect(typed.absoluteString == "file:///Users/sam/Year%209/Chapter-4-Worked-Solutions.pdf")
 
         let encoded = try #require(
-            localFileURL(from: "file:///Users/aniko/Year%209/Chapter-4-Worked-Solutions.pdf", home: home)
+            localFileURL(from: "file:///Users/sam/Year%209/Chapter-4-Worked-Solutions.pdf", home: home)
         )
         #expect(encoded == typed)
-        #expect(encoded.path == "/Users/aniko/Year 9/Chapter-4-Worked-Solutions.pdf")
+        #expect(encoded.path == "/Users/sam/Year 9/Chapter-4-Worked-Solutions.pdf")
     }
 
     @Test func aFileURLWithLiteralSpacesIsAcceptedToo() throws {
-        let url = try #require(localFileURL(from: "file:///Users/aniko/Year 9/Ch 4.pdf", home: home))
-        #expect(url.path == "/Users/aniko/Year 9/Ch 4.pdf")
-        #expect(url.absoluteString == "file:///Users/aniko/Year%209/Ch%204.pdf")
+        let url = try #require(localFileURL(from: "file:///Users/sam/Year 9/Ch 4.pdf", home: home))
+        #expect(url.path == "/Users/sam/Year 9/Ch 4.pdf")
+        #expect(url.absoluteString == "file:///Users/sam/Year%209/Ch%204.pdf")
     }
 
     @Test func theLocalhostFormNamesTheSameFile() throws {
@@ -206,7 +206,7 @@ struct OpenedFileStoreTests {
     }
 
     private var chapter: URL {
-        URL(fileURLWithPath: "/Users/aniko/Documents/Subjects/Patrick/Year 9/Chapter-4-Worked-Solutions.pdf")
+        URL(fileURLWithPath: "/Users/sam/Documents/School/Year 9/Chapter-4-Worked-Solutions.pdf")
     }
 
     @Test func openingAFileRecordsItsEncodedLocationVerbatim() throws {
@@ -216,9 +216,9 @@ struct OpenedFileStoreTests {
         #expect(row.displayName == "Chapter-4-Worked-Solutions.pdf")
         #expect(
             row.locationString
-                == "file:///Users/aniko/Documents/Subjects/Patrick/Year%209/Chapter-4-Worked-Solutions.pdf"
+                == "file:///Users/sam/Documents/School/Year%209/Chapter-4-Worked-Solutions.pdf"
         )
-        #expect(row.path == "/Users/aniko/Documents/Subjects/Patrick/Year 9/Chapter-4-Worked-Solutions.pdf")
+        #expect(row.path == "/Users/sam/Documents/School/Year 9/Chapter-4-Worked-Solutions.pdf")
         #expect(row.url == chapter)
         #expect(store.entries.count == 1)
     }
