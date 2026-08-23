@@ -13,6 +13,10 @@ struct LauncherMain: View {
     /// Gap between the panel edge and the field, and between the field and the list.
     private static let panelPadding: CGFloat = 6
 
+    /// One flat surface: solid fill, one hairline border, 8 pt corner. No blur, and no
+    /// second outline around the field inside it.
+    private static let cornerRadius: CGFloat = LauncherField.cornerRadius
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             LauncherField(
@@ -58,20 +62,22 @@ struct LauncherMain: View {
                 .padding(Self.panelPadding)
             }
         }
-        .background(theme.launcherMainBackground)
-        .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
-        .clipShape(ConditionallyConcentricRectangle(cornerRadius: LauncherField.cornerRadius, style: .continuous))
+        .background(theme.popoverBackground)
+        .clipShape(ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .overlay(
-            ConditionallyConcentricRectangle(cornerRadius: LauncherField.cornerRadius, style: .continuous)
-                .stroke((match?.color ?? theme.foreground).opacity(0.12), lineWidth: 1)
+            ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                .stroke(theme.border, lineWidth: 1)
                 .padding(0.25)
         )
-        .shadow(color: .black.opacity(0.35), radius: 32, x: 0, y: 12)
+        .auraFloatingShadow()
     }
 
     private func getPlaceholder(match: LauncherMatch?) -> String {
         guard let match else {
-            return "Search the web or enter URL..."
+            let engine = viewModel.searchEngineService.getDefaultSearchEngine(
+                for: viewModel.tabManager?.activeContainer?.id
+            )
+            return "Search with \(engine?.name ?? "Google") or enter address"
         }
 
         if let engine = viewModel.searchEngineService.getSearchEngine(byName: match.text) {

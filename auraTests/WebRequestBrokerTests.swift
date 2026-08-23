@@ -75,18 +75,34 @@ struct WebRequestBrokerTests {
         #expect(shimAt.lowerBound < ownScriptAt.lowerBound, "the shim has to run before the extension does")
     }
 
+    /// The blocker Aura ships has to be in the app bundle and has to be a
+    /// declarativeNetRequest blocker: that is the API WebKit implements itself, and
+    /// the only reason blocking works here at all. Swapping in an archive without
+    /// it would ship a browser that quietly blocks nothing.
     @Test
-    func firstLaunchUnpacksTheBundledUBlockOrigin() throws {
+    func firstLaunchUnpacksTheBundledBlocker() throws {
         let profile = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("aura-profile-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: profile) }
 
+        #expect(BundledExtensions.archiveURL != nil, "the .xpi has to be inside the app bundle")
         let first = try Self.installBundledUBlock(into: profile)
         let installed = try #require(first, "the add-on has to ship inside the app")
-        #expect(installed.lastPathComponent == "ublock-origin")
+        #expect(installed.lastPathComponent == BundledExtensions.folderID)
+
         let manifest = try readManifest(at: installed)
-        #expect(manifest.raw["name"] as? String == "uBlock Origin")
-        #expect(manifest.permissions.contains("webRequestBlocking"))
+        #expect(manifest.raw["manifest_version"] as? Int == 3)
+        #expect(manifest.permissions.contains("declarativeNetRequest"))
+        #expect(!manifest.permissions.contains("webRequestBlocking"), "the bundled blocker must not need the bundle")
+        #expect(ExtensionCompatibility.evaluate(permissions: manifest.permissions) == .supported)
+
+        // Rule sets are what it actually blocks with, and at least one has to ship enabled.
+        let dnr = manifest.raw["declarative_net_request"] as? [String: Any]
+        let rulesets = (dnr?["rule_resources"] as? [[String: Any]]) ?? []
+        #expect(rulesets.contains { $0["enabled"] as? Bool == true })
+
+        let gecko = (manifest.raw["browser_specific_settings"] as? [String: Any])?["gecko"] as? [String: Any]
+        #expect(gecko?["id"] as? String == BundledExtensions.geckoID, "pre-consent matches on this id")
 
         // A second launch must not overwrite the copy the user has been running.
         let second = try Self.installBundledUBlock(into: profile)
@@ -130,7 +146,7 @@ struct WebRequestBrokerTests {
             try JSONSerialization.jsonObject(with: Data(contentsOf: backup)) as? [String: Any]
         )
         #expect(original[ExtensionShim.versionKey] == nil, "the backup has to be the manifest as downloaded")
-        #expect(original["name"] as? String == "uBlock Origin")
+        #expect(original["name"] as? String == "uBO Lite")
     }
 
     // MARK: - Filters
@@ -481,85 +497,15 @@ struct WebRequestBrokerTests {
         #expect(after <= 2, "50 page opens leaked \(after) tunnelled ports")
     }
 
-    // MARK: - uBlock Origin
+    // MARK: - The bundled blocker
 
-    /// The bundled add-on, unpacked, shimmed and asked to block a real EasyList
-    /// hit. Nothing here is a stand-in: it is uBlock Origin's own static
-    /// filtering engine deciding, and the injected bundle acting on it.
-    @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
-    @MainActor
-    func uBlockOriginBlocksAnEasyListHit() async throws {
-        guard #available(macOS 15.4, *) else { return }
-
-        let directory = try unpackBundledUBlock()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        #expect(try ExtensionShim.apply(at: directory), "uBlock ships a background page, which needs the shim tag")
-
-        let engine = ExtensionEngine()
-        let server = try LocalHTTPServer(html: Self.uBlockTestPage)
-        defer { server.stop() }
-        let port = try await server.start()
-
-        let configuration = WKWebViewConfiguration()
-        configuration.processPool = try #require(AuraWebBundle.processPool)
-        configuration.webExtensionController = engine.controller
-        configuration.websiteDataStore = .nonPersistent()
-
-        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), configuration: configuration)
-        let window = NSWindow(contentRect: webView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        window.contentView = webView
-        window.makeKeyAndOrderFront(nil)
-        defer { window.close() }
-
-        _ = try await engine.load(directory: directory, id: Self.uBlockID)
-        defer { engine.unload(id: Self.uBlockID) }
-
-        // uBlock compiles its filter lists before it registers anything, which
-        // is seconds of work on a cold profile.
-        let registered = await waitForBroker(Self.uBlockID, timeout: 90)
-        #expect(registered, "uBlock never registered a blocking listener; its background page did not get that far")
-        guard registered else { return }
-
-        try? await Task.sleep(for: .seconds(5))
-        let url = try #require(URL(string: "http://127.0.0.1:\(port)/index.html"))
-        webView.load(URLRequest(url: url))
-        let state = try await settledPageState(of: webView)
-        let served = server.servedPaths
-
-        #expect(state["ok"] as? String == "load", "/content/logo.png is not an ad; uBlock should leave it alone")
-        #expect(
-            state["ad"] as? String == "error",
-            "EasyList's /ads/banners/*$image should have cancelled the banner; got \(state["ad"] ?? "")"
-        )
-        #expect(!served.contains("/ads/banners/banner.png"), "the banner still reached the server: \(served)")
-
-        // The old failure mode: vAPI.getURL('') threw, the background page died
-        // part-way through start-up, and the popup came up blank. Anything
-        // WebKit reports with a JS error name in it is that failure again;
-        // missing-asset and manifest gripes are not.
-        let context = try #require(engine.context(for: Self.uBlockID))
-        let thrown = context.errors.filter { $0.localizedDescription.contains("Error:") }
-        #expect(thrown.isEmpty, "uBlock's background page threw: \(thrown.map(\.localizedDescription))")
-
-    }
-
-    private static let uBlockID = "ublock-origin"
-
-    /// `/ads/banners/*$image` is an EasyList rule old enough to be dependable,
-    /// and it is generic, so it matches on the loopback host too.
-    private static let uBlockTestPage = """
-    <!doctype html><meta charset="utf-8"><body>
-    <img id="ok" src="/content/logo.png" onload="window.__okState='load'" onerror="window.__okState='error'">
-    <img id="ad" src="/ads/banners/banner.png"
-         onload="window.__adState='load'" onerror="window.__adState='error'">
-    <script src="/app.js" onload="window.__scriptState='load'" onerror="window.__scriptState='error'"></script>
-    <script>
-    fetch("/api/data.json")
-        .then(function () { window.__fetchState = "load"; })
-        .catch(function () { window.__fetchState = "error"; });
-    </script>
-    </body>
-    """
+    // `uBlockOriginBlocksAnEasyListHit` lived here. It proved full uBlock Origin's
+    // static filtering engine cancelling an EasyList hit through the injected
+    // bundle, and it went with the add-on: uBlock Origin Lite blocks through
+    // declarativeNetRequest, which WebKit compiles and enforces itself, with no
+    // broker hop to observe. What guards the swap now is
+    // `firstLaunchUnpacksTheBundledBlocker`, which fails if the shipped archive
+    // ever stops being a DNR blocker.
 
     private func unpackBundledUBlock() throws -> URL {
         let profile = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -568,10 +514,11 @@ struct WebRequestBrokerTests {
         return try #require(installed, "the add-on has to ship inside the app; nothing downloads at test time")
     }
 
-    /// The same call first launch makes, minus the "have we done this" marker.
+    /// The same call first launch makes, minus the "have we done this" marker and
+    /// the removal of the blocker this one replaced.
     static func installBundledUBlock(into profile: URL) throws -> URL? {
-        guard let archive = BundledExtensions.uBlockArchiveURL else { return nil }
-        return try BundledExtensions.unpack(archive, named: BundledExtensions.uBlockFolderName, into: profile)
+        guard let archive = BundledExtensions.archiveURL else { return nil }
+        return try BundledExtensions.unpack(archive, named: BundledExtensions.folderID, into: profile)
     }
 
     // MARK: - Intra-extension messaging
@@ -625,11 +572,15 @@ struct WebRequestBrokerTests {
         print("RELAY page->background round trip: \(log)")
     }
 
-    /// The bundled uBlock Origin's own popup and dashboard, rendered by WebKit
-    /// and read back out of their web views. Blank is the failure this fixes.
+    /// The bundled blocker's own popup and dashboard, rendered by WebKit and read
+    /// back out of their web views. Blank is the failure this fixes.
+    ///
+    /// The assertions stay off uBlock Origin Lite's own markup on purpose: this is
+    /// about WebKit building the views and the relay carrying their ports, and a
+    /// blocker update is free to rename every element in there.
     @Test(.enabled(if: WebRequestBrokerTests.isEnabled))
     @MainActor
-    func uBlockOriginsPopupAndDashboardRender() async throws {
+    func bundledBlockersPopupAndDashboardRender() async throws {
         guard #available(macOS 15.4, *) else { return }
 
         let directory = try unpackBundledUBlock()
@@ -637,75 +588,53 @@ struct WebRequestBrokerTests {
         #expect(try ExtensionShim.apply(at: directory))
 
         let engine = ExtensionEngine()
-        let id = "ublock-origin-popup"
+        let id = BundledExtensions.folderID
         _ = try await engine.load(directory: directory, id: id)
         defer { engine.unload(id: id) }
 
         let context = try #require(engine.context(for: id))
         let attached = await poll(timeout: 60) { ExtensionMessageRelay.shared.hasBackground(for: id) }
-        #expect(attached, "uBlock's background page never opened its relay port")
+        #expect(attached, "the blocker's background page never opened its relay port")
         guard attached else { return }
-        // uBO compiles its filter lists before it answers anything.
+        // It compiles its rule sets before it answers anything.
         try? await Task.sleep(for: .seconds(10))
 
         let action = try #require(context.action(for: nil))
         #expect(action.presentsPopup)
         let popup = try #require(action.popupWebView, "WebKit built no popup web view")
 
-        // #version is written from the payload the background page sends back
-        // for 'getPopupData'. Filled means the round trip happened.
+        // Text on screen is the whole point: an empty body is the blank popup.
         let filled = await poll(timeout: 30) {
-            let version = (try? await popup.evaluateJavaScript(
-                "(document.getElementById('version') || {}).textContent || \'\'"
+            let text = (try? await popup.evaluateJavaScript(
+                "(document.body || {}).innerText || \'\'"
             )) as? String
-            return (version ?? "").isEmpty == false
+            return (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         }
         let report = (try? await popup.evaluateJavaScript(Self.popupReport)) as? String ?? "nil"
-        print("UBO POPUP \(report)")
+        print("UBOL POPUP \(report)")
 
-        #expect(filled, "uBlock's popup never got its data from the background page: \(report)")
-        #expect(report.contains("\"powerSwitch\":true"), "the popup should hold uBO's power button")
-        #expect(!report.contains("\"blocked\":\"\""), "the popup should show a blocked count")
+        #expect(filled, "the popup rendered nothing: \(report)")
         #expect(ExtensionMessageRelay.shared.openPortCount(for: id) > 0, "the popup's port should be tunnelled")
-
-        // Per-site power. Clicking uBO's switch posts to the background page
-        // over the relay and the panel repaints from what comes back, so a
-        // changed body class is proof of a full round trip rather than of a
-        // local class toggle.
-        let restingClass = await popupBodyClass(popup)
-        _ = try? await popup.evaluateJavaScript("document.getElementById('switch').click()")
-        let switched = await poll(timeout: 20) { await self.popupBodyClass(popup) != restingClass }
-        let offClass = await popupBodyClass(popup)
-        _ = try? await popup.evaluateJavaScript("document.getElementById('switch').click()")
-        let restored = await poll(timeout: 20) { await self.popupBodyClass(popup) == restingClass }
-        print("UBO POWER resting=\(restingClass) toggled=\(offClass)")
-        #expect(switched, "the power button never round-tripped to the background page")
-        #expect(restored, "toggling back left the popup stuck at \(offClass)")
 
         // The dashboard is the harder case: a page in a tab that frames another
         // page, each one connecting on its own.
         let dashboard = try extensionPageWebView(for: context)
         defer { dashboard.window?.close() }
-        let pane = try #require(URL(string: "#3p-filters.html", relativeTo: context.optionsPageURL))
-        dashboard.load(URLRequest(url: pane))
+        let options = try #require(context.optionsPageURL, "the blocker has to declare an options page")
+        dashboard.load(URLRequest(url: options))
 
-        let lists = await poll(timeout: 45) {
-            ((try? await dashboard.evaluateJavaScript(Self.filterListCount)) as? Int ?? 0) > 0
+        let painted = await poll(timeout: 45) {
+            let text = (try? await dashboard.evaluateJavaScript(
+                "(document.body || {}).innerText || \'\'"
+            )) as? String
+            return (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         }
-        let count = (try? await dashboard.evaluateJavaScript(Self.filterListCount)) as? Int ?? 0
-        print("UBO DASHBOARD filter lists: \(count)")
-        #expect(lists, "the dashboard's filter-list pane came up empty")
-    }
-
-    /// uBO writes the panel's state onto the body as classes, and it only does
-    /// that from the payload the background page sends back.
-    @MainActor
-    private func popupBodyClass(_ popup: WKWebView) async -> String {
-        let value = try? await popup.evaluateJavaScript("document.body ? document.body.className : ''")
-        return (value as? String) ?? ""
+        #expect(painted, "the dashboard came up empty")
     }
 
     /// What the popup looks like from the inside, as one JSON line in the log.
+    /// Diagnostics only: nothing here is asserted, so a blocker update renaming
+    /// its own elements changes the log line rather than the verdict.
     private static let popupReport = """
     JSON.stringify({
         url: location.href,
@@ -713,21 +642,9 @@ struct WebRequestBrokerTests {
         shim: globalThis.__auraShimInstalled || null,
         relay: globalThis.__auraShimRelay,
         port: typeof vAPI === 'object' && vAPI.messaging ? vAPI.messaging.port !== null : null,
-        powerSwitch: !!document.getElementById('switch'),
-        version: ((document.getElementById('version') || {}).textContent || ''),
-        blocked: ((document.querySelector('[data-i18n^="popupBlockedOnThisPage"] + span') || {}).textContent || ''),
+        text: ((document.body || {}).innerText || '').slice(0, 200),
         bodyClass: document.body ? document.body.className : ''
     })
-    """
-
-    /// uBO's dashboard swaps one iframe between panes; the filter-list pane
-    /// fills with `.listEntry` rows only after its own port answers.
-    private static let filterListCount = """
-    (() => {
-        const frame = document.getElementById('iframe');
-        const doc = frame && frame.contentDocument;
-        return doc ? doc.querySelectorAll('.listEntry').length : 0;
-    })()
     """
 
     @available(macOS 15.4, *)
@@ -972,3 +889,250 @@ struct WebRequestBrokerTests {
 }
 
 // swiftlint:enable no_print_statements
+
+/// The parts of the broker that are plain value logic. No web process, no
+/// extension, so these run without the `AURA_BUNDLE` gate the suite above needs.
+struct WebRequestPureTests {
+    // MARK: - Match patterns
+
+    /// Chrome folds case over the scheme and the host, and only over those. A
+    /// filter list written with a capitalised host has to match the lowercase
+    /// URL the browser actually requests.
+    @Test
+    func matchPatternsFoldCaseOverSchemeAndHostOnly() {
+        #expect(MatchPattern("*://YouTube.com/*")?.matches("https://youtube.com/watch") == true)
+        #expect(MatchPattern("*://youtube.com/*")?.matches("HTTPS://YouTube.COM/watch") == true)
+        #expect(MatchPattern("HTTPS://example.com/*")?.matches("https://example.com/a") == true)
+        // The path is case-sensitive, so a pattern aimed at /Ads/ leaves /ads/ alone.
+        #expect(MatchPattern("*://example.com/Ads/*")?.matches("https://example.com/ads/x") == false)
+        #expect(MatchPattern("*://example.com/Ads/*")?.matches("https://example.com/Ads/x") == true)
+        #expect(MatchPattern("<all_urls>")?.matches("HTTPS://example.com/a") == true)
+        // A host wildcard is one label deep, not a licence to swallow the path.
+        #expect(MatchPattern("*://*.example.com/*")?.matches("https://ads.example.com/x") == true)
+        #expect(MatchPattern("*://ads.example/*")?.matches("https://evil.test/?u=http://ads.example/x") == false)
+    }
+
+    // MARK: - The wait
+
+    /// The premise of the private wait mode. `decide` parks the main thread in
+    /// it, so the reply still has to arrive, while a timer scheduled the
+    /// ordinary way must not run: spinning the default mode ran TabManager's
+    /// maintenance sweep, which could hibernate the very web view whose request
+    /// was being decided, and DownloadManager's progress timers.
+    @Test
+    @MainActor
+    func theWaitModeTakesRepliesAndLeavesTimersAlone() {
+        guard #available(macOS 15.4, *) else { return }
+
+        // WebKit hands the port reply over on a run loop source registered for
+        // the common modes. `waitMode` is registered as one of those, so such a
+        // source fires inside the wait. The main dispatch queue rides along in
+        // the app but cannot be asserted here: the test body is itself a
+        // main-queue block, and CoreFoundation refuses to nest that drain in
+        // any mode.
+
+        let signalled = Flag()
+        var context = CFRunLoopSourceContext()
+        context.info = Unmanaged.passUnretained(signalled).toOpaque()
+        context.perform = { info in
+            guard let info else { return }
+            Unmanaged<Flag>.fromOpaque(info).takeUnretainedValue().isSet = true
+        }
+        let source = try? #require(CFRunLoopSourceCreate(nil, 0, &context))
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        defer { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
+        CFRunLoopSourceSignal(source)
+
+        let quiet = Flag()
+        let quietTimer = Timer.scheduledTimer(withTimeInterval: 0.005, repeats: true) { _ in
+            quiet.isSet = true
+        }
+        Self.spin(WebRequestBroker.waitMode, for: 0.05)
+        quietTimer.invalidate()
+
+        #expect(signalled.isSet, "the reply's kind of source has to fire inside the wait")
+        #expect(!quiet.isSet, "a timer scheduled the ordinary way must not run inside the wait")
+
+        // The control: the same timer does run in the mode the broker used to
+        // spin, which is what made the old wait unsafe.
+        let noisy = Flag()
+        let noisyTimer = Timer.scheduledTimer(withTimeInterval: 0.005, repeats: true) { _ in
+            noisy.isSet = true
+        }
+        Self.spin(.defaultMode, for: 0.05)
+        noisyTimer.invalidate()
+        #expect(noisy.isSet, "the default mode is what runs those timers")
+    }
+
+    private static func spin(_ mode: CFRunLoopMode, for seconds: CFTimeInterval) {
+        let deadline = CFAbsoluteTimeGetCurrent() + seconds
+        while CFAbsoluteTimeGetCurrent() < deadline {
+            CFRunLoopRunInMode(mode, 0.002, true)
+        }
+    }
+
+    // MARK: - Merging verdicts
+
+    /// Chrome asks every interested extension and then reconciles the answers.
+    /// The broker used to return on whichever reply landed first, so a second
+    /// extension's `cancel` was thrown away whenever a first one allowed.
+    @Test
+    func aCancelFromAnyExtensionBeatsAnAllow() {
+        #expect(WebRequestVerdict.merge([]) == .allow)
+        #expect(WebRequestVerdict.merge([.allow, .allow]) == .allow)
+        #expect(WebRequestVerdict.merge([.allow, .cancel]) == .cancel)
+        #expect(WebRequestVerdict.merge([.cancel, .allow]) == .cancel)
+        // A cancel outranks a redirect however they are ordered: the request
+        // must not be made at all.
+        #expect(WebRequestVerdict.merge([.redirect("https://a.test/"), .cancel]) == .cancel)
+        #expect(WebRequestVerdict.merge([.cancel, .redirect("https://a.test/")]) == .cancel)
+    }
+
+    @Test
+    func aRedirectAppliesWhenNobodyCancelled() {
+        #expect(WebRequestVerdict.merge([.allow, .redirect("https://a.test/")]) == .redirect("https://a.test/"))
+        // Two redirects are a real conflict; the caller's order decides, and it
+        // has to decide the same way twice.
+        let conflict: [WebRequestVerdict] = [.redirect("https://a.test/"), .redirect("https://b.test/")]
+        #expect(WebRequestVerdict.merge(conflict) == .redirect("https://a.test/"))
+        #expect(WebRequestVerdict.merge(conflict) == WebRequestVerdict.merge(conflict))
+    }
+
+    /// The shim speaks JSON, so what the merge reads and what the bundle is
+    /// handed both have to survive the dictionary round trip.
+    @Test
+    func verdictsSurviveTheShimsJSON() {
+        #expect(WebRequestVerdict(message: [:]) == .allow)
+        #expect(WebRequestVerdict(message: ["cancel": false]) == .allow)
+        #expect(WebRequestVerdict(message: ["cancel": true]) == .cancel)
+        // An empty redirect is what the shim sends for "no opinion".
+        #expect(WebRequestVerdict(message: ["redirectUrl": ""]) == .allow)
+        #expect(WebRequestVerdict(message: ["redirectUrl": "https://a.test/"]) == .redirect("https://a.test/"))
+        // A cancel wins inside a single answer too.
+        #expect(WebRequestVerdict(message: ["cancel": true, "redirectUrl": "https://a.test/"]) == .cancel)
+
+        #expect(WebRequestVerdict.allow.payload.isEmpty)
+        #expect(WebRequestVerdict.cancel.payload["cancel"] as? Bool == true)
+        #expect(WebRequestVerdict.redirect("https://a.test/").payload["redirectUrl"] as? String == "https://a.test/")
+        // `cacheable` belongs to the broker, never to a verdict.
+        #expect(WebRequestVerdict.cancel.payload["cacheable"] == nil)
+    }
+
+    // MARK: - Asks that arrive mid-decision
+
+    /// The bug: an ask that landed while another was being decided returned a
+    /// verdict with no `cancel` field, which the bundle reads as allow. A page
+    /// firing eighty subresources at once had most of them admitted without any
+    /// extension seeing them, so blocking was probabilistic exactly under the
+    /// load where it matters. They are served now.
+    @Test
+    func anAskArrivingMidDecisionIsServedRatherThanWavedThrough() {
+        var gate = WebRequestAskGate()
+        let first = gate.admit()
+        #expect(first)
+        #expect(gate.isBusy)
+        let second = gate.admit()
+        #expect(second, "an ask that arrives mid-decision has to be served, not allowed")
+        #expect(gate.depth == 2)
+    }
+
+    /// The cap is what a pathological page cannot get past: every parked ask is
+    /// a stack frame and a share of the main thread's time.
+    @Test
+    func theAskGateStopsAtItsDepthCap() {
+        var gate = WebRequestAskGate()
+        var admitted = 0
+        for _ in 0 ..< WebRequestAskGate.maxDepth where gate.admit() { admitted += 1 }
+        #expect(admitted == WebRequestAskGate.maxDepth)
+        let overflow = gate.admit()
+        #expect(overflow == false)
+        #expect(gate.depth == WebRequestAskGate.maxDepth, "a refused ask must not take a slot")
+    }
+
+    @Test
+    func theAskGateDrainsAsDecisionsFinish() {
+        var gate = WebRequestAskGate()
+        for _ in 0 ..< WebRequestAskGate.maxDepth { _ = gate.admit() }
+        gate.release()
+        let afterOneFinished = gate.admit()
+        #expect(afterOneFinished, "one finished decision makes room for the next ask")
+
+        for _ in 0 ... WebRequestAskGate.maxDepth { gate.release() }
+        #expect(gate.depth == 0, "more releases than admits must not go negative")
+        #expect(!gate.isBusy)
+        let afterDraining = gate.admit()
+        #expect(afterDraining, "a drained gate serves again")
+    }
+
+    /// What the bundle is told when the gate is full. Allowed, because there is
+    /// nothing else a synchronous reply can say, but never remembered: the next
+    /// occurrence has to ask again instead of reusing an answer no extension gave.
+    @Test
+    @available(macOS 15.4, *)
+    func anOverflowingAskIsAllowedButNeverRemembered() {
+        let verdict = WebRequestBroker.unansweredVerdict
+        #expect(verdict["cancel"] == nil)
+        #expect(verdict["redirectUrl"] == nil)
+        #expect(verdict["cacheable"] as? Bool == false)
+    }
+
+    // MARK: - Request headers
+
+    /// The shim sends the difference against the headers it was handed, and the
+    /// bundle applies exactly that. Both halves have to survive the JSON round trip,
+    /// including the empty case, which must stay the same bytes an allow always was.
+    @Test
+    func headerPatchesSurviveTheShimsJSON() {
+        #expect(WebRequestHeaderPatch(message: [:]).isEmpty)
+        #expect(WebRequestHeaderPatch(message: [:]).payload.isEmpty)
+
+        let patch = WebRequestHeaderPatch(message: [
+            "setHeaders": ["Referer": "https://a.test/", "X-Bad": 7],
+            "removeHeaders": ["Cookie", "X-Client-Data"]
+        ])
+        #expect(patch.setHeaders == ["Referer": "https://a.test/"], "a non-string value is not a header")
+        #expect(patch.removedHeaders == ["cookie", "x-client-data"], "names fold to lowercase")
+        #expect(patch.payload["setHeaders"] as? [String: String] == ["Referer": "https://a.test/"])
+        #expect(patch.payload["removeHeaders"] as? [String] == ["cookie", "x-client-data"])
+    }
+
+    /// Same rule the redirect merge follows: the caller passes answers in a stable
+    /// order, so two extensions naming one header always resolve the same way.
+    @Test
+    func headerPatchesMergeWithTheFirstAnswerWinning() {
+        let first = WebRequestHeaderPatch(message: ["setHeaders": ["DNT": "1"]])
+        let second = WebRequestHeaderPatch(message: ["setHeaders": ["DNT": "0", "X-Extra": "y"]])
+        let merged = WebRequestHeaderPatch.merge([first, second])
+        #expect(merged.setHeaders["DNT"] == "1")
+        #expect(merged.setHeaders["X-Extra"] == "y")
+
+        // Setting a header outranks removing it: the extension that set a value said
+        // what it wants sent, and an empty removal list keeps the reply small.
+        let removing = WebRequestHeaderPatch(message: ["removeHeaders": ["dnt", "cookie"]])
+        let conflict = WebRequestHeaderPatch.merge([first, removing])
+        #expect(conflict.setHeaders["DNT"] == "1")
+        #expect(conflict.removedHeaders == ["cookie"])
+        #expect(WebRequestHeaderPatch.merge([]).isEmpty)
+    }
+
+    /// The state string is a bit mask now. "0" and "1" still mean what they meant
+    /// before headers existed, which is what keeps an old bundle and a new host from
+    /// disagreeing about the flag they both already understood.
+    @Test
+    @MainActor
+    @available(macOS 15.4, *)
+    func theStateFlagsStayCompatibleWithTheOlderTwoValues() {
+        // No listener is registered in a unit test run, so this is the "off" value.
+        #expect(WebRequestBroker.shared.stateFlags == "0")
+        #expect(!WebRequestBroker.shared.wantsRequestHeaders)
+        #expect(Int("1")! & 1 == 1, "bit 0 is the flag the bundle already had")
+        #expect(Int("3")! & 1 == 1, "an active host with header listeners is still active")
+        #expect(Int("3")! & 2 == 2, "bit 1 is the new one")
+    }
+}
+
+/// Set from a main-thread closure; `@unchecked` because a run loop callback
+/// cannot capture a plain `var`.
+private final class Flag: @unchecked Sendable {
+    var isSet = false
+}

@@ -9,7 +9,9 @@ enum AuraGlass {
     static let tintKey = "ui.glass.tintHex"
     static let opacityKey = "ui.glass.opacity"
     static let blurKey = "ui.glass.blur"
-    static let defaultTintHex = "#4DABF7"
+    /// Empty means "follow the theme accent", the same convention `AuraAccent` uses.
+    /// The chrome has no brand colour of its own, so an unset tint is the accent.
+    static let defaultTintHex = AuraAccent.systemDefault
 
     /// How much of the tint covers the glass. Below this the chrome loses every edge
     /// against the page, so values stored by older builds are clamped up on read rather
@@ -38,18 +40,36 @@ enum AuraGlass {
         }
     }
 
+    /// The colour the glass paints with. An empty stored hex follows the theme accent,
+    /// so the chrome carries the one brand colour instead of a second one.
+    static func tint(forHex hex: String, theme: Theme) -> Color {
+        hex.isEmpty ? theme.accent : Color(hex: hex)
+    }
+
+    /// The same resolution where only the appearance is at hand, reading the accent from
+    /// the key `ThemeProvider` reads.
+    static func tint(forHex hex: String, colorScheme: ColorScheme) -> Color {
+        let accentHex = UserDefaults.standard.string(forKey: AuraAccent.key) ?? AuraAccent.systemDefault
+        return tint(forHex: hex, theme: Theme(colorScheme: colorScheme, accentHex: accentHex))
+    }
+
     /// Chrome text and icons flip to white or black depending on how bright the chrome
     /// ends up, which is the tint blended over whatever shows through at that opacity.
     static func foreground(forTintHex hex: String, opacity: Double, colorScheme: ColorScheme) -> Color {
-        URLBarColors.foreground(for: blended(tintHex: hex, opacity: opacity, colorScheme: colorScheme))
+        let resolved = tint(forHex: hex, colorScheme: colorScheme)
+        return foreground(forTint: resolved, opacity: opacity, colorScheme: colorScheme)
+    }
+
+    static func foreground(forTint tint: Color, opacity: Double, colorScheme: ColorScheme) -> Color {
+        URLBarColors.foreground(for: blended(tint: tint, opacity: opacity, colorScheme: colorScheme))
     }
 
     /// The tint laid over the window's own background for the current appearance.
-    static func blended(tintHex: String, opacity: Double, colorScheme: ColorScheme) -> Color {
+    static func blended(tint: Color, opacity: Double, colorScheme: ColorScheme) -> Color {
         let base = NSColor(Theme(colorScheme: colorScheme).background)
-        let tint = NSColor(Color(hex: tintHex))
-        guard let baseRGB = base.usingColorSpace(.sRGB), let tintRGB = tint.usingColorSpace(.sRGB) else {
-            return Color(hex: tintHex)
+        let overlay = NSColor(tint)
+        guard let baseRGB = base.usingColorSpace(.sRGB), let tintRGB = overlay.usingColorSpace(.sRGB) else {
+            return tint
         }
         let amount = clampedOpacity(opacity)
         return Color(
@@ -125,8 +145,10 @@ private struct GlassChrome: ViewModifier {
     @AppStorage(AuraGlass.blurKey) private var blur = AuraGlass.defaultBlur
     @Environment(\.theme) private var theme
 
+    private var tint: Color { AuraGlass.tint(forHex: tintHex, theme: theme) }
+
     private var chromeForeground: Color {
-        AuraGlass.foreground(forTintHex: tintHex, opacity: tintOpacity, colorScheme: theme.colorScheme)
+        AuraGlass.foreground(forTint: tint, opacity: tintOpacity, colorScheme: theme.colorScheme)
     }
 
     func body(content: Content) -> some View {
@@ -136,7 +158,7 @@ private struct GlassChrome: ViewModifier {
                 .background {
                     if let surfaceRadius {
                         AuraGlassSurface(
-                            tint: Color(hex: tintHex),
+                            tint: tint,
                             opacity: tintOpacity,
                             blur: blur,
                             cornerRadius: surfaceRadius,
@@ -170,7 +192,7 @@ private struct GlassWindowBackdrop: ViewModifier {
         if enabled {
             content.background {
                 AuraGlassSurface(
-                    tint: Color(hex: tintHex), opacity: tintOpacity,
+                    tint: AuraGlass.tint(forHex: tintHex, theme: theme), opacity: tintOpacity,
                     blur: blur, cornerRadius: cornerRadius
                 )
                 .ignoresSafeArea(.all)

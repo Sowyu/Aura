@@ -23,7 +23,7 @@ extension TabManager {
             container: container
         )
         modelContext.insert(folder)
-        try? modelContext.save()
+        saveOrLog(modelContext)
         return folder
     }
 
@@ -37,7 +37,7 @@ extension TabManager {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != folder.name else { return }
         folder.name = trimmed
-        try? modelContext.save()
+        saveOrLog(modelContext)
     }
 
     /// `closeTabs: false` keeps the tabs and drops them back to the top level.
@@ -50,7 +50,7 @@ extension TabManager {
             renamingFolderID = nil
         }
         modelContext.delete(folder)
-        try? modelContext.save()
+        saveOrLog(modelContext)
 
         if closeTabs {
             for tab in tabs {
@@ -77,7 +77,7 @@ extension TabManager {
         tab.folder = folder
         // Dropping into a collapsed folder would hide the tab you just moved.
         folder?.isCollapsed = false
-        try? modelContext.save()
+        saveOrLog(modelContext)
     }
 
     /// Drag-reorder for folder rows. Folders share `Tab.order`'s scale, so the moved
@@ -98,12 +98,12 @@ extension TabManager {
         for (index, item) in group.enumerated() {
             item.order = values[index]
         }
-        try? modelContext.save()
+        saveOrLog(modelContext)
     }
 
     func toggleCollapsed(_ folder: Folder) {
         folder.isCollapsed.toggle()
-        try? modelContext.save()
+        saveOrLog(modelContext)
     }
 
     /// Opens a new tab already inside `folder`.

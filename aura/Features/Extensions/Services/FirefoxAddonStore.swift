@@ -98,6 +98,11 @@ enum FirefoxAddonStoreError: LocalizedError {
 /// Client for addons.mozilla.org (AMO). Firefox extensions are standard
 /// WebExtensions packaged as .xpi (a zip), so anything downloaded here goes
 /// through the same unpacked-folder install path as a local extension.
+///
+/// The bundled blocker is not served from here. uBlock Origin Lite ships as its
+/// GitHub release build, `uBOLiteRedux@raymondhill.net`, and Aura knows no AMO
+/// slug for it, so nothing in the store offers that id an update. It is replaced
+/// by shipping a newer archive in `BundledExtensions`.
 struct FirefoxAddonStore {
     static let shared = FirefoxAddonStore()
 
@@ -152,9 +157,18 @@ struct FirefoxAddonStore {
         return Self.parsePage(data)
     }
 
+    /// The same endpoint answers to a gecko id, which is what an installed add-on
+    /// knows itself by and the only handle an update check has.
+    func addon(guid: String) async throws -> FirefoxAddon {
+        try await addon(slug: guid)
+    }
+
     func addon(slug: String) async throws -> FirefoxAddon {
         let url = apiBase.appendingPathComponent("addon/\(slug)/")
-        let (data, response) = try await URLSession.shared.data(from: url)
+        // A launch-time update check must not sit on a stalled connection for the
+        // default minute; AMO either answers quickly or is treated as unreachable.
+        let request = URLRequest(url: url, timeoutInterval: 15)
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode != 404 else {
             throw FirefoxAddonStoreError.addonNotFound
         }

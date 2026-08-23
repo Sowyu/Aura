@@ -8,8 +8,8 @@ import WebKit
 // Test output is the deliverable here: the benchmark prints its timings.
 
 /// Loads five heavy real sites three times each, once with the bundled uBlock Origin
-/// loaded through `ExtensionEngine` and once with no extension controller at all. The
-/// gap between the two medians is what blocking buys the user on a real page.
+/// Lite loaded through `ExtensionEngine` and once with no extension controller at all.
+/// The gap between the two medians is what blocking buys the user on a real page.
 ///
 /// Opt in with `ORA_BENCH_PAGELOAD=1`; thirty loads over the network take about ten
 /// minutes, so CI never pays for it. `xcodebuild` only forwards variables prefixed
@@ -24,7 +24,7 @@ struct PageLoadBenchmark {
         "https://www.youtube.com/",
     ]
 
-    private static let uBlockID = "ublock-origin"
+    private static let blockerID = BundledExtensions.folderID
 
     /// Three loads per arm. Enough for a median to mean something, few enough that the
     /// whole run stays under the patience of whoever started it.
@@ -70,24 +70,25 @@ struct PageLoadBenchmark {
     }
 
     @Test(.enabled(if: PageLoadBenchmark.isEnabled))
-    func pageLoadCostWithAndWithoutUBlockOrigin() async throws {
+    func pageLoadCostWithAndWithoutTheBundledBlocker() async throws {
         guard #available(macOS 15.4, *) else { return }
 
         let pool = try #require(AuraWebBundle.processPool, "both arms have to run in the injected bundle's pool")
-        let directory = try Self.unpackBundledUBlock()
+        let directory = try Self.unpackBundledBlocker()
         defer { try? FileManager.default.removeItem(at: directory) }
         _ = try ExtensionShim.apply(at: directory)
 
         let engine = ExtensionEngine()
-        _ = try await engine.load(directory: directory, id: Self.uBlockID)
-        defer { engine.unload(id: Self.uBlockID) }
+        _ = try await engine.load(directory: directory, id: Self.blockerID)
+        defer { engine.unload(id: Self.blockerID) }
 
-        // uBO compiles its filter lists before it registers anything, tens of seconds on
-        // a cold profile. Timing a load before that lands measures an extension that is
-        // not blocking yet, which is the "off" arm wearing the wrong label.
-        let registered = await Self.waitForBroker(Self.uBlockID, timeout: 120)
-        #expect(registered, "uBlock never registered a blocking listener; the on-arm would be a second off-arm")
-        guard registered else { return }
+        // uBO Lite blocks through declarativeNetRequest, so WebKit compiles the rule
+        // sets rather than the extension registering a listener Aura can watch for.
+        // That is about 30 s on a cold profile, and timing a load before it lands
+        // measures an extension that is not blocking yet: the "off" arm wearing the
+        // wrong label. ponytail: a fixed wait, because nothing exposes "rules
+        // compiled". Swap it for the real signal if WebKit ever publishes one.
+        try? await Task.sleep(for: .seconds(60))
 
         for site in Self.sites {
             let url = try #require(URL(string: site))
@@ -240,22 +241,12 @@ struct PageLoadBenchmark {
         return object
     }
 
-    @available(macOS 15.4, *)
-    private static func waitForBroker(_ extensionID: String, timeout: TimeInterval) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if WebRequestBroker.shared.hasBlockingListener(for: extensionID) { return true }
-            try? await Task.sleep(nanoseconds: 250_000_000)
-        }
-        return false
-    }
-
     /// The add-on ships inside the app; nothing downloads at benchmark time.
-    private static func unpackBundledUBlock() throws -> URL {
+    private static func unpackBundledBlocker() throws -> URL {
         let profile = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("aura-pageload-\(UUID().uuidString)", isDirectory: true)
-        let archive = try #require(BundledExtensions.uBlockArchiveURL, "no bundled uBlock Origin to benchmark")
-        let installed = try BundledExtensions.unpack(archive, named: BundledExtensions.uBlockFolderName, into: profile)
+        let archive = try #require(BundledExtensions.archiveURL, "no bundled blocker to benchmark")
+        let installed = try BundledExtensions.unpack(archive, named: BundledExtensions.folderID, into: profile)
         return try #require(installed, "the bundled add-on failed to unpack")
     }
 }

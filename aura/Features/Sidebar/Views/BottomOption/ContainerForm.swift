@@ -62,6 +62,7 @@ struct ContainerForm: View {
         .frame(width: ContainerConstants.UI.emojiButtonSize, height: ContainerConstants.UI.emojiButtonSize)
         .cornerRadius(ContainerConstants.UI.cornerRadius)
         .buttonStyle(InteractiveButtonStyle(cornerRadius: ContainerConstants.UI.cornerRadius, hoverOpacity: 0))
+        .accessibilityLabel(Text("Choose Space Icon"))
         .onHover { isIconPickerHovering = $0 }
         .animation(AnimationSettings.easeOut(0.1), value: isIconPickerHovering)
     }

@@ -25,7 +25,7 @@ protocol BrowserPageDelegate: AnyObject {
         runOpenPanelWith options: BrowserOpenPanelOptions,
         completion: @escaping ([URL]?) -> Void
     )
-    func browserPage(_ page: BrowserPage, runJavaScriptAlert message: String)
+    func browserPage(_ page: BrowserPage, runJavaScriptAlert message: String, completion: @escaping () -> Void)
     func browserPage(_ page: BrowserPage, runJavaScriptConfirm message: String, completion: @escaping (Bool) -> Void)
     func browserPage(
         _ page: BrowserPage,
@@ -81,7 +81,9 @@ extension BrowserPageDelegate {
         completion(nil)
     }
 
-    func browserPage(_ page: BrowserPage, runJavaScriptAlert message: String) {}
+    func browserPage(_ page: BrowserPage, runJavaScriptAlert message: String, completion: @escaping () -> Void) {
+        completion()
+    }
 
     func browserPage(_ page: BrowserPage, runJavaScriptConfirm message: String, completion: @escaping (Bool) -> Void) {
         completion(false)

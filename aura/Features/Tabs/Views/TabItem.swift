@@ -99,6 +99,7 @@ struct TabItem: View {
     @Environment(TabManager.self) private var tabManager
     @Environment(HistoryManager.self) private var historyManager
     @Environment(DownloadManager.self) private var downloadManager
+    @Environment(ContainerManager.self) private var containerManager
     @EnvironmentObject var privacyMode: PrivacyMode
     let availableContainers: [TabContainer]
 
@@ -135,15 +136,18 @@ struct TabItem: View {
         }
         .padding(8)
         .opacity(isDragging ? 0.45 : 1.0)
-        .background(backgroundColor, in: .rect(cornerRadius: 10))
-        .overlay(alignment: .leading) { spaceStripe }
-        .contentShape(ConditionallyConcentricRectangle(cornerRadius: 10))
+        .background(backgroundColor, in: .rect(cornerRadius: AuraRadius.row))
+        .overlay(alignment: .trailing) { ContainerStripe(container: tab.browsingContainer) }
+        .contentShape(ConditionallyConcentricRectangle(cornerRadius: AuraRadius.row))
         // `activateTab` rebuilds the web view for a hibernated tab on the way in, so
         // there is nothing to chase here.
         .onTapGesture { onTap() }
         .onHover { isHovering = $0 }
+        // The row is a button made of a gesture, so it says so itself; the close button
+        // inside it keeps its own label.
+        .accessibilityLabel(Text(tab.title))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .auraContextMenu { contextMenuItems }
-        .animation(AnimationSettings.easeOut(0.15), value: isDragging)
         .geometryGroup()
     }
 
@@ -176,20 +180,13 @@ struct TabItem: View {
     @ViewBuilder
     private var actionButton: some View {
         if tab.type == .pinned, !tab.isWebViewReady {
-            ActionButton(icon: "pin.slash", color: textColor, action: onPinToggle).help("Unpin Tab")
+            ActionButton(icon: "pin.slash", color: textColor, action: onPinToggle)
+                .help("Unpin Tab")
+                .accessibilityLabel(Text("Unpin Tab"))
         } else {
-            ActionButton(icon: "xmark", color: textColor, action: onClose).help("Close Tab")
-        }
-    }
-
-    /// A 2pt colour rail marking which space the tab belongs to. Spaces left on Auto have
-    /// no colour, so most sidebars stay unstriped.
-    @ViewBuilder
-    private var spaceStripe: some View {
-        if let hex = tab.container.iconColorHex, !hex.isEmpty {
-            Capsule()
-                .fill(Color(hex: hex))
-                .frame(width: 2, height: 16)
+            ActionButton(icon: "xmark", color: textColor, action: onClose)
+                .help("Close Tab")
+                .accessibilityLabel(Text("Close Tab"))
         }
     }
 
@@ -231,6 +228,14 @@ struct TabItem: View {
                         }
                 )
             }
+            AuraMenuItem.submenu(
+                "Open in Container",
+                icon: "square.stack.3d.up",
+                items: ContainerMenuItems.choices(
+                    current: tab.browsingContainer,
+                    containers: containerManager.containers
+                ) { containerManager.move(tab, to: $0) }
+            )
             SpaceMenuItems.alwaysOpen(url: tab.url, in: tab.container)
             AuraMenuItem.separator
             AuraMenuItem.item("Close Tab", icon: "xmark", isDestructive: true, action: onClose)
@@ -255,6 +260,30 @@ struct ActionButton: View {
                 .frame(width: Self.hitSize, height: Self.hitSize)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(InteractiveButtonStyle(cornerRadius: 5, hoverOpacity: 0.18, pressOpacity: 0.3, tint: color))
+        .buttonStyle(
+            InteractiveButtonStyle(
+                cornerRadius: AuraRadius.button,
+                hoverOpacity: 0.18,
+                pressOpacity: 0.3,
+                tint: color
+            )
+        )
+    }
+}
+
+/// The tab's browsing container as a 2pt rail on the trailing edge of a row. The 4pt
+/// inset keeps it clear of the row's 10pt corner and outside the close button's 20pt
+/// slot, so nothing moves when the button appears. Blank for a tab in no container,
+/// which is most of them.
+struct ContainerStripe: View {
+    let container: BrowsingContainer?
+
+    var body: some View {
+        if let container {
+            Capsule()
+                .fill(Color(hex: container.colorHex))
+                .frame(width: 2, height: 16)
+                .padding(.trailing, 4)
+        }
     }
 }

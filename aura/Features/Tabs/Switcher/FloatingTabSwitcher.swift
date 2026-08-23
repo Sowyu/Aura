@@ -23,9 +23,6 @@ struct FloatingTabSwitcher: View {
     private enum Constants {
         static let previewWidth: CGFloat = 200
         static let previewHeight: CGFloat = 125
-        static let maxTabsToShow = 5
-        static let cornerRadius: CGFloat = 10
-        static let containerCornerRadius: CGFloat = 32
     }
 
     var body: some View {
@@ -67,7 +64,7 @@ struct FloatingTabSwitcher: View {
     // MARK: - View Components
 
     private var backgroundOverlay: some View {
-        Color.black.opacity(0.3)
+        Color.black.opacity(0.2)
             .ignoresSafeArea()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
@@ -82,13 +79,13 @@ struct FloatingTabSwitcher: View {
             if tabManager.activeContainer != nil {
                 if recentTabs.isEmpty {
                     ZStack {
-                        RoundedRectangle(cornerRadius: Constants.cornerRadius, style: .continuous)
-                            .fill(Color.gray.opacity(0.1))
+                        RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                            .fill(theme.mutedBackground)
                             .frame(width: Constants.previewWidth, height: Constants.previewHeight)
 
                         Text("There are no active tabs")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 13))
+                            .foregroundColor(theme.mutedForeground)
                     }
 
                 } else {
@@ -101,20 +98,15 @@ struct FloatingTabSwitcher: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
-        .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
-        .background(theme.background.opacity(0.3))
-        .cornerRadius(Constants.containerCornerRadius)
-        .shadow(color: theme.primary.opacity(0.07), radius: 16, x: 0, y: 12)
+        .background(theme.popoverBackground)
+        .cornerRadius(AuraRadius.pane)
+        .auraFloatingShadow()
         .background(keyboardHandler)
         .overlay(containerBorder)
     }
 
     private func tabPreviewItem(for tab: Tab) -> some View {
         tabPreview(for: tab)
-            .shadow(
-                color: focusedTab == tab.id ? theme.primary.opacity(0.3) : .clear,
-                radius: 8, x: 0, y: 2
-            )
             .animation(AnimationSettings.easeOut(0.1), value: focusedTab)
             .focusable()
             .focused($focusedTab, equals: tab.id)
@@ -148,23 +140,22 @@ struct FloatingTabSwitcher: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: Constants.previewWidth, height: Constants.previewHeight)
                 .clipped()
-                .cornerRadius(Constants.cornerRadius)
-                .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 4)
+                .cornerRadius(AuraRadius.row)
                 .drawingGroup()
                 .overlay(focusBorder(for: tab))
         } else {
-            RoundedRectangle(cornerRadius: Constants.cornerRadius, style: .continuous)
-                .fill(Color.gray.opacity(0.3))
+            RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                .fill(theme.mutedBackground)
                 .frame(width: Constants.previewWidth, height: Constants.previewHeight)
                 .overlay(focusBorder(for: tab))
         }
     }
 
     private func focusBorder(for tab: Tab) -> some View {
-        RoundedRectangle(cornerRadius: Constants.cornerRadius, style: .continuous)
+        RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
             .stroke(
-                focusedTab == tab.id ? theme.invertedSolidWindowBackgroundColor : Color.clear,
-                lineWidth: 2
+                focusedTab == tab.id ? theme.accent : theme.border,
+                lineWidth: focusedTab == tab.id ? 2 : 1
             )
     }
 
@@ -180,7 +171,7 @@ struct FloatingTabSwitcher: View {
             .frame(width: 16, height: 16)
 
             Text(tab.title)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundColor(theme.foreground)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -199,8 +190,8 @@ struct FloatingTabSwitcher: View {
     }
 
     private var containerBorder: some View {
-        RoundedRectangle(cornerRadius: Constants.containerCornerRadius, style: .continuous)
-            .stroke(Color(.separatorColor), lineWidth: 1.5)
+        RoundedRectangle(cornerRadius: AuraRadius.pane, style: .continuous)
+            .stroke(theme.border, lineWidth: 1)
     }
 
     // MARK: - Computed Properties
@@ -214,7 +205,7 @@ struct FloatingTabSwitcher: View {
             .sorted { (lhs: Tab, rhs: Tab) in
                 (lhs.lastAccessedAt ?? .distantPast) > (rhs.lastAccessedAt ?? .distantPast)
             }
-            .prefix(Constants.maxTabsToShow)
+            .prefix(SettingsStore.shared.maxRecentTabs)
             .map { $0 }
     }
 

@@ -24,6 +24,9 @@ struct AuraMenuItem: Identifiable {
     var title = ""
     /// SF Symbol name.
     var icon: String?
+    /// Tint for `icon`, as `#RRGGBB`. Nil leaves the symbol in the row's own colour.
+    /// Used by rows that stand for a coloured thing, such as a browsing container.
+    var iconColorHex: String?
     /// Right-aligned hint such as "⌘T". Purely cosmetic: the menu never handles it.
     var shortcut: String?
     var state: SelectionState = .none
@@ -45,6 +48,7 @@ extension AuraMenuItem {
     static func item(
         _ title: String,
         icon: String? = nil,
+        iconColorHex: String? = nil,
         shortcut: String? = nil,
         state: SelectionState = .none,
         isDestructive: Bool = false,
@@ -55,6 +59,7 @@ extension AuraMenuItem {
             kind: .item,
             title: title,
             icon: icon,
+            iconColorHex: iconColorHex,
             shortcut: shortcut,
             state: state,
             isDestructive: isDestructive,

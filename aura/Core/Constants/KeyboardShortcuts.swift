@@ -47,11 +47,14 @@ enum KeyboardShortcuts {
             category: "Tabs",
             defaultChord: KeyChord(keyEquivalent: .leftArrow, modifiers: [.option, .command])
         )
+        /// Was ⌘D until bookmarks existed. Every browser spends ⌘D on "save this page",
+        /// and two menu items sharing a key equivalent means AppKit picks one by menu
+        /// order. A custom binding already stored under this id still wins.
         static let pin = KeyboardShortcutDefinition(
             id: "tabs.pin",
             name: "Pin Tab",
             category: "Tabs",
-            defaultChord: KeyChord(keyEquivalent: .init("d"), modifiers: [.command])
+            defaultChord: KeyChord(keyEquivalent: .init("p"), modifiers: [.command, .option])
         )
         static let tab1 = KeyboardShortcutDefinition(
             id: "tabs.tab1",
@@ -242,11 +245,13 @@ enum KeyboardShortcuts {
     // MARK: - Zoom
 
     enum Zoom {
+        /// `=` rather than `+`: the key people actually press for ⌘+ is the unshifted
+        /// one, and a chord spelled with `+` only matches when shift is held too.
         static let zoomIn = KeyboardShortcutDefinition(
             id: "zoom.zoomIn",
             name: "Zoom In",
             category: "Zoom",
-            defaultChord: KeyChord(keyEquivalent: .init("+"), modifiers: [.command])
+            defaultChord: KeyChord(keyEquivalent: .init("="), modifiers: [.command])
         )
         static let zoomOut = KeyboardShortcutDefinition(
             id: "zoom.zoomOut",
@@ -282,12 +287,11 @@ enum KeyboardShortcuts {
             category: "Developer",
             defaultChord: KeyChord(keyEquivalent: .init("i"), modifiers: [.command, .option])
         )
-        static let reloadIgnoringCache = KeyboardShortcutDefinition(
-            id: "developer.reloadIgnoringCache",
-            name: "Reload (Ignoring Cache)",
-            category: "Developer",
-            defaultChord: KeyChord(keyEquivalent: .init("r"), modifiers: [.command, .shift])
-        )
+        // `developer.reloadIgnoringCache` was here on ⇧⌘R, the same chord as
+        // `navigation.hardReload` and doing the same thing. Nothing referenced it, and
+        // two commands on one chord means AppKit picks between them by menu order, so it
+        // went; `CustomKeyboardShortcutManager.retiredShortcutIDs` drops any binding
+        // someone had stored under it.
     }
 
     // MARK: - App
@@ -326,6 +330,44 @@ enum KeyboardShortcuts {
     }
 }
 
+extension KeyboardShortcuts {
+    /// Out here for the same reason the catalogue below is: the enum body is already at
+    /// the type-length limit.
+    enum Bookmarks {
+        static let add = KeyboardShortcutDefinition(
+            id: "bookmarks.add",
+            name: "Add Bookmark",
+            category: "Bookmarks",
+            defaultChord: KeyChord(keyEquivalent: .init("d"), modifiers: [.command])
+        )
+        static let toggleBar = KeyboardShortcutDefinition(
+            id: "bookmarks.toggleBar",
+            name: "Show Bookmarks Bar",
+            category: "Bookmarks",
+            defaultChord: KeyChord(keyEquivalent: .init("b"), modifiers: [.command, .shift])
+        )
+        static let showManager = KeyboardShortcutDefinition(
+            id: "bookmarks.showManager",
+            name: "Show All Bookmarks",
+            category: "Bookmarks",
+            defaultChord: KeyChord(keyEquivalent: .init("b"), modifiers: [.command, .option])
+        )
+    }
+}
+
+extension KeyboardShortcuts {
+    /// Out here with `Bookmarks` for the same reason: the enum body is at the type-length
+    /// limit.
+    enum Files {
+        static let open = KeyboardShortcutDefinition(
+            id: "files.open",
+            name: "Open File",
+            category: "Files",
+            defaultChord: KeyChord(keyEquivalent: .init("o"), modifiers: [.command])
+        )
+    }
+}
+
 // Catalogue kept out of the enum body so adding a shortcut does not grow it past the type length limit.
 extension KeyboardShortcuts {
     /// All keyboard shortcut definitions
@@ -351,6 +393,12 @@ extension KeyboardShortcuts {
         // History
         History.show,
 
+        // Bookmarks
+        Bookmarks.add, Bookmarks.toggleBar, Bookmarks.showManager,
+
+        // Files
+        Files.open,
+
         // Zoom
         Zoom.zoomIn, Zoom.zoomOut, Zoom.reset,
 
@@ -358,7 +406,7 @@ extension KeyboardShortcuts {
         Privacy.toggleJavaScript,
 
         // Developer
-        Developer.toggleDevTools, Developer.reloadIgnoringCache,
+        Developer.toggleDevTools,
 
         // App
         App.quit, App.hide, App.preferences, App.toggleSidebar, App.toggleToolbar

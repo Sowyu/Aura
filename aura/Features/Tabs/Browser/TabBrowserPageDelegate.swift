@@ -1,12 +1,84 @@
 import AppKit
 import SwiftUI
 
+/// Remembers the URL a tab last recorded a visit for. The page script reports on every
+/// `<title>` mutation, so without this a page that keeps renaming itself counts as a new
+/// visit every 150 ms.
+struct HistoryVisitGate {
+    private var lastRecordedURL: URL?
+    private var lastRecorded: (title: String, favicon: URL?)?
+
+    enum Change: Equatable {
+        /// Nothing the row stores has changed, so there is nothing to fetch or save.
+        case none
+        /// Same page, new title or icon: refresh the row, do not count a visit.
+        case details
+        /// A different URL: a real visit.
+        case visit
+    }
+
+    /// What a page-script or navigation update means for history. A retitling page
+    /// sends the same URL many times a second; only the first of each title is work.
+    mutating func change(url: URL, title: String, favicon: URL?) -> Change {
+        defer {
+            lastRecordedURL = url
+            lastRecorded = (title, favicon)
+        }
+        if lastRecordedURL != url { return .visit }
+        if let lastRecorded, lastRecorded.title == title, lastRecorded.favicon == favicon { return .none }
+        return .details
+    }
+
+    /// True when `url` is a move away from the last recorded one, so it is a real visit.
+    mutating func countsAsVisit(_ url: URL) -> Bool {
+        change(url: url, title: lastRecorded?.title ?? "", favicon: lastRecorded?.favicon) == .visit
+    }
+}
+
+/// The one snapshot the chrome colour needs. Rendering the whole view per finished
+/// navigation makes the web content process draw a frame nobody looks at, so the
+/// snapshot is scoped to the strip the colour is averaged from and downscaled on the
+/// way out.
+enum HeaderColorSnapshot {
+    /// How much of the top of the page the colour is averaged over, in points.
+    static let stripHeight: CGFloat = 24
+    /// The whole view at 32px wide, never a rect: a rect-scoped snapshot is a known
+    /// WebKit flash trigger (see `BrowserSnapshotConfiguration`). The strip is cut out
+    /// of the tiny bitmap afterwards, which costs nothing.
+    static func configuration(for viewSize: CGSize) -> BrowserSnapshotConfiguration {
+        .thumbnail
+    }
+
+    /// The top strip of the scaled bitmap, in pixels, for a view of `viewSize` points.
+    static func stripRect(imageSize: CGSize, viewSize: CGSize) -> CGRect {
+        guard viewSize.height > 0, imageSize.height > 0 else {
+            return CGRect(origin: .zero, size: imageSize)
+        }
+        let fraction = min(1, stripHeight / viewSize.height)
+        let height = max(1, (imageSize.height * fraction).rounded(.up))
+        return CGRect(x: 0, y: 0, width: imageSize.width, height: height)
+    }
+
+    /// A snapshot is only worth a forced render when someone can see the result: a
+    /// background tab has no window, and a window that is not key is behind something.
+    static func shouldSnapshot(windowIsKey: Bool, isVisibleTab: Bool) -> Bool {
+        windowIsKey && isVisibleTab
+    }
+}
+
 final class TabBrowserPageDelegate: BrowserPageDelegate {
     weak var tab: Tab?
     weak var mediaController: MediaController?
     weak var passwordCoordinator: PasswordAutofillCoordinator?
 
     private var progressResetWorkItem: DispatchWorkItem?
+    /// One delegate per tab, so this is the tab's own last-recorded URL.
+    private var historyGate = HistoryVisitGate()
+    /// A load finished while the tab was hidden or its window was in the background.
+    /// `TabManager.activateTab` asks for the colour again when the tab comes up; this
+    /// covers the rest, on the next navigation or title report that arrives while the
+    /// tab is visible.
+    private var pendingHeaderColor = false
 
     func browserPage(
         _ page: BrowserPage,
@@ -16,7 +88,11 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
             return routed
         }
 
-        guard navigationAction.modifierFlags.contains(.command),
+        let intent = LinkOpenIntent.from(
+            buttonNumber: navigationAction.buttonNumber,
+            modifiers: navigationAction.modifierFlags
+        )
+        guard intent != .sameTab,
               let url = navigationAction.request.url,
               let tab,
               let tabManager = tab.tabManager,
@@ -31,10 +107,13 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
                 url: url,
                 historyManager: historyManager,
                 downloadManager: downloadManager,
+                focusAfterOpening: intent == .foreground,
                 isPrivate: tab.isPrivate
             )
         }
-        return .openInNewTab
+        // Cancel, not `.openInNewTab`: the tab is already open, and that disposition
+        // would have the page ask for a second one on the same URL.
+        return .cancel
     }
 
     func browserPage(_ page: BrowserPage, didRequestOpenInNewTab url: URL) {
@@ -70,6 +149,9 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
                 downloadManager: tab.downloadManager,
                 isPrivate: tab.isPrivate
             )
+            // WebKit built the popup on the opener's data store, so the adopted tab
+            // records the opener's container rather than the space default.
+            newTab.browsingContainer = tab.browsingContainer
             newTab.browserPage = popup
             newTab.setupBrowserPageDelegate(for: popup)
             newTab.syncBackgroundColorFromHex()
@@ -80,10 +162,16 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
 
     func browserPage(_ page: BrowserPage, didUpdateNavigation event: BrowserNavigationEvent) {
         guard let tab else { return }
+        flushPendingHeaderColor(page)
 
         switch event.phase {
         case .started:
             progressResetWorkItem?.cancel()
+            // The page that raised them is going away, and WebKit hangs a page on a
+            // reply that never comes, so anything outstanding is refused first.
+            MainActor.assumeIsolated {
+                SitePermissionCoordinator.shared.cancelRequests(forTab: tab.id)
+            }
             tab.clearNavigationError()
             tab.colorUpdated = false
             passwordCoordinator?.clearAutofillState()
@@ -111,6 +199,10 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
                 MainActor.assumeIsolated {
                     mediaController?.syncTitleForTab(tab.id, newTitle: title)
                 }
+            } else if (event.url ?? tab.url).isFileURL {
+                // A PDF or a plain-text file reports no title, which left the sidebar
+                // row blank. The file name is what the user opened, so show that.
+                tab.title = (event.url ?? tab.url).lastPathComponent
             }
             if let url = event.url {
                 tab.updateURL(url)
@@ -118,12 +210,14 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
                 // gating on `favicon == nil` left the previous site's icon on the tab
                 // after a cross-domain navigation.
                 tab.setFavicon()
-                tab.updateHistory()
+                recordHistory(for: tab)
                 tab.updateHeaderColor()
             }
             // A tab coming back from hibernation reloads from the top; put it back
             // where the user left it.
             tab.restoreScrollOffsetIfNeeded()
+            // The one moment the back/forward list is settled.
+            tab.captureSession()
 
             let workItem = DispatchWorkItem { [weak tab] in
                 tab?.loadingProgress = 0
@@ -133,6 +227,11 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
 
         MainActor.assumeIsolated {
+            // Per-site zoom rides on every phase that names a URL, not just the finished
+            // one: `pageZoom` belongs to the web view rather than the document, so a tab
+            // leaving a zoomed site carries that zoom to the next one until it is reset,
+            // and doing it at `.started` means the first frame is already the right size.
+            SiteZoomController.apply(to: page, url: event.url ?? page.currentURL)
             ExtensionManager.shared.tabNavigationDidChange(tab)
         }
     }
@@ -154,6 +253,7 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
 
         switch message.name {
         case "listener":
+            flushPendingHeaderColor(page)
             handleURLUpdateMessage(message.body, for: tab)
         case "linkHover":
             let hovered = (message.body as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -169,14 +269,28 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
     }
 
+    /// Never `.prompt`: that hands the question back to WebKit, which puts its own raw
+    /// dialog up and remembers nothing. The coordinator answers from the site's stored
+    /// grants when it has one and queues Aura's own prompt when it does not.
     func browserPage(
         _ page: BrowserPage,
         requestPermission permission: BrowserPermissionKind,
         origin: URL?,
         decisionHandler: @escaping (BrowserPermissionDecision) -> Void
     ) {
-        // Let WebKit show the system permission prompt rather than granting silently.
-        decisionHandler(.prompt)
+        guard let tab else {
+            decisionHandler(.deny)
+            return
+        }
+        MainActor.assumeIsolated {
+            SitePermissionCoordinator.shared.request(
+                kind: permission,
+                origin: origin ?? page.currentURL,
+                tabID: tab.id,
+                isPrivate: tab.isPrivate,
+                decide: decisionHandler
+            )
+        }
     }
 
     func browserPage(
@@ -193,13 +307,34 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
     }
 
-    func browserPage(_ page: BrowserPage, runJavaScriptAlert message: String) {
+    /// `runModal` here spins a nested modal run loop on the main thread, which stalls
+    /// every other window and, worse, any web process parked in a synchronous
+    /// injected-bundle ask, for as long as the dialog is up. A sheet keeps the run loop
+    /// turning, so any visible window will do as a host: a dialog on the wrong window
+    /// beats freezing all of them.
+    private func present(_ alert: NSAlert, on page: BrowserPage, respond: @escaping (Bool) -> Void) {
+        let host = page.window
+            ?? NSApp.keyWindow
+            ?? NSApp.windows.first { $0.isVisible && $0.canBecomeKey && $0.attachedSheet == nil }
+        guard let host else {
+            // Last resort: the page is windowless (an off-screen or detached web view)
+            // and there is nothing on screen to attach to. This blocks the whole UI
+            // thread until the dialog is dismissed.
+            respond(alert.runModal() == .alertFirstButtonReturn)
+            return
+        }
+        alert.beginSheetModal(for: host) { response in
+            respond(response == .alertFirstButtonReturn)
+        }
+    }
+
+    func browserPage(_ page: BrowserPage, runJavaScriptAlert message: String, completion: @escaping () -> Void) {
         let alert = NSAlert()
         alert.messageText = "Alert"
         alert.informativeText = message
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
-        alert.runModal()
+        present(alert, on: page) { _ in completion() }
     }
 
     func browserPage(_ page: BrowserPage, runJavaScriptConfirm message: String, completion: @escaping (Bool) -> Void) {
@@ -209,7 +344,7 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Cancel")
-        completion(alert.runModal() == .alertFirstButtonReturn)
+        present(alert, on: page, respond: completion)
     }
 
     func browserPage(
@@ -229,10 +364,8 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         textField.stringValue = defaultText ?? ""
         alert.accessoryView = textField
 
-        if alert.runModal() == .alertFirstButtonReturn {
-            completion(textField.stringValue)
-        } else {
-            completion(nil)
+        present(alert, on: page) { accepted in
+            completion(accepted ? textField.stringValue : nil)
         }
     }
 
@@ -267,25 +400,65 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
     /// instead of the tab polling for one.
     @discardableResult
     func takeSnapshotAfterLoad(_ page: BrowserPage) -> Bool {
-        guard !page.isLoading, page.contentView.bounds.width > 0 else { return false }
+        let bounds = page.contentView.bounds
+        guard !page.isLoading, bounds.width > 0 else { return false }
 
-        page.takeSnapshot(configuration: .thumbnail) { [weak self] image, error in
+        let window = page.contentView.window
+        guard HeaderColorSnapshot.shouldSnapshot(
+            windowIsKey: window?.isKeyWindow ?? false,
+            isVisibleTab: window != nil
+        ) else {
+            // Handled, so the caller stops retrying; the colour is taken when the tab
+            // is next in front.
+            pendingHeaderColor = true
+            return true
+        }
+        pendingHeaderColor = false
+
+        page.takeSnapshot(configuration: HeaderColorSnapshot.configuration(for: bounds.size)) { [weak self] image, error in
             guard let self, let image, error == nil else { return }
-            guard let fullImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-            // The header colour comes from the top of the page, as the old 24pt strip did:
-            // keep the top tenth of the thumbnail (at least one row) before averaging.
-            let stripHeight = max(1, fullImage.height / 10)
-            let strip = CGRect(x: 0, y: 0, width: fullImage.width, height: stripHeight)
-            let cgImage = fullImage.cropping(to: strip) ?? fullImage
+            guard let full = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+            let strip = HeaderColorSnapshot.stripRect(
+                imageSize: CGSize(width: full.width, height: full.height),
+                viewSize: bounds.size
+            )
+            let cgImage = full.cropping(to: strip) ?? full
 
-            let color = self.extractDominantColor(from: cgImage) ?? .black
             DispatchQueue.main.async {
+                let color = Self.extractDominantColor(from: cgImage) ?? .black
                 self.tab?.updateBackgroundColor(Color(nsColor: color))
                 self.tab?.colorUpdated = true
             }
         }
 
         return true
+    }
+
+    /// Retakes a colour that was skipped while the tab was out of sight.
+    private func flushPendingHeaderColor(_ page: BrowserPage) {
+        guard pendingHeaderColor else { return }
+        takeSnapshotAfterLoad(page)
+    }
+
+    /// Records a visit only when the tab moved to a different URL. A title-only report
+    /// refreshes the existing entry instead of counting a second visit.
+    private func recordHistory(for tab: Tab) {
+        guard let historyManager = tab.historyManager else { return }
+        let change = historyGate.change(url: tab.url, title: tab.title, favicon: tab.favicon)
+        guard change != .none else { return }
+        let countsAsVisit = change == .visit
+        let (title, url, favicon, localFile, container) =
+            (tab.title, tab.url, tab.favicon, tab.faviconLocalFile, tab.container)
+        Task { @MainActor in
+            historyManager.record(
+                title: title,
+                url: url,
+                faviconURL: favicon,
+                faviconLocalFile: localFile,
+                container: container,
+                countsAsVisit: countsAsVisit
+            )
+        }
     }
 
     private func handleURLUpdateMessage(_ body: Any?, for tab: Tab) {
@@ -302,7 +475,7 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
             tab.updateURL(href)
         }
         tab.setFavicon()
-        tab.updateHistory()
+        recordHistory(for: tab)
 
         if oldTitle != update.title, !update.title.isEmpty {
             MainActor.assumeIsolated {
@@ -324,23 +497,29 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
     }
 
-    private func extractDominantColor(from cgImage: CGImage) -> NSColor? {
+    /// One 1x1 scratch bitmap for every average taken in the app. Building a `CGContext`
+    /// per navigation is allocation for nothing. Main thread only, which is where the
+    /// snapshot completion is hopped onto before it draws.
+    private static let averagingContext = CGContext(
+        data: nil,
+        width: 1,
+        height: 1,
+        bitsPerComponent: 8,
+        bytesPerRow: 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    )
+
+    private static func extractDominantColor(from cgImage: CGImage) -> NSColor? {
+        dispatchPrecondition(condition: .onQueue(.main))
         guard cgImage.width > 0, cgImage.height > 0 else { return nil }
+        guard let context = averagingContext else { return nil }
 
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let context = CGContext(
-            data: nil,
-            width: 1,
-            height: 1,
-            bitsPerComponent: 8,
-            bytesPerRow: 4,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            return nil
-        }
-
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        // The pixel is reused, so last navigation's colour has to go before a partly
+        // transparent page blends over it.
+        let pixel = CGRect(x: 0, y: 0, width: 1, height: 1)
+        context.clear(pixel)
+        context.draw(cgImage, in: pixel)
         guard let data = context.data else { return nil }
 
         let pixels = data.assumingMemoryBound(to: UInt8.self)

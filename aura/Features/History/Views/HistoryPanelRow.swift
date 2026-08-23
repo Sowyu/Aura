@@ -39,14 +39,15 @@ struct HistoryPanelRow: View {
 
             Spacer(minLength: 0)
 
-            if isHovered {
-                hoverActions
-            }
+            // Always laid out, so hovering toggles opacity only: the title never shifts.
+            hoverActions
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 6)
         .background(
-            ConditionallyConcentricRectangle(cornerRadius: 12)
+            ConditionallyConcentricRectangle(cornerRadius: AuraRadius.row)
                 .fill(isHovered ? theme.mutedBackground.opacity(0.5) : .clear)
         )
         .contentShape(Rectangle())
@@ -74,7 +75,7 @@ struct HistoryPanelRow: View {
                 .frame(width: 20, height: 20)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.interactive(cornerRadius: 6))
+        .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
         .help(help)
     }
 

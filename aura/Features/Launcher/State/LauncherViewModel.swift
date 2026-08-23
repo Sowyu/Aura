@@ -12,6 +12,10 @@ class LauncherViewModel: ObservableObject {
 
     private let debouncer = Debouncer(delay: 0.2)
     private var autoSuggestionRequestID = 0
+    /// How long a burst of typing coalesces into one local search.
+    static let localSearchDebounce: TimeInterval = 0.04
+    private var localSearchTask: Task<Void, Never>?
+    private var lastLocalSearchAt: Date?
 
     // Dependencies injected from the view layer
     private(set) var tabManager: TabManager?
@@ -49,7 +53,7 @@ class LauncherViewModel: ObservableObject {
     /// exception it enforces itself: row 0 is always what the typed text does. An open tab
     /// that happens to match the address is a row you can arrow onto, never the default.
     func searchHandler(_ text: String) {
-        guard let tabManager, let historyManager else { return }
+        guard tabManager != nil, historyManager != nil else { return }
 
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else {
             invalidateAutoSuggestionRequests()
@@ -60,6 +64,52 @@ class LauncherViewModel: ObservableObject {
 
         let requestID = nextAutoSuggestionRequestID()
 
+        // The history fetch and the tab scan used to run on every keystroke, on the main
+        // thread, between the key going down and the character appearing.
+        localSearchTask?.cancel()
+        let now = Date()
+        if Self.runsLocalSearchNow(lastRunAt: lastLocalSearchAt, now: now) {
+            lastLocalSearchAt = now
+            runLocalSearch(text)
+        } else {
+            localSearchTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(Self.localSearchDebounce))
+                guard !Task.isCancelled, let self else { return }
+                self.lastLocalSearchAt = Date()
+                self.runLocalSearch(text)
+            }
+        }
+
+        // Not for a palette query: a search engine has nothing to say about `>reload`,
+        // and its answers would land in the middle of the command list.
+        if AppCommandCatalog.paletteQuery(text) == nil {
+            requestAutoSuggestions(text, requestID: requestID)
+        }
+    }
+
+    /// The first keystroke after a pause searches immediately, so the list is there for
+    /// the first character typed. Anything closer than the window waits it out, which is
+    /// what keeps a held-down key from running one history fetch per repeat.
+    static func runsLocalSearchNow(
+        lastRunAt: Date?,
+        now: Date,
+        window: TimeInterval = LauncherViewModel.localSearchDebounce
+    ) -> Bool {
+        guard let lastRunAt else { return true }
+        return now.timeIntervalSince(lastRunAt) >= window
+    }
+
+    private func runLocalSearch(_ text: String) {
+        guard let tabManager, let historyManager else { return }
+
+        // `>` hands the whole list to the app's commands: there is no address in a
+        // palette query, so nothing else belongs in it.
+        if let palette = AppCommandCatalog.paletteQuery(text) {
+            suggestions = commandSuggestions(palette, palette: true)
+            focusedElement = suggestions.first?.id ?? UUID()
+            return
+        }
+
         let histories = historyManager.search(
             text,
             activeContainerId: tabManager.activeContainer?.id ?? UUID()
@@ -68,17 +118,24 @@ class LauncherViewModel: ObservableObject {
 
         suggestions = LauncherResultMerger.merge(
             typed: typedTextSuggestion(text),
-            links: historySuggestions(histories, matching: text),
+            links: historySuggestions(histories, matching: text) + commandSuggestions(text, palette: false),
             openTabs: openTabSuggestions(tabs, matching: text),
             trailing: trailingSuggestions(text)
         )
         focusedElement = suggestions.first?.id ?? UUID()
+    }
 
-        requestAutoSuggestions(text, requestID: requestID)
+    /// Rows for the app's own commands. See `AppCommand.swift` for the row itself.
+    private func commandSuggestions(_ query: String, palette: Bool) -> [LauncherSuggestion] {
+        AppCommandCatalog.matches(query, palette: palette).map {
+            LauncherSuggestion(command: $0, query: query, palette: palette)
+        }
     }
 
     func reset() {
         invalidateAutoSuggestionRequests()
+        localSearchTask?.cancel()
+        lastLocalSearchAt = nil
         suggestions = []
         focusedElement = UUID()
         currentText = ""

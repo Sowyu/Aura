@@ -74,7 +74,8 @@ private struct PasswordsWindowUnavailableView: View {
                 .ignoresSafeArea()
 
             Text("Passwords are unavailable because the shared data store could not be opened.")
-                .foregroundStyle(.secondary)
+                .font(.system(size: 13))
+                .foregroundStyle(theme.mutedForeground)
                 .padding(24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
@@ -95,7 +96,7 @@ private struct PasswordsWindowView: View {
             // The whole vault is `PasswordVaultView`, shared with the Passwords settings
             // section. The window gives the table every point it has left; the settings
             // card, being inside a scroll view, pins it to a fixed height instead.
-            PasswordVaultView(title: "Saved Passwords", containers: containers)
+            PasswordVaultView(title: "Saved passwords", containers: containers)
                 .padding(20)
         }
         .frame(minWidth: 960, minHeight: 480)

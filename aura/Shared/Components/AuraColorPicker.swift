@@ -14,6 +14,8 @@ struct AuraColorPicker: View {
     private static let barHeight: CGFloat = 12
     private static let knobSize: CGFloat = 12
 
+    @Environment(\.theme) private var theme
+
     @State private var hue: Double = 0.58
     @State private var saturation: Double = 0.7
     @State private var value: Double = 0.97
@@ -58,7 +60,7 @@ struct AuraColorPicker: View {
                         y: (1 - value) * geo.size.height - Self.knobSize / 2
                     )
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous))
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0).onChanged { drag in
@@ -132,7 +134,7 @@ struct AuraColorPicker: View {
             .fill(color)
             .frame(width: Self.knobSize, height: Self.knobSize)
             .overlay(Circle().stroke(.white, lineWidth: 2))
-            .shadow(color: .black.opacity(0.3), radius: 1)
+            .auraFloatingShadow()
     }
 
     // MARK: - Presets and hex
@@ -149,7 +151,10 @@ struct AuraColorPicker: View {
                         .frame(width: 16, height: 16)
                         .overlay(
                             Circle()
-                                .stroke(Color.primary.opacity(isSelected(preset) ? 0.8 : 0.15), lineWidth: 1.5)
+                                .stroke(
+                                    isSelected(preset) ? theme.foreground.opacity(0.8) : theme.border,
+                                    lineWidth: 1.5
+                                )
                         )
                 }
                 .buttonStyle(.plain)
@@ -159,12 +164,12 @@ struct AuraColorPicker: View {
 
     private var hexRow: some View {
         HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
+            RoundedRectangle(cornerRadius: AuraRadius.button, style: .continuous)
                 .fill(preview)
                 .frame(width: 20, height: 20)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: AuraRadius.button, style: .continuous)
+                        .stroke(theme.border, lineWidth: 1)
                 )
             TextField("#RRGGBB", text: $hexField)
                 .textFieldStyle(.roundedBorder)
@@ -203,8 +208,10 @@ struct AuraColorPicker: View {
     }
 
     private func load() {
-        let resolved = NSColor(Color(hex: hex)).usingColorSpace(.sRGB)
-            ?? NSColor(Color(hex: AuraGlass.defaultTintHex))
+        // An empty or malformed stored hex means "no colour of its own yet", which is
+        // the theme accent rather than the grey `Color(hex:)` falls back to.
+        let base = Self.normalizedHex(hex).map { Color(hex: $0) } ?? theme.accent
+        guard let resolved = NSColor(base).usingColorSpace(.sRGB) else { return }
         var hueOut: CGFloat = 0
         var satOut: CGFloat = 0
         var valueOut: CGFloat = 0

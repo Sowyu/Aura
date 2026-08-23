@@ -20,7 +20,9 @@ struct NewContainerButton: View {
             }
             .padding(8)
         }
-        .buttonStyle(.interactive(cornerRadius: 8, tint: theme.invertedSolidWindowBackgroundColor))
+        .buttonStyle(.interactive(cornerRadius: AuraRadius.button, tint: theme.invertedSolidWindowBackgroundColor))
+        .help("New Space")
+        .accessibilityLabel(Text("New Space"))
     }
 }
 

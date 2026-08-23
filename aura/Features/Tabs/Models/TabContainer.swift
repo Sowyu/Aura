@@ -25,6 +25,10 @@ class TabContainer: ObservableObject, Identifiable {
     @Relationship(deleteRule: .cascade) var tabs: [Tab] = []
     @Relationship(deleteRule: .cascade) var folders: [Folder] = []
     @Relationship var history: [History] = []
+    /// Browsing container new tabs in this space land in. `nil` means no container, so
+    /// they browse on the shared default store. Spaces and containers are independent:
+    /// this is only the default, any tab can be moved elsewhere.
+    @Relationship var defaultBrowsingContainer: BrowsingContainer?
 
     init(
         id: UUID = UUID(),

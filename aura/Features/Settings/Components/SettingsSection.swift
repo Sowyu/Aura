@@ -2,15 +2,25 @@ import SwiftUI
 
 /// One set of numbers for every settings page, window and embedded tab alike.
 enum SettingsMetrics {
-    static let pagePadding: CGFloat = 24
+    /// The one horizontal inset in Settings. The nav column, the page header and the
+    /// cards all use it, so the gap left of a card matches the gap right of it and the
+    /// gap between the nav rows and the cards.
+    static let gutter: CGFloat = 16
     static let cardSpacing: CGFloat = 16
     static let cardPadding: CGFloat = 16
+    /// Cards stop growing here and stay left-aligned. A toggle row stretched across a
+    /// 1400pt window puts its control a screen away from its label.
+    static let contentMaxWidth: CGFloat = 960
     /// Wide enough for the longest section title. At 220 "Passwords and Autofill"
     /// truncated to "Passwords and Auto…".
     static let sidebarWidth: CGFloat = 244
     /// The space picker inside the Spaces page. Narrower than the nav sidebar: it holds
     /// one short name per row and the cards beside it need the width more.
     static let spaceListWidth: CGFloat = 180
+    static let searchFieldHeight: CGFloat = 28
+    /// Matches the fill `HomePageView` gives the content pane, so the window blur behind
+    /// it shows through by the same amount.
+    static let paneOpacity: Double = 0.85
 }
 
 struct SettingsSection<Content: View>: View {
@@ -22,7 +32,8 @@ struct SettingsSection<Content: View>: View {
             VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
                 content()
             }
-            .padding(SettingsMetrics.pagePadding)
+            .frame(maxWidth: SettingsMetrics.contentMaxWidth, alignment: .leading)
+            .padding(SettingsMetrics.gutter)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(alwaysShowScrollBars ? .visible : .automatic)

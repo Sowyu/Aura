@@ -15,5 +15,5 @@ pre-commit:
 
 pre-push:
   commands:
-    build:
-      run: ./scripts/xcbuild-debug.sh
+    test:
+      run: ./scripts/xctest-debug.sh

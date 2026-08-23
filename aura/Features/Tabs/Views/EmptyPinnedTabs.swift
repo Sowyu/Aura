@@ -16,9 +16,9 @@ struct EmptyPinnedTabs: View {
         .frame(maxWidth: .infinity)
         .padding(8)
         .background(theme.invertedSolidWindowBackgroundColor.opacity(0.07))
-        .cornerRadius(10)
+        .cornerRadius(AuraRadius.row)
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
                 .stroke(
                     theme.invertedSolidWindowBackgroundColor.opacity(0.25),
                     style: StrokeStyle(lineWidth: 1, dash: [5, 5])

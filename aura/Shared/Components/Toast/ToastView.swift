@@ -129,7 +129,6 @@ struct ToastItemView: View {
     let toast: Toast
     let onDismiss: () -> Void
     @Environment(\.theme) private var theme
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 8) {
@@ -150,21 +149,18 @@ struct ToastItemView: View {
                     .foregroundColor(theme.foreground.opacity(0.4))
                     .frame(width: 20, height: 20)
             }
-            .buttonStyle(.interactive(cornerRadius: 5))
+            .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .frame(width: 356)
-        .background(colorScheme == .dark ? theme.background.opacity(0.7) : theme.background)
-        .background(
-            BlurEffectView(material: .hudWindow, blendingMode: .withinWindow)
-        )
-        .clipShape(ConditionallyConcentricRectangle(cornerRadius: 14))
+        .background(theme.popoverBackground)
+        .clipShape(ConditionallyConcentricRectangle(cornerRadius: AuraRadius.pane))
         .overlay(
-            ConditionallyConcentricRectangle(cornerRadius: 14)
-                .stroke(theme.border.opacity(0.5), lineWidth: 0.5)
+            ConditionallyConcentricRectangle(cornerRadius: AuraRadius.pane)
+                .stroke(theme.border, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        .auraFloatingShadow()
     }
 
     @ViewBuilder

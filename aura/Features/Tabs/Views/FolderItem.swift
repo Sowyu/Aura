@@ -22,11 +22,9 @@ struct FolderItem: View {
     private var tabCount: Int { folder.sortedTabs.count }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: folder.isCollapsed ? "chevron.right" : "chevron.down")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(theme.foreground.opacity(0.6))
-                .frame(width: 10)
+        // The folder glyph takes the favicon column and the chevron the close-button
+        // column, so a folder's title starts where a tab's does.
+        HStack(spacing: 8) {
             Image(systemName: "folder")
                 .font(.system(size: 12))
                 .foregroundColor(theme.foreground)
@@ -38,14 +36,22 @@ struct FolderItem: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.foreground.opacity(0.6))
             }
+            Image(systemName: folder.isCollapsed ? "chevron.right" : "chevron.down")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(theme.foreground.opacity(0.6))
+                .frame(width: 20, height: 20)
         }
         .padding(8)
-        .background(backgroundColor, in: .rect(cornerRadius: 10))
+        .background(backgroundColor, in: .rect(cornerRadius: AuraRadius.row))
         .overlay(dropOutline)
-        .contentShape(ConditionallyConcentricRectangle(cornerRadius: 10))
+        // No container stripe: a folder holds tabs from any container, so it belongs to none.
+        .contentShape(ConditionallyConcentricRectangle(cornerRadius: AuraRadius.row))
         .onTapGesture(count: 2) { beginRename() }
         .onTapGesture { if !isRenaming { onToggle() } }
         .onHover { isHovering = $0 }
+        .accessibilityLabel(Text(folder.name))
+        .accessibilityValue(Text(folder.isCollapsed ? "Collapsed" : "Expanded"))
+        .accessibilityAddTraits(.isButton)
         .auraContextMenu { contextMenuItems }
         .onChange(of: isRenaming, initial: true) { _, renaming in
             if renaming {
@@ -80,7 +86,7 @@ struct FolderItem: View {
     @ViewBuilder
     private var dropOutline: some View {
         if isDropTarget {
-            ConditionallyConcentricRectangle(cornerRadius: 10)
+            ConditionallyConcentricRectangle(cornerRadius: AuraRadius.row)
                 .stroke(theme.invertedSolidWindowBackgroundColor.opacity(0.35), lineWidth: 1)
         }
     }

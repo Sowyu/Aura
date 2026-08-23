@@ -42,15 +42,31 @@ static os_unfair_lock AuraCacheLock = OS_UNFAIR_LOCK_INIT;
 #pragma mark - Active flag
 
 static _Atomic(BOOL) AuraActive;
+static _Atomic(BOOL) AuraWantsRequestHeaders;
+
+/// The state string is a bit mask: 1 is "a listener is registered", 2 is "send the
+/// request's headers with the ask". Parsed as an integer so "0" and "1" keep meaning
+/// what they meant before the header bit existed.
+static NSInteger AuraStateFlags(NSString *state)
+{
+    return state.length > 0 ? state.integerValue : 0;
+}
 
 BOOL AuraWebRequestChannelIsActive(void)
 {
     return AuraActive;
 }
 
+BOOL AuraWebRequestChannelWantsRequestHeaders(void)
+{
+    return AuraWantsRequestHeaders;
+}
+
 void AuraWebRequestChannelSetActive(NSString *state)
 {
-    AuraActive = [state isEqualToString:@"1"];
+    const NSInteger flags = AuraStateFlags(state);
+    AuraActive = (flags & 1) != 0;
+    AuraWantsRequestHeaders = (flags & 2) != 0;
     os_unfair_lock_lock(&AuraCacheLock);
     [AuraDecisionCache() removeAllObjects];
     os_unfair_lock_unlock(&AuraCacheLock);
@@ -61,7 +77,10 @@ void AuraWebRequestChannelRefreshActive(void)
     NSString *state = AuraWebRequestChannelPostSync(AuraWebRequestStateMessageName, @"");
     // No handler on the host side: stay quiet rather than stall every load.
     if (!state) { state = @"0"; }
-    if ([state isEqualToString:@"1"] != AuraActive) { AuraWebRequestChannelSetActive(state); }
+    const NSInteger flags = AuraStateFlags(state);
+    if (((flags & 1) != 0) != AuraActive || ((flags & 2) != 0) != AuraWantsRequestHeaders) {
+        AuraWebRequestChannelSetActive(state);
+    }
 }
 
 #pragma mark - Synchronous ask

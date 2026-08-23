@@ -29,6 +29,26 @@ extension URL {
         isOraInternal && host?.lowercased() == "extensions"
     }
 
+    /// `aura://view-source?url=…`: the page's HTML, rendered natively with line numbers.
+    var isOraViewSource: Bool {
+        isOraInternal && host?.lowercased() == "view-source"
+    }
+
+    /// `aura://reader?url=…`: the article text of a page, rendered natively.
+    var isOraReader: Bool {
+        isOraInternal && host?.lowercased() == "reader"
+    }
+
+    /// The page a view-source or reader address describes. Reading goes through
+    /// `queryItems`, which undoes the escaping `oraPageTool` applied.
+    var oraPageToolTarget: URL? {
+        guard isOraViewSource || isOraReader,
+              let components = URLComponents(url: self, resolvingAgainstBaseURL: false),
+              let raw = components.queryItems?.first(where: { $0.name == "url" })?.value
+        else { return nil }
+        return URL(string: raw)
+    }
+
     /// The settings section a `aura://settings/<section>` URL points at, if it names a known one.
     var oraSettingsSection: SettingsTab? {
         guard isOraSettings else { return nil }
@@ -61,6 +81,28 @@ extension URL {
         return components.url ?? URL(fileURLWithPath: "/")
     }()
 
+    static func oraViewSource(of target: URL) -> URL {
+        oraPageTool(host: "view-source", target: target)
+    }
+
+    static func oraReader(of target: URL) -> URL {
+        oraPageTool(host: "reader", target: target)
+    }
+
+    /// Every reserved character in `target` is escaped, not just the ones a query
+    /// technically has to escape: `URLComponents` leaves `+` alone when it builds a
+    /// query item, and a `+` in a path is a space to whoever reads it back.
+    private static func oraPageTool(host: String, target: URL) -> URL {
+        var components = URLComponents()
+        components.scheme = oraScheme
+        components.host = host
+        let escaped = target.absoluteString
+            .addingPercentEncoding(withAllowedCharacters: .oraUnreserved)
+        components.percentEncodedQuery = "url=\(escaped ?? "")"
+        // A scheme + host always resolves; the fallback only keeps the API non-optional.
+        return components.url ?? oraHome
+    }
+
     static func oraSettings(section: SettingsTab? = nil) -> URL {
         var components = URLComponents()
         components.scheme = oraScheme
@@ -69,4 +111,11 @@ extension URL {
         // A scheme + host always resolves; the fallback only keeps the API non-optional.
         return components.url ?? URL(fileURLWithPath: "/")
     }
+}
+
+private extension CharacterSet {
+    /// RFC 3986's unreserved set. Everything else in a page tool's target is escaped.
+    static let oraUnreserved = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
 }

@@ -9,10 +9,7 @@ extension ModelConfiguration {
         } else {
             return ModelConfiguration(
                 "OraData",
-                schema: Schema([
-                    TabContainer.self, History.self, Download.self,
-                    SiteJavaScriptRule.self, SiteSpaceRule.self
-                ]),
+                schema: Schema(versionedSchema: AuraSchemaV5.self),
                 url: URL.applicationSupportDirectory.appending(path: "Aura/OraData.sqlite")
             )
         }
@@ -28,15 +25,17 @@ extension ModelConfiguration {
     /// tabs between private windows, which is the opposite of what they are for.
     static func createOraContainer(isPrivate: Bool = false) throws -> ModelContainer {
         if isPrivate {
+            // No plan: an in-memory store is built from the current schema every time.
             return try ModelContainer(
-                for: TabContainer.self, History.self, Download.self, SiteJavaScriptRule.self, SiteSpaceRule.self,
+                for: Schema(versionedSchema: AuraSchemaV5.self),
                 configurations: oraDatabase(isPrivate: true)
             )
         }
         return try sharedContainerLock.withLock {
             if let sharedContainer { return sharedContainer }
             let container = try ModelContainer(
-                for: TabContainer.self, History.self, Download.self, SiteJavaScriptRule.self, SiteSpaceRule.self,
+                for: Schema(versionedSchema: AuraSchemaV5.self),
+                migrationPlan: AuraMigrationPlan.self,
                 configurations: oraDatabase(isPrivate: false)
             )
             sharedContainer = container

@@ -65,21 +65,33 @@ private struct MediaPlayerCard: View {
         }
     }
 
+    private func controlGlyph(_ name: String, isEnabled: Bool) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(isEnabled ? theme.foreground : theme.disabledForeground)
+            .frame(width: 24, height: 24)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if hovered, !session.title.isEmpty {
+            if !session.title.isEmpty {
                 HStack(spacing: 8) {
                     Text(session.title)
                         .lineLimit(1)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.9))
+                        .truncationMode(.tail)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(theme.foreground)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    // Always laid out, only the opacity moves, so the title never shifts.
                     Button { media.closeSession(session.tabID) } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(theme.foreground)
+                            .frame(width: 18, height: 18)
                     }
-                    .buttonStyle(PlayerIconButtonStyle(isEnabled: true))
-                    .foregroundStyle(Color.white.opacity(0.9))
+                    .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
+                    .opacity(hovered ? 1 : 0)
+                    .allowsHitTesting(hovered)
                 }
                 .padding(.horizontal, 8)
                 .padding(.top, 6)
@@ -91,32 +103,28 @@ private struct MediaPlayerCard: View {
                         .scaledToFit()
                         .frame(width: 18, height: 18)
                         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .padding(4)
                 }
-                .buttonStyle(PlayerIconButtonStyle(isEnabled: true))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .help("Go to playing tab")
 
                 Spacer()
 
                 Button(action: { media.previousTrack(session.tabID) }) {
-                    Image(systemName: "backward.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .opacity(media.canGoPrevious(of: session.tabID) ? 1.0 : 0.35)
+                    controlGlyph("backward.fill", isEnabled: media.canGoPrevious(of: session.tabID))
                 }
-                .buttonStyle(PlayerIconButtonStyle(isEnabled: media.canGoPrevious(of: session.tabID)))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .disabled(!media.canGoPrevious(of: session.tabID))
 
                 Button(action: { media.togglePlayPause(session.tabID) }) {
-                    Image(systemName: session.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 14, weight: .bold))
+                    controlGlyph(session.isPlaying ? "pause.fill" : "play.fill", isEnabled: true)
                 }
-                .buttonStyle(PlayerIconButtonStyle(isEnabled: true))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
 
                 Button(action: { media.nextTrack(session.tabID) }) {
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .opacity(media.canGoNext(of: session.tabID) ? 1.0 : 0.35)
+                    controlGlyph("forward.fill", isEnabled: media.canGoNext(of: session.tabID))
                 }
-                .buttonStyle(PlayerIconButtonStyle(isEnabled: media.canGoNext(of: session.tabID)))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .disabled(!media.canGoNext(of: session.tabID))
 
                 Spacer()
@@ -124,12 +132,12 @@ private struct MediaPlayerCard: View {
                 Button {
                     withAnimation(AnimationSettings.easeOut(0.15)) { showVolume.toggle() }
                 } label: {
-                    Image(systemName: media
-                        .volume(of: session.tabID) <= 0.001 ? "speaker.slash.fill" : "speaker.wave.2.fill"
+                    controlGlyph(
+                        media.volume(of: session.tabID) <= 0.001 ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                        isEnabled: true
                     )
-                    .font(.system(size: 12, weight: .semibold))
                 }
-                .buttonStyle(PlayerIconButtonStyle(isEnabled: true))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -146,14 +154,10 @@ private struct MediaPlayerCard: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.black.opacity(0.85))
-                .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 3)
+            RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                .fill(theme.mutedBackground)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.05), lineWidth: 1)
-        )
+        .animation(AnimationSettings.easeOut(0.15), value: hovered)
         .onHover { hovered = $0 }
         .frame(maxWidth: .infinity)
     }

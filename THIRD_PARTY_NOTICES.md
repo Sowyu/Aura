@@ -12,22 +12,57 @@ This repository includes third-party source code and other third-party component
 
 The files in `aura/Shared/Layout/SplitView` were copied from the upstream `SplitView` project and may include local modifications.
 
+## uBlock Origin Lite
+
+- Upstream project: [uBlockOrigin/uBOL-home](https://github.com/uBlockOrigin/uBOL-home),
+  built from [gorhill/uBlock](https://github.com/gorhill/uBlock) by `tools/make-mv3.sh firefox`
+  (the build instructions ship inside the archive as `README.md`)
+- Upstream source: the Firefox release build, published on
+  [GitHub releases](https://github.com/uBlockOrigin/uBOL-home/releases), add-on id
+  `uBOLiteRedux@raymondhill.net`
+- Local path: `aura/Resources/Extensions/ublock-origin-lite.xpi`
+- Version: 2026.820.1159 (SHA-256 `b23d4d487e885235fb01277ef0fad00531bdd5d20d407f5d74ce48e90aba817e`)
+- License: GPL-3.0
+- Included license text: `aura/Resources/Extensions/LICENSE-ublock-origin-lite.txt`
+
+The archive is the signed release build, unmodified. Aura unpacks it into the
+profile on first launch, enabled, and installs it like any other extension: it is
+the only ad and tracker blocker Aura ships. It blocks through
+`declarativeNetRequest`, which WebKit compiles and enforces itself, so it needs
+nothing switched on. The installed copy is then patched the same way every
+extension is: `aura-shim.js` is copied in and made the first script the background
+page runs, and `manifest.json` is rewritten to load it (the untouched original
+stays as `manifest.original.json`).
+
 ## uBlock Origin
 
 - Upstream project: [gorhill/uBlock](https://github.com/gorhill/uBlock)
-- Upstream source: `ublock_origin-1.73.0.xpi`, the Firefox build published on
-  [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/ublock-origin/)
+- Upstream source: the signed Firefox release build, published on
+  [GitHub releases](https://github.com/gorhill/uBlock/releases/tag/1.73.0), asset
+  `uBlock0_1.73.0.firefox.signed.xpi`, add-on id `uBlock0@raymondhill.net`
 - Local path: `aura/Resources/Extensions/ublock-origin.xpi`
-- Version: 1.73.0 (SHA-256 `bccc51a773150af4af6e1fd62c7bfdeb7238b79ff2381b998fa9f2e38f64786a`)
+- Version: 1.73.0 (SHA-256
+  `bccc51a773150af4af6e1fd62c7bfdeb7238b79ff2381b998fa9f2e38f64786a`)
 - License: GPL-3.0
 - Included license text: `aura/Resources/Extensions/LICENSE-ublock-origin.txt`
 
-The archive is the signed AMO build, unmodified. Aura unpacks it into the profile
-on first launch, enabled, and installs it like any other extension: it is the
-only ad and tracker blocker Aura ships. The installed copy is
-then patched the same way every extension is: `aura-shim.js` is copied in and
-made the first script the background page runs, and `manifest.json` is rewritten
-to load it (the untouched original stays as `manifest.original.json`).
+The archive is the signed release build, unmodified, and the tag above is the
+corresponding source. The version and hash are pinned in
+`BundledExtensions.FullUBlockOrigin`, checked against this file by `auraTests`, and
+checked again before the archive is ever unpacked.
+
+Full uBlock Origin is off by default and never installed until the user switches
+"Full ad blocking" on in Settings > Privacy and agrees to the permissions it asks
+for. It blocks through `webRequest`, which only answers with Aura's injected web
+bundle loaded, and that moves every page onto WebKit's Development WebContent
+service, which has been known to stop pages painting. Aura probes for that at
+launch and hands blocking back to uBlock Origin Lite if it happens. The installed
+copy is patched the same way every extension is, with `aura-shim.js` and a
+rewritten `manifest.json`; nothing else in it is modified.
+
+An older Aura preinstalled full uBlock Origin for everyone under the folder
+`ublock-origin`. That copy is deleted on the next launch of a profile that
+received it; the opt-in one installs alongside as `ublock-origin-full`.
 
 ## Zen Browser space icons (Ionicons)
 
@@ -43,6 +78,28 @@ these glyphs. The path data is verbatim. Two changes make the files parse outsid
 `#filter` preprocessor line was dropped and the MPL header kept as an XML comment, and the
 Firefox-only `fill="context-fill"` / `fill-opacity="context-fill-opacity"` attributes were
 replaced by `fill="#000000"` so AppKit can draw them as template images.
+
+## Firefox toolbar icons
+
+- Upstream project: [mozilla-firefox/firefox](https://github.com/mozilla-firefox/firefox)
+- Upstream source paths: `browser/themes/shared/icons/back.svg`, `forward.svg`, `history.svg`,
+  `home.svg`, and `toolkit/themes/shared/icons/reload.svg`
+- Local path: `aura/Resources/Icons/Toolbar/`
+- License: MPL-2.0, the header is kept in each file
+
+Aura's five navigation marks are Firefox's, which is what makes the chrome row read like
+Zen's. Zen does not ship its own back, forward, reload, history or home: its
+`zen-icons/nucleo` set is Nucleo artwork, and Nucleo's notice forbids redistribution, so
+Aura takes Mozilla's MPL-2.0 originals instead.
+
+Three changes make the files draw outside Firefox. The Firefox-only `fill="context-fill"`
+and `fill-opacity="context-fill-opacity"` attributes were replaced by `fill="#000000"`, so
+AppKit can load them as template images. Each upstream file carries two variants of the
+glyph, `proton` and `nova`, switched by a `<style>` block with a `-moz-pref` media query
+that no other renderer evaluates; only the `nova` paths were kept and the style block
+dropped, because both variants otherwise draw on top of each other. The files are named
+with a `toolbar-` prefix because the build flattens `aura/Resources` into
+`Contents/Resources`. The path data is verbatim.
 
 ## Nook Browser (history panel and hibernation policy)
 

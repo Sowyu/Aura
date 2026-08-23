@@ -53,6 +53,9 @@ private func isIPv6Literal(_ text: String) -> Bool {
 
 func isValidURL(_ text: String) -> Bool {
     if oraInternalURL(from: text) != nil { return true }
+    // A path is an address, not a query. Without this the launcher offers a web search
+    // for `~/Documents/report.pdf` and never the file.
+    if localFileURL(from: text) != nil { return true }
     if isIPv6Literal(text.trimmingCharacters(in: .whitespacesAndNewlines)) { return true }
 
     guard let host = extractDomainOrIP(from: text) else { return false }
@@ -85,6 +88,11 @@ func constructURL(from text: String) -> URL? {
     if let internalURL = oraInternalURL(from: trimmed) {
         return internalURL
     }
+    // Before the search fallback, and before the scheme check: a path is never a query,
+    // and `file://` never starts with `http`.
+    if let fileURL = localFileURL(from: trimmed) {
+        return fileURL
+    }
     if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
         return URL(string: trimmed)
     }
@@ -95,4 +103,62 @@ func constructURL(from text: String) -> URL? {
         || trimmed.hasPrefix("[::1]") || host.hasSuffix(".localhost")
     let scheme = isLoopback ? "http" : "https"
     return URL(string: "\(scheme)://\(trimmed)")
+}
+
+// MARK: - Local files
+
+/// The user's home directory, not the one `NSHomeDirectory()` reports.
+///
+/// Inside the sandbox `NSHomeDirectory()` is the app container, so expanding `~` with it
+/// would point every typed path at a folder the user has never seen. The passwd entry is
+/// the real home either way.
+func realHomeDirectory() -> String {
+    guard let entry = getpwuid(getuid()), let directory = entry.pointee.pw_dir else {
+        return NSHomeDirectory()
+    }
+    return String(cString: directory)
+}
+
+/// A local path typed into the address field, as a `file://` URL, or nil when the text
+/// is not one.
+///
+/// Three forms count: an absolute POSIX path, a `~` path, and a string that already says
+/// `file://`. A bare `notes/todo.md` is left alone on purpose. It has nothing to resolve
+/// against, and reading it as a path would swallow a search the user meant to run.
+///
+/// The `file://` form is rebuilt from its path rather than handed to `URL(string:)`,
+/// which rejects the literal spaces in a path pasted out of Finder. `URL(fileURLWithPath:)`
+/// then puts the percent-encoding back the one right way, so `Chapter 4.pdf` and
+/// `Chapter%204.pdf` arrive at the same URL.
+func localFileURL(from text: String, home: String = realHomeDirectory()) -> URL? {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+
+    if trimmed.lowercased().hasPrefix("file://") {
+        var body = String(trimmed.dropFirst("file://".count))
+        // `file://localhost/x` names the same file as `file:///x`.
+        if body.lowercased().hasPrefix("localhost/") {
+            body = String(body.dropFirst("localhost".count))
+        }
+        guard body.hasPrefix("/") else { return nil }
+        // A fragment is the URL's, not the file name's: `report.pdf#page=3` is how a
+        // PDF viewer is told which page to open at.
+        var fragment: String?
+        if let hash = body.firstIndex(of: "#") {
+            fragment = String(body[body.index(after: hash)...])
+            body = String(body[..<hash])
+        }
+        guard !body.isEmpty else { return nil }
+        let fileURL = URL(fileURLWithPath: body.removingPercentEncoding ?? body)
+        guard let fragment, !fragment.isEmpty else { return fileURL }
+        return URL(string: fileURL.absoluteString + "#" + fragment) ?? fileURL
+    }
+
+    if trimmed == "~" || trimmed.hasPrefix("~/") {
+        return URL(fileURLWithPath: home + trimmed.dropFirst())
+    }
+
+    // `//example.com/path` is a scheme-relative address, not a path with two slashes.
+    guard trimmed.hasPrefix("/"), !trimmed.hasPrefix("//") else { return nil }
+    return URL(fileURLWithPath: trimmed)
 }

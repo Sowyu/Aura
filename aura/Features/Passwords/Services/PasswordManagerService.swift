@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Foundation
 import LocalAuthentication
 import Security
@@ -13,6 +14,10 @@ struct SavedPasswordMetadata: Codable, Hashable {
     var updatedAt: Date
     var lastUsedAt: Date?
     var containerID: UUID?
+    /// Salted digest of the stored password. Lets a form submit tell "same password
+    /// as saved" apart from "changed" without reading the secret back out of the
+    /// keychain. Nil for entries saved before this existed.
+    var passwordFingerprint: String?
 }
 
 struct SavedPasswordSummary: Identifiable, Hashable {
@@ -53,6 +58,56 @@ struct SavedPasswordSummary: Identifiable, Hashable {
 
     var displayUsername: String {
         username.isEmpty ? "No username" : username
+    }
+
+    var passwordFingerprint: String? {
+        metadata.passwordFingerprint
+    }
+}
+
+/// Compares a submitted password against a saved entry without touching the keychain.
+/// A fingerprint is `salt.SHA256(salt + password)`, both base64.
+enum SubmitComparison {
+    private static let separator: Character = "."
+
+    static func fingerprint(for password: String) -> String {
+        var salt = Data(count: 16)
+        let generated = salt.withUnsafeMutableBytes { buffer -> Bool in
+            guard let base = buffer.baseAddress else { return false }
+            return SecRandomCopyBytes(kSecRandomDefault, buffer.count, base) == errSecSuccess
+        }
+        guard generated else {
+            // Fail closed: no salt means no usable fingerprint, so submits fall back
+            // to prompting rather than to a silent match.
+            return ""
+        }
+        return fingerprint(for: password, salt: salt)
+    }
+
+    static func fingerprint(for password: String, salt: Data) -> String {
+        let digest = SHA256.hash(data: salt + Data(password.utf8))
+        return salt.base64EncodedString() + String(separator) + Data(digest).base64EncodedString()
+    }
+
+    /// True only when the stored fingerprint proves the typed password is the one
+    /// already saved. Anything unparseable answers false, never a match.
+    static func matchesSavedPassword(typedPassword: String, savedFingerprint: String?) -> Bool {
+        guard let salt = salt(from: savedFingerprint), let savedFingerprint else { return false }
+        return fingerprint(for: typedPassword, salt: salt) == savedFingerprint
+    }
+
+    /// True when the entry carries no usable fingerprint, so the only way to decide
+    /// is an authenticated keychain reveal. The submit path treats this as "changed"
+    /// and prompts instead, which backfills the fingerprint on save.
+    static func needsReveal(typedPassword: String, savedFingerprint: String?) -> Bool {
+        salt(from: savedFingerprint) == nil
+    }
+
+    private static func salt(from fingerprint: String?) -> Data? {
+        guard let fingerprint else { return nil }
+        let parts = fingerprint.split(separator: separator, maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[1].isEmpty else { return nil }
+        return Data(base64Encoded: String(parts[0]))
     }
 }
 
@@ -177,6 +232,12 @@ final class PasswordManagerService: ObservableObject {
         scopedEntries(for: containerID)
     }
 
+    /// Lets a caller that handled a throw itself put the reason on the shared banner,
+    /// so the vault has one place to read failures from.
+    func report(_ error: Error) {
+        lastErrorMessage = error.localizedDescription
+    }
+
     func revealPassword(for entry: SavedPasswordSummary) throws -> String {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -227,7 +288,8 @@ final class PasswordManagerService: ObservableObject {
                 createdAt: existing.createdAt,
                 updatedAt: now,
                 lastUsedAt: existing.lastUsedAt,
-                containerID: containerID
+                containerID: containerID,
+                passwordFingerprint: SubmitComparison.fingerprint(for: password)
             )
 
             let attributes: [String: Any] = try [
@@ -255,20 +317,17 @@ final class PasswordManagerService: ObservableObject {
                 createdAt: now,
                 updatedAt: now,
                 lastUsedAt: nil,
-                containerID: containerID
+                containerID: containerID,
+                passwordFingerprint: SubmitComparison.fingerprint(for: password)
             )
 
-            let item: [String: Any] = try [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: serviceName,
-                kSecAttrAccount as String: metadata.id,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
-                kSecAttrSynchronizable as String: kCFBooleanTrue as Any,
-                kSecAttrGeneric as String: encode(metadata: metadata),
-                kSecAttrLabel as String: normalizedHost,
-                kSecAttrComment as String: trimmedUsername,
-                kSecValueData as String: Data(password.utf8)
-            ]
+            let item = try Self.newItemAttributes(
+                service: serviceName,
+                metadata: metadata,
+                encodedMetadata: encode(metadata: metadata),
+                password: password,
+                syncsViaICloud: SettingsStore.shared.passwordSyncViaICloud
+            )
 
             let status = SecItemAdd(item as CFDictionary, nil)
             guard status == errSecSuccess else {
@@ -289,7 +348,8 @@ final class PasswordManagerService: ObservableObject {
                 createdAt: entry.createdAt,
                 updatedAt: entry.updatedAt,
                 lastUsedAt: Date(),
-                containerID: entry.containerID
+                containerID: entry.containerID,
+                passwordFingerprint: entry.passwordFingerprint
             )
 
             let attributes: [String: Any] = try [
@@ -317,12 +377,51 @@ final class PasswordManagerService: ObservableObject {
             kSecValuePersistentRef as String: entry.persistentReference
         ]
 
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw PasswordManagerError.keychainStatus(status)
+        if let failure = Self.deleteFailure(for: SecItemDelete(query as CFDictionary)) {
+            // Recorded here rather than at the call site so every caller reports the same
+            // failure, and the row stays put because the throw skips the refresh.
+            lastErrorMessage = failure.localizedDescription
+            throw failure
         }
 
         refresh()
+    }
+
+    /// The attributes for a credential Aura is storing for the first time.
+    ///
+    /// Split out as a pure function because `kSecAttrSynchronizable` decides whether the
+    /// password, the host and the username leave this Mac, and that is worth a test that
+    /// does not need a keychain. Only new and re-saved items pass through here: an item
+    /// that is already synced stays synced, since flipping the setting off and silently
+    /// pulling credentials out of iCloud Keychain would surprise anyone relying on them.
+    static func newItemAttributes(
+        service: String,
+        metadata: SavedPasswordMetadata,
+        encodedMetadata: Data,
+        password: String,
+        syncsViaICloud: Bool
+    ) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: metadata.id,
+            // Autofill runs without a second unlock, so the item has to survive the
+            // first one. Unrelated to sync, and it does not move with it.
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock as String,
+            kSecAttrSynchronizable as String: syncsViaICloud,
+            kSecAttrGeneric as String: encodedMetadata,
+            kSecAttrLabel as String: metadata.host,
+            kSecAttrComment as String: metadata.username,
+            kSecValueData as String: Data(password.utf8)
+        ]
+    }
+
+    /// errSecItemNotFound means the credential is already gone, which is the outcome the
+    /// caller asked for. Any other status leaves the entry in place.
+    static func deleteFailure(for status: OSStatus) -> PasswordManagerError? {
+        status == errSecSuccess || status == errSecItemNotFound
+            ? nil
+            : .keychainStatus(status)
     }
 
     func deleteEntries(for containerID: UUID) throws {
@@ -415,8 +514,11 @@ final class PasswordManagerService: ObservableObject {
         copyToPasteboard(value, clearingAfter: nil)
     }
 
+    /// How long a copied password stays on the pasteboard.
+    static let sensitivePasteboardClearDelay: TimeInterval = 90
+
     func copySensitiveToPasteboard(_ value: String) {
-        copyToPasteboard(value, clearingAfter: 90)
+        copyToPasteboard(value, clearingAfter: Self.sensitivePasteboardClearDelay)
     }
 
     static func normalizeHost(_ host: String) -> String {
@@ -566,7 +668,8 @@ final class PasswordManagerService: ObservableObject {
                 createdAt: entry.createdAt,
                 updatedAt: entry.updatedAt,
                 lastUsedAt: entry.lastUsedAt,
-                containerID: destinationContainerID
+                containerID: destinationContainerID,
+                passwordFingerprint: entry.passwordFingerprint
             )
 
             let attributes: [String: Any] = try [

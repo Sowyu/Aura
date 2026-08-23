@@ -16,7 +16,7 @@ import os
 /// change re-patches by itself.
 enum ExtensionShim {
     /// Must match `SHIM_VERSION` in aura-shim.js.
-    static let version = 3
+    static let version = 4
 
     static let scriptName = "aura-shim.js"
     /// Generated per extension: `runtime.getManifest()` returns undefined under
@@ -39,20 +39,6 @@ enum ExtensionShim {
             case .missingShimScript: return "Aura's extension shim is missing from the app bundle."
             case .unreadableManifest: return "The extension's manifest.json could not be read."
             }
-        }
-    }
-
-    /// `apply` wrapped for the install path: the shim only has a channel home
-    /// when the injected bundle is loaded, so it follows that. A failure becomes
-    /// the note Settings shows next to the extension.
-    @MainActor
-    static func patch(at directory: URL) -> String? {
-        guard AuraWebBundle.isEnabled else { return nil }
-        do {
-            try apply(at: directory)
-            return nil
-        } catch {
-            return error.localizedDescription
         }
     }
 

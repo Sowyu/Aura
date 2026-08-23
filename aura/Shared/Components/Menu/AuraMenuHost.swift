@@ -16,6 +16,9 @@ struct AuraMenuHost: View {
     @State private var monitors: [Any] = []
     @State private var resignObserver: NSObjectProtocol?
     @State private var hoverWork: DispatchWorkItem?
+    /// Where the pointer last sat on the row owning the open submenu, and when. The safe
+    /// zone triangle is measured from here.
+    @State private var submenuExit: (point: CGPoint, at: Date)?
     /// The overlay's own top-left in window coordinates; panels are positioned relative
     /// to the window, and the host does not always start at the window's corner.
     @State private var hostOrigin: CGPoint = .zero
@@ -30,14 +33,15 @@ struct AuraMenuHost: View {
                 ForEach(Array(controller.levels.enumerated()), id: \.element.id) { index, level in
                     AuraMenuPanel(level: level, levelIndex: index)
                         .offset(x: level.origin.x - hostOrigin.x, y: level.origin.y - hostOrigin.y)
-                        .transition(.opacity)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
         .background(WindowOriginReader { hostOrigin = $0 })
-        .animation(AnimationSettings.easeOut(0.1), value: controller.levels.map(\.id))
+        // Panels cut straight in and out, like NSMenu. A fade on the way out left the
+        // submenu ghosting over the row the pointer had already moved to.
+        .animation(nil, value: controller.levels.map(\.id))
         .onChange(of: isMine, initial: true) { _, open in
             if open { startTracking() } else { stopTracking() }
         }
@@ -85,6 +89,7 @@ struct AuraMenuHost: View {
     private func stopTracking() {
         hoverWork?.cancel()
         hoverWork = nil
+        submenuExit = nil
         monitors.forEach(NSEvent.removeMonitor)
         monitors = []
         if let resignObserver {
@@ -111,7 +116,7 @@ struct AuraMenuHost: View {
 
         switch type {
         case .mouseMoved, .leftMouseDragged:
-            hover(target)
+            hover(target, at: point)
             return target != nil
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
             guard let target else {
@@ -135,6 +140,10 @@ struct AuraMenuHost: View {
             }
             return true
         case .scrollWheel:
+            // The overlay takes no hits, so the panel's own scroll view never sees the
+            // wheel; a menu taller than the window scrolls from the keyboard instead.
+            // ponytail: wheel scrolling needs the panel hit-testable, add it when a
+            // shipped menu is routinely taller than the window.
             controller.dismiss()
             return true
         default:
@@ -143,9 +152,11 @@ struct AuraMenuHost: View {
     }
 
     @MainActor
-    private func hover(_ target: (level: Int, row: Int?)?) {
+    private func hover(_ target: (level: Int, row: Int?)?, at point: CGPoint) {
         hoverWork?.cancel()
         guard let target else {
+            // Outside every panel. The highlight goes, open submenus stay: the pointer
+            // leaves through the gap between a parent and its child all the time.
             controller.highlight(row: nil, atLevel: controller.deepest)
             return
         }
@@ -160,21 +171,55 @@ struct AuraMenuHost: View {
             }
         }
 
-        // 120 ms of grace, so a diagonal run into an open submenu does not close it on the
-        // way past its neighbours. ponytail: no pointer-triangle heuristic; add one if
-        // wide submenus start closing under a slow diagonal.
-        let work = DispatchWorkItem {
-            MainActor.assumeIsolated {
-                let controller = AuraMenuController.shared
-                if let row = target.row, controller.item(atLevel: target.level, row: row)?.kind == .submenu {
-                    controller.openSubmenu(atLevel: target.level, row: row)
-                } else {
-                    controller.closeLevels(deeperThan: target.level)
+        if controller.levels.count > target.level + 1 {
+            let child = controller.levels[target.level + 1]
+            if target.row != nil, target.row == child.parentRow {
+                // Still on the row that owns the panel. Every move here refreshes the
+                // corner the safe zone will be measured from.
+                submenuExit = (point, Date())
+                return
+            }
+            if let exit = submenuExit {
+                let elapsed = Date().timeIntervalSince(exit.at)
+                if AuraMenuSafeZone.allowsTravel(
+                    to: point,
+                    from: exit.point,
+                    toward: child.frame,
+                    elapsed: elapsed
+                ) {
+                    // Heading for the child. Close when the grace runs out rather than on
+                    // the next move, so a pointer that stops inside the triangle and stops
+                    // sending events still lets go.
+                    schedule(after: AuraMenuSafeZone.grace - elapsed) {
+                        $0.closeLevels(deeperThan: target.level)
+                    }
+                    return
                 }
             }
+            // A different row is highlighted and the pointer is not aiming at the panel,
+            // so it goes now. Waiting even one frame here is what read as unresponsive.
+            submenuExit = nil
+            controller.closeLevels(deeperThan: target.level)
+        }
+
+        // Opening waits 120 ms, so a pointer skimming past "JavaScript" on its way down
+        // the list does not fling a panel open behind it.
+        guard let row = target.row,
+              controller.item(atLevel: target.level, row: row)?.kind == .submenu
+        else {
+            return
+        }
+        schedule(after: 0.12) { _ = $0.openSubmenu(atLevel: target.level, row: row) }
+    }
+
+    /// Runs `body` on the controller after `delay`, replacing any pending hover work.
+    @MainActor
+    private func schedule(after delay: TimeInterval, _ body: @escaping (AuraMenuController) -> Void) {
+        let work = DispatchWorkItem {
+            MainActor.assumeIsolated { body(AuraMenuController.shared) }
         }
         hoverWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay), execute: work)
     }
 
     @MainActor

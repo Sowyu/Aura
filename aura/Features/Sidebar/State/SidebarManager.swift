@@ -11,6 +11,8 @@ enum SidebarPanel: String, Hashable {
     case none
     case downloads
     case history
+    /// The file tray, next to downloads at the foot of the sidebar.
+    case files
 
     var isOpen: Bool { self != .none }
 }
@@ -121,7 +123,7 @@ final class SidebarManager {
 
     func toggleSidebar() {
         let targetSide = sidebarPosition == .primary ? SplitSide.primary : .secondary
-        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.9)) {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             hiddenSidebar.side = (hiddenSidebar.side == targetSide) ? nil : targetSide
             updateSidebarHidden()
         }

@@ -86,13 +86,13 @@ struct HistoryPanelView: View {
                     .padding(.vertical, 4)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.interactive(cornerRadius: 6))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .onHover { isClearHovered = $0 }
                 .animation(AnimationSettings.easeOut(0.1), value: isClearHovered)
                 .help(range == .all ? "Clear all history in this space" : "Clear \(range.title.lowercased())")
             }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 10)
         .frame(height: 38)
     }
 
@@ -116,7 +116,7 @@ struct HistoryPanelView: View {
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.interactive(cornerRadius: 8))
+            .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
             .help("Filter by time")
         }
         .padding(.horizontal, 10)
@@ -135,16 +135,16 @@ struct HistoryPanelView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(
-                            ConditionallyConcentricRectangle(cornerRadius: 8)
+                            ConditionallyConcentricRectangle(cornerRadius: AuraRadius.button)
                                 .fill(option == range ? theme.mutedBackground : .clear)
                         )
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .padding(.bottom, 4)
     }
 
@@ -176,26 +176,11 @@ struct HistoryPanelView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Spacer()
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 32, weight: .light))
-                .foregroundColor(theme.mutedForeground)
-            Text(searchText.isEmpty ? "No History" : "No results for \u{201C}\(searchText)\u{201D}")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(theme.foreground)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-            if searchText.isEmpty {
-                Text("Pages you visit in this space show up here")
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.mutedForeground)
-                    .multilineTextAlignment(.center)
-            }
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .padding(24)
+        SidebarPanelEmptyState(
+            symbol: searchText.isEmpty ? "clock.arrow.circlepath" : "magnifyingglass",
+            title: searchText.isEmpty ? "No history" : "No results for \u{201C}\(searchText)\u{201D}",
+            subtitle: searchText.isEmpty ? "Pages you visit in this space show up here" : nil
+        )
     }
 
     private func sectionHeader(_ title: String) -> some View {
@@ -224,11 +209,11 @@ struct HistoryPanelView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
             }
-            .buttonStyle(.interactive(cornerRadius: 6))
+            .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 10)
         .padding(.vertical, 16)
     }
 

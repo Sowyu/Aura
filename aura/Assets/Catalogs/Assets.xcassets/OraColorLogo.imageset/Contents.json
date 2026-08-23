@@ -1,17 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "ora-color-logo.png",
-      "idiom" : "universal"
-    },
-    {
-      "appearances" : [
-        {
-          "appearance" : "luminosity",
-          "value" : "dark"
-        }
-      ],
-      "filename" : "ora-color-logo 1.png",
+      "filename" : "aura-color-logo.png",
       "idiom" : "universal"
     }
   ],

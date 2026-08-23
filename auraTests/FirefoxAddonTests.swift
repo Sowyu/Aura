@@ -125,6 +125,7 @@ struct FirefoxAddonTests {
             id: name,
             directoryURL: URL(fileURLWithPath: "/tmp/\(name)"),
             displayName: name,
+            displayDescription: nil,
             displayVersion: nil,
             geckoID: geckoID,
             isEnabled: true,
@@ -137,11 +138,31 @@ struct FirefoxAddonTests {
         #expect(ExtensionCompatibility.evaluate(permissions: ["storage", "tabs"]) == .supported)
         #expect(ExtensionCompatibility.evaluate(permissions: ["proxy", "storage"]) == .partial(["proxy"]))
 
+        // What the bundled blocker asks for. WebKit compiles and enforces DNR rule
+        // sets itself, so uBlock Origin Lite is fully supported with nothing on.
+        let lite = ExtensionCompatibility.evaluate(
+            permissions: ["declarativeNetRequest", "scripting", "storage", "<all_urls>"]
+        )
+        #expect(lite == .supported)
+        #expect(lite.title == "Works on WebKit")
+        #expect(lite.detail == nil)
+        #expect(
+            ExtensionCompatibility.evaluate(permissions: ["declarativeNetRequestWithHostAccess"]) == .supported
+        )
+
         // Blocking webRequest stopped being a WebKit gap once the injected
         // bundle started asking the extension. It follows the same setting the
         // native request filter does.
         let previous = SettingsStore.shared.extensionRequestBlocking
         defer { SettingsStore.shared.extensionRequestBlocking = previous }
+        SettingsStore.shared.extensionRequestBlocking = false
+        // Full uBlock Origin with the bundle off: it installs and runs, but the
+        // badge has to say the blocking is what does not happen.
+        let unblocked = ExtensionCompatibility.evaluate(permissions: ["webRequest", "webRequestBlocking"])
+        #expect(unblocked == .partial(["webRequestBlocking"]))
+        #expect(unblocked.detail?.contains("Extension request blocking") == true)
+        #expect(unblocked.detail?.contains("WebKit has no") == false)
+
         SettingsStore.shared.extensionRequestBlocking = true
         let blocking = ExtensionCompatibility.evaluate(permissions: ["webRequest", "webRequestBlocking"])
         #expect(ExtensionCompatibility.supportsBlockingWebRequest)
@@ -247,5 +268,46 @@ struct FirefoxAddonTests {
         #expect(loaded.displayName?.isEmpty == false)
         #expect(engine.controller.extensionContexts.count == 1)
         engine.unload(id: "amo-test")
+    }
+
+    /// The consent sheet is the only thing standing between an AMO listing and full
+    /// page access, so it has to name the guid it is really installing and say what
+    /// each permission means in words a user can weigh.
+    @Test func amoInstallBecomesAReadableConsentRequest() {
+        let addon = FirefoxAddon(
+            id: 607_454,
+            slug: "ublock-origin",
+            name: "uBlock Origin",
+            guid: "uBlock0@raymondhill.net",
+            version: "1.60.0",
+            permissions: ["webRequest", "storage"],
+            hostPermissions: ["<all_urls>", "*://example.com/*"]
+        )
+
+        let request = ExtensionConsentRequest(
+            id: "ublock-origin-a1b2c3d4",
+            displayName: addon.name,
+            displayDescription: addon.summary,
+            version: addon.version,
+            source: ExtensionManager.installSource(for: addon),
+            permissions: addon.requestedPermissions
+        )
+        #expect(request.source == .addonStore("uBlock0@raymondhill.net"))
+        #expect(request.source.label == "addons.mozilla.org (uBlock0@raymondhill.net)")
+
+        let lines = request.permissionLines
+        #expect(lines.contains("Read and change data on every site you visit"))
+        #expect(lines.contains("Read and change data on example.com"))
+        #expect(lines.contains("Store data on this Mac"))
+        // Raw manifest keys must not leak into the sheet.
+        #expect(!lines.contains("<all_urls>"))
+        #expect(lines.count == Set(lines).count)
+    }
+
+    /// A permission Aura has no wording for is still shown, because hiding it would
+    /// be worse than showing the manifest key.
+    @Test func unknownPermissionsFallBackToTheirManifestKey() {
+        #expect(ExtensionCompatibility.humanPermission("geckoProfiler") == "geckoProfiler")
+        #expect(ExtensionCompatibility.humanPermission("tabs") == "Read the tabs you have open")
     }
 }

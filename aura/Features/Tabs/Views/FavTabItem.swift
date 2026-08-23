@@ -15,9 +15,11 @@ struct FavTabItem: View {
     let containers: [TabContainer]
 
     @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(TabManager.self) private var tabManager
     @Environment(HistoryManager.self) private var historyManager
     @Environment(DownloadManager.self) private var downloadManager
+    @Environment(ContainerManager.self) private var containerManager
     @EnvironmentObject var privacyMode: PrivacyMode
 
     @State private var isHovering = false
@@ -37,13 +39,13 @@ struct FavTabItem: View {
                 } placeholder: {
                     LocalFavIcon(
                         faviconLocalFile: tab.faviconLocalFile,
-                        textColor: Color(.white)
+                        textColor: textColor
                     )
                 }
             } else {
                 LocalFavIcon(
                     faviconLocalFile: tab.faviconLocalFile,
-                    textColor: Color(.white)
+                    textColor: textColor
                 )
             }
 
@@ -56,10 +58,10 @@ struct FavTabItem: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 8, height: 8)
-                            .foregroundColor(.white.opacity(0.9))
+                            .foregroundColor(textColor)
                             .background(
                                 Circle()
-                                    .fill(Color.black.opacity(0.6))
+                                    .fill(theme.solidWindowBackgroundColor)
                                     .frame(width: 12, height: 12)
                             )
                     }
@@ -78,30 +80,28 @@ struct FavTabItem: View {
                     )
             }
         }
-        .foregroundColor(theme.foreground)
+        .foregroundColor(textColor)
         .frame(height: 48)
         .frame(maxWidth: .infinity)
         .opacity(isDragging ? 0.0 : 1.0)
-        .background(backgroundColor)
-        .cornerRadius(10)
-        .overlay(
-            isDragging
-                ? RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(
-                    theme.invertedSolidWindowBackgroundColor.opacity(0.25),
-                    style: StrokeStyle(lineWidth: 1, dash: [5, 5])
-                )
-                : isSelected
-                ? RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(
-                    theme.invertedSolidWindowBackgroundColor,
-                    lineWidth: 1
-                )
-                : nil
-        )
+        .background(backgroundColor, in: .rect(cornerRadius: AuraRadius.row))
+        // Only the drag placeholder is outlined. Selection is the fill, same as a tab row.
+        .overlay {
+            if isDragging {
+                RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                    .stroke(
+                        theme.invertedSolidWindowBackgroundColor.opacity(0.25),
+                        style: StrokeStyle(lineWidth: 1, dash: [5, 5])
+                    )
+            }
+        }
+        .overlay(alignment: .trailing) { ContainerStripe(container: tab.browsingContainer) }
+        .contentShape(.rect(cornerRadius: AuraRadius.row))
         // `activateTab` rebuilds the web view for a hibernated tab on the way in.
         .onTapGesture { onTap() }
         .onHover { isHovering = $0 }
+        .accessibilityLabel(Text(tab.title))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .auraContextMenu { contextMenuItems }
     }
 
@@ -130,19 +130,33 @@ struct FavTabItem: View {
                         }
                     }
             )
+            AuraMenuItem.submenu(
+                "Open in Container",
+                icon: "square.stack.3d.up",
+                items: ContainerMenuItems.choices(
+                    current: tab.browsingContainer,
+                    containers: containerManager.containers
+                ) { containerManager.move(tab, to: $0) }
+            )
             AuraMenuItem.separator
             AuraMenuItem.item("Close Tab", icon: "xmark", isDestructive: true, action: onClose)
         }
     }
 
+    /// A favourite tile carries the same colours as a tab row: idle is bare, hover is a
+    /// hint of the active fill, selected is the active fill itself.
     private var backgroundColor: Color {
         if isDragging {
             return theme.activeTabBackground.opacity(0.1)
         } else if isSelected {
-            return theme.invertedSolidWindowBackgroundColor.opacity(0.3)
+            return theme.activeTabBackground
         } else if isHovering {
-            return theme.activeTabBackground.opacity(0.3)
+            return theme.activeTabBackground.opacity(colorScheme == .dark ? 0.3 : 0.1)
         }
-        return theme.mutedBackground
+        return .clear
+    }
+
+    private var textColor: Color {
+        isSelected ? .white : theme.foreground
     }
 }

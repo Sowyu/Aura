@@ -107,7 +107,7 @@ struct SpaceIconPicker: View {
                         .frame(height: 36)
                         .frame(maxWidth: .infinity)
                         .background(hoveredSymbol == symbol.name ? theme.mutedBackground : Color.clear)
-                        .cornerRadius(6)
+                        .cornerRadius(AuraRadius.button)
                         .contentShape(Rectangle())
                         .onHover { hoveredSymbol = $0 ? symbol.name : nil }
                         .onTapGesture {
@@ -135,7 +135,7 @@ struct SpaceIconPicker: View {
                             emojiModel.selectedCategory == category.category ? theme.accent : theme.mutedForeground
                         )
                 }
-                .buttonStyle(.interactive(cornerRadius: 6))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .padding(4)
                 Spacer()
             }

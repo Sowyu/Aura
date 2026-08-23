@@ -17,11 +17,52 @@ struct SettingsSectionsTests {
         }
     }
 
+    /// The nav column draws `allCases` in two rules, so the case order is the reading
+    /// order: the sections that change how Aura browses, then the system-level ones.
+    @Test func sectionsAreListedInNavOrder() {
+        #expect(SettingsTab.allCases == [
+            .lookAndFeel, .window, .browsing, .bookmarks, .search, .privacy, .passwords, .downloads,
+            .spaces, .containers, .accessibility, .languages, .shortcuts, .permissions, .about,
+            .extensions
+        ])
+    }
+
+    /// Typing a card's name has to find the section holding it, and window layout now
+    /// lives in Window rather than Look and Feel.
+    @Test func searchFindsASectionByWhatItHoldsNotJustItsTitle() {
+        func hits(_ query: String) -> [SettingsTab] {
+            SettingsTab.allCases.filter { $0.matches(query: query) }
+        }
+
+        #expect(hits("compact") == [.window])
+        #expect(hits("sidebar position") == [.window])
+        #expect(hits("BLUR") == [.window])
+        #expect(hits("accent") == [.lookAndFeel])
+        #expect(hits("liquid glass") == [.lookAndFeel])
+        #expect(hits("hibernation") == [.browsing])
+        #expect(hits("zzzz").isEmpty)
+        // Title matches still count, so every nav row can be reached by its own name.
+        #expect(SettingsTab.downloads.matches(query: "downloads"))
+
+        for tab in SettingsTab.allCases {
+            #expect(!tab.searchKeywords.isEmpty, "\(tab) has nothing to search")
+            #expect(
+                tab.searchKeywords.allSatisfy { $0 == $0.lowercased() },
+                "\(tab) has a keyword that is not lower-cased, so no query can match it"
+            )
+        }
+    }
+
     @Test func savedSelectionsFromOlderBuildsStillResolve() {
         #expect(SettingsTab.resolve(rawValue: "general") == .lookAndFeel)
         #expect(SettingsTab.resolve(rawValue: "searchEngines") == .search)
+        // Tab Management merged into Tabs and Browsing, so its saved selections and its
+        // aura://settings/tabManagement deep links land on the page that absorbed it.
+        #expect(SettingsTab.resolve(rawValue: "tabManagement") == .browsing)
+        #expect(!SettingsTab.allCases.contains { $0.rawValue == "tabManagement" })
         // Sections that kept their raw value must keep resolving to themselves.
         #expect(SettingsTab.resolve(rawValue: "spaces") == .spaces)
+        #expect(SettingsTab.resolve(rawValue: "containers") == .containers)
         #expect(SettingsTab.resolve(rawValue: "passwords") == .passwords)
         #expect(SettingsTab.resolve(rawValue: "shortcuts") == .shortcuts)
         #expect(SettingsTab.resolve(rawValue: "extensions") == .extensions)

@@ -21,6 +21,7 @@ struct NormalTabsList: View {
     /// re-ran, and rebuilt every row, on any change to any space.
     let containers: [TabContainer]
     @Environment(TabManager.self) private var tabManager
+    @Environment(\.theme) private var theme
     @ObservedObject private var dragSession = TabDragSession.shared
     @State private var previousTabIds: [UUID] = []
 
@@ -88,12 +89,18 @@ struct NormalTabsList: View {
         .overlay(alignment: dragSession.indicator(for: tab.id, in: zone)?.below == true ? .bottom : .top) {
             if dragSession.indicator(for: tab.id, in: zone) != nil {
                 Capsule()
-                    .fill(Color.accentColor)
+                    .fill(theme.accent)
                     .frame(height: 2)
                     .padding(.horizontal, 6)
             }
         }
-        .tabDragSource(id: tab.id, in: zone)
+        .tabDragSource(
+            id: tab.id,
+            in: zone,
+            url: tab.url,
+            title: tab.title,
+            onMiddleClick: { onClose(tab) }
+        )
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .move(edge: .bottom)),
             removal: .opacity.combined(with: .move(edge: .top))
@@ -116,7 +123,7 @@ struct NormalTabsList: View {
             .overlay(alignment: dragSession.indicator(for: folder.id, in: zone)?.below == true ? .bottom : .top) {
                 if dragSession.indicator(for: folder.id, in: zone) != nil {
                     Capsule()
-                        .fill(Color.accentColor)
+                        .fill(theme.accent)
                         .frame(height: 2)
                         .padding(.horizontal, 6)
                 }

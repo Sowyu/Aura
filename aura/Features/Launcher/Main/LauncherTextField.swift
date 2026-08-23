@@ -144,6 +144,9 @@ struct LauncherTextField: NSViewRepresentable {
         textField.usesSingleLineMode = true
         textField.cell?.wraps = false
         textField.cell?.isScrollable = true
+        // The field draws no label of its own, and this one view is both the address bar
+        // and the launcher, so the placeholder is the only thing that says which.
+        textField.setAccessibilityLabel(placeholder.isEmpty ? "Search or enter address" : placeholder)
         if let textColor {
             textField.textColor = NSColor(textColor)
         }
@@ -178,6 +181,7 @@ struct LauncherTextField: NSViewRepresentable {
         }
         nsView.cursorColor = NSColor(cursorColor)
         nsView.placeholderString = placeholder
+        nsView.setAccessibilityLabel(placeholder.isEmpty ? "Search or enter address" : placeholder)
         if let textColor {
             nsView.textColor = NSColor(textColor)
         }

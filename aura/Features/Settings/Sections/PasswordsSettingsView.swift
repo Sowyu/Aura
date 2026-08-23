@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct PasswordsSettingsView: View {
+    @Environment(\.theme) private var theme
     @Query(sort: \TabContainer.lastAccessedAt, order: .reverse) var containers: [TabContainer]
 
     @Bindable private var settings = SettingsStore.shared
@@ -18,6 +19,9 @@ struct PasswordsSettingsView: View {
         SettingsSection {
             passwordsOverview
             vaultCard
+            if selectedProvider.usesBuiltInVault {
+                PasswordExportCard()
+            }
         }
     }
 
@@ -37,8 +41,8 @@ struct PasswordsSettingsView: View {
                     .fixedSize()
 
                     Text(selectedProvider.summary)
-                        .font(.caption)
-                        .foregroundStyle(selectedProvider.isAvailable ? Color.secondary : .orange)
+                        .font(.system(size: 11))
+                        .foregroundStyle(selectedProvider.isAvailable ? theme.mutedForeground : theme.warning)
                 }
             }
 
@@ -54,10 +58,20 @@ struct PasswordsSettingsView: View {
             Toggle("Prompt to save passwords", isOn: $settings.passwordSavePromptsEnabled)
                 .disabled(!settings.passwordsEnabled || !selectedProvider.usesBuiltInVault)
 
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Sync passwords via iCloud", isOn: $settings.passwordSyncViaICloud)
+                    .disabled(!settings.passwordsEnabled || !selectedProvider.usesBuiltInVault)
+                Text("Off keeps saved passwords on this Mac. Credentials saved before "
+                    + "changing this keep whatever they were saved with.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if !selectedProvider.isAvailable {
                 Text("\(selectedProvider.title) is not yet integrated.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
             }
         }
     }
@@ -69,7 +83,7 @@ struct PasswordsSettingsView: View {
         if selectedProvider.usesBuiltInVault {
             SettingsCard {
                 PasswordVaultView(
-                    title: "Saved Credentials",
+                    title: "Saved credentials",
                     containers: containers,
                     tableHeight: 320
                 )
@@ -77,7 +91,7 @@ struct PasswordsSettingsView: View {
         } else {
             SettingsCard(header: selectedProvider.title) {
                 Text("\(selectedProvider.title) integration coming soon.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.mutedForeground)
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
             }
         }

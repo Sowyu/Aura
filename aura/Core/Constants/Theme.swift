@@ -19,6 +19,29 @@ enum AuraAccent {
     ]
 }
 
+/// The radius scale. Every surface picks one of these; a literal radius anywhere else
+/// is a bug. Buttons and chips 6, rows/fields/cards/menus/overlays 10, panes 13.
+enum AuraRadius {
+    static let button: CGFloat = 6
+    static let row: CGFloat = 10
+    static let pane: CGFloat = 13
+}
+
+/// Flat chrome floats on a 1pt `theme.border` line, and at most this much shadow.
+/// Anything larger reads as a different elevation model next to the content pane.
+enum AuraShadow {
+    static let radius: CGFloat = 6
+    static let y: CGFloat = 2
+    static let opacity: Double = 0.12
+}
+
+extension View {
+    /// The one shadow a floating Aura surface may carry.
+    func auraFloatingShadow() -> some View {
+        shadow(color: .black.opacity(AuraShadow.opacity), radius: AuraShadow.radius, y: AuraShadow.y)
+    }
+}
+
 struct Theme: Equatable {
     let colorScheme: ColorScheme
     /// Set only on the glass chrome, where readable text follows the tint's luminance

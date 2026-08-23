@@ -12,24 +12,87 @@ struct FaviconPayload {
     let pixels: CGFloat
 }
 
+/// A dictionary that drops its oldest insertion once it passes `limit`. Insertion order,
+/// not access order: a favicon is looked up on every render, so LRU would mean touching
+/// the order array on every read for no practical gain.
+/// ponytail: `order.removeFirst()` is O(n). Swap for a deque if the limit ever passes a
+/// few thousand.
+struct BoundedCache<Key: Hashable, Value> {
+    private var storage: [Key: Value] = [:]
+    private var order: [Key] = []
+    let limit: Int
+
+    init(limit: Int) {
+        self.limit = limit
+    }
+
+    var count: Int { storage.count }
+
+    subscript(key: Key) -> Value? {
+        get { storage[key] }
+        set {
+            guard let newValue else {
+                removeValue(forKey: key)
+                return
+            }
+            if storage.updateValue(newValue, forKey: key) == nil { order.append(key) }
+            while order.count > limit {
+                storage.removeValue(forKey: order.removeFirst())
+            }
+        }
+    }
+
+    @discardableResult
+    mutating func removeValue(forKey key: Key) -> Value? {
+        let removed = storage.removeValue(forKey: key)
+        if removed != nil, let index = order.firstIndex(of: key) { order.remove(at: index) }
+        return removed
+    }
+}
+
 final class FaviconService: ObservableObject {
     static let shared = FaviconService()
-    private var cache: [String: NSImage] = [:]
-    private var colorCache: [String: Color] = [:]
-    private var sourceURLCache: [String: URL] = [:]
+    /// Unbounded before: a long session kept an icon, a colour and a source URL for every
+    /// domain ever seen, and a negative entry for every one that failed.
+    static let cacheLimit = 512
+    private var cache = BoundedCache<String, NSImage>(limit: FaviconService.cacheLimit)
+    private var colorCache = BoundedCache<String, Color>(limit: FaviconService.cacheLimit)
+    private var sourceURLCache = BoundedCache<String, URL>(limit: FaviconService.cacheLimit)
     private var isFetching: Set<String> = []
     private var pendingCompletions: [String: [(NSImage?) -> Void]] = [:]
     /// Original downloaded bytes, kept so a second tab on the same domain writes the real
     /// icon file rather than a TIFF snapshot of the already-downscaled image.
-    private let originalBytes = NSCache<NSString, NSData>()
+    /// Internal so the tests can read the ceilings back.
+    let originalBytes = NSCache<NSString, NSData>()
     /// Decoded 64 px icons keyed by on-disk path, shared by every row showing that file.
-    private let fileImages = NSCache<NSString, NSImage>()
+    let fileImages = NSCache<NSString, NSImage>()
+    /// NSCache evicts on cost only when the entries carry one, so every insert below
+    /// passes `cost:`. Without a limit a long session kept every icon it ever decoded.
+    static let byteCacheCostLimit = 32 * 1024 * 1024
+    static let imageCacheCostLimit = 64 * 1024 * 1024
+    static let cacheCountLimit = 256
+
+    /// What a decoded icon costs in memory: the bitmap it renders into, 4 bytes a pixel.
+    static func imageCost(_ image: NSImage) -> Int {
+        let size = image.representations.first.map {
+            CGSize(width: $0.pixelsWide, height: $0.pixelsHigh)
+        } ?? image.size
+        return max(1, Int(size.width * size.height) * 4)
+    }
+
     /// Never download more than this many candidates before settling for the best so far.
     private static let maxCandidateDownloads = 3
     // Negative cache: without it, every SwiftUI render of a domain with no
     // resolvable favicon kicks off another full network fetch.
-    private var failedFetches: [String: Date] = [:]
+    private var failedFetches = BoundedCache<String, Date>(limit: FaviconService.cacheLimit)
     private let failureRetryInterval: TimeInterval = 300
+
+    private init() {
+        originalBytes.countLimit = Self.cacheCountLimit
+        originalBytes.totalCostLimit = Self.byteCacheCostLimit
+        fileImages.countLimit = Self.cacheCountLimit
+        fileImages.totalCostLimit = Self.imageCacheCostLimit
+    }
 
     func getFavicon(for searchURL: String) -> NSImage? {
         guard let domain = extractDomain(from: searchURL) else { return nil }
@@ -145,7 +208,9 @@ final class FaviconService: ObservableObject {
     private func completeFetch(for domain: String, favicon: NSImage?, sourceURL: URL?, data: Data? = nil) {
         if let favicon {
             cache[domain] = favicon
-            if let data { originalBytes.setObject(data as NSData, forKey: domain as NSString) }
+            if let data {
+                originalBytes.setObject(data as NSData, forKey: domain as NSString, cost: data.count)
+            }
             colorCache[domain] = Color(favicon.averageColor())
             if let sourceURL {
                 sourceURLCache[domain] = sourceURL
@@ -171,7 +236,7 @@ final class FaviconService: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL),
               let image = FaviconDecoder.decode(data)
         else { return nil }
-        fileImages.setObject(image, forKey: key)
+        fileImages.setObject(image, forKey: key, cost: Self.imageCost(image))
         return image
     }
 
@@ -259,6 +324,10 @@ final class FaviconService: ObservableObject {
     }
 }
 
+/// One context for every average-colour pass. Building a CIContext per call cost more
+/// than the 1x1 render it was made for.
+private let averageColorContext = CIContext(options: [.workingColorSpace: kCFNull as Any])
+
 extension NSImage {
     func averageColor() -> NSColor {
         guard let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
@@ -285,8 +354,7 @@ extension NSImage {
         }
 
         var bitmap = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: kCFNull as Any])
-        context.render(
+        averageColorContext.render(
             outputImage,
             toBitmap: &bitmap,
             rowBytes: 4,

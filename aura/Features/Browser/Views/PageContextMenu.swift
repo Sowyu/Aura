@@ -54,6 +54,7 @@ struct PageContextMenu {
             AuraMenuItem.item("Copy Link", icon: "link") {
                 ClipboardUtils.copyToClipboard(link.absoluteString)
             }
+            cleanLinkItem(for: link)
             AuraMenuItem.item("Download Linked File", icon: "arrow.down.circle") {
                 page.startDownload(from: link)
             }
@@ -65,7 +66,7 @@ struct PageContextMenu {
         return [
             .separator,
             .item("Open Image in New Tab", icon: "photo") { open(image, focus: false) },
-            .item("Copy Image", icon: "doc.on.doc") { copyImage(image) },
+            .item("Copy Image", icon: "doc.on.doc") { page.copyImage(at: image) },
             .item("Copy Image Address", icon: "link") {
                 ClipboardUtils.copyToClipboard(image.absoluteString)
             },
@@ -106,9 +107,20 @@ struct PageContextMenu {
     private var pageItems: [AuraMenuItem] {
         Array {
             SpaceMenuItems.alwaysOpen(url: tab.url, in: tab.container)
-            AuraMenuItem.item("Save Page As…", icon: "square.and.arrow.down") {
-                page.saveWebArchive(named: tab.title.isEmpty ? (tab.url.host ?? "page") : tab.title)
+            reopenInSpaceItems
+            AuraMenuItem.separator
+            AuraMenuItem.item("Reader", icon: "doc.plaintext", shortcut: "⌥⌘R", isDisabled: !isPageToolAvailable) {
+                PageTools.reader(for: tab)
             }
+            AuraMenuItem.item("View Source", icon: "chevron.left.forwardslash.chevron.right",
+                              shortcut: "⌥⌘U", isDisabled: !isPageToolAvailable) {
+                PageTools.viewSource(for: tab)
+            }
+            AuraMenuItem.separator
+            AuraMenuItem.item("Save Page As…", icon: "square.and.arrow.down", shortcut: "⇧⌘S") {
+                PageTools.savePageAs(tab)
+            }
+            AuraMenuItem.item("Save Screenshot…", icon: "camera") { PageTools.saveScreenshot(tab) }
             AuraMenuItem.item("Print…", icon: "printer", shortcut: "⌘P") { page.printPage() }
             if let inspectElement {
                 AuraMenuItem.separator
@@ -120,6 +132,36 @@ struct PageContextMenu {
     }
 
     // MARK: - Helpers
+
+    /// Only offered when stripping actually changes the address, so a link that carries
+    /// no tracking does not grow a row that copies the same string twice.
+    private func cleanLinkItem(for link: URL) -> [AuraMenuItem] {
+        let cleaned = LinkCleaner.clean(link)
+        guard cleaned != link else { return [] }
+        return [
+            .item("Copy Link With Clean Parameters", icon: "link.badge.plus") {
+                ClipboardUtils.copyToClipboard(cleaned.absoluteString)
+            }
+        ]
+    }
+
+    /// Moves this tab to another space, rather than opening a copy of it there.
+    private var reopenInSpaceItems: [AuraMenuItem] {
+        guard let tabManager else { return [] }
+        let targets = tabManager.fetchContainers().filter { $0.id != tab.container.id }
+        guard !targets.isEmpty else { return [] }
+        return [
+            .submenu("Reopen In Space", icon: "arrow.right.square", items: targets.map { space in
+                .item(SpaceMenuItems.label(for: space), icon: space.iconSymbol) {
+                    tabManager.moveTabToContainer(tab, toContainer: space)
+                }
+            })
+        ]
+    }
+
+    private var isPageToolAvailable: Bool {
+        PageTools.isAvailable(for: tab)
+    }
 
     private func spaceItems(for url: URL) -> [AuraMenuItem] {
         guard let tabManager else { return [] }
@@ -156,17 +198,6 @@ struct PageContextMenu {
     /// responder chain exactly as the native menu sent them.
     private func sendToPage(_ selector: Selector) {
         NSApp.sendAction(selector, to: nil, from: nil)
-    }
-
-    private func copyImage(_ url: URL) {
-        // Decoding blocks, and a full-page image is not small, so it never runs on main.
-        DispatchQueue.global(qos: .userInitiated).async {
-            guard let image = NSImage(contentsOf: url) else { return }
-            DispatchQueue.main.async {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.writeObjects([image])
-            }
-        }
     }
 
     private func lookUp(_ text: String) {

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AccessibilitySettingsView: View {
+    @Environment(\.theme) private var theme
     @Bindable private var settings = SettingsStore.shared
 
     var body: some View {
@@ -23,7 +24,7 @@ struct AccessibilitySettingsView: View {
                         .frame(maxWidth: 260)
                     Text(settings.minimumFontSize == 0 ? "Off" : "\(Int(settings.minimumFontSize)) pt")
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.mutedForeground)
                         .frame(width: 50, alignment: .leading)
                 }
             }

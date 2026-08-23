@@ -56,15 +56,16 @@ struct ConfirmDialogView: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(12)
         .background(theme.popoverMutedBackground)
-        .cornerRadius(11)
+        .cornerRadius(AuraRadius.row)
         .overlay {
-            ConditionallyConcentricRectangle(cornerRadius: 11)
-                .stroke(theme.border, lineWidth: 0.5)
+            ConditionallyConcentricRectangle(cornerRadius: AuraRadius.row)
+                .stroke(theme.border, lineWidth: 1)
         }
+        // 3pt inset inside the 13pt outer edge keeps the two corners concentric.
         .padding(3)
         .background(theme.popoverBackground)
-        .cornerRadius(14)
-        .shadow(color: .black.opacity(0.25), radius: 20, y: 8)
+        .cornerRadius(AuraRadius.pane)
+        .auraFloatingShadow()
     }
 
     @ViewBuilder
@@ -75,8 +76,8 @@ struct ConfirmDialogView: View {
                 .scaledToFit()
                 .frame(width: 42, height: 42)
                 .padding(2)
-                .background(Color.white)
-                .cornerRadius(12)
+                .background(theme.mutedBackground)
+                .cornerRadius(AuraRadius.row)
         } else if let icon {
             OraIcons(icon: icon, size: .custom(42), color: iconColor ?? theme.mutedForeground)
         }

@@ -14,7 +14,7 @@ struct FloatingSidebar: View {
             // of its own and shows this exact surface through.
             .auraGlassWindowBackdrop(cornerRadius: browserContentCornerRadius)
             .clipShape(shape)
-            .shadow(color: .black.opacity(0.15), radius: browserContentCornerRadius, x: 0, y: 2)
+            .auraFloatingShadow()
             .padding(browserContentInset)
     }
 }

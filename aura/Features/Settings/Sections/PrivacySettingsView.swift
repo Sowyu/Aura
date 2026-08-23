@@ -4,8 +4,9 @@ import SwiftUI
 
 /// Global privacy defaults: fingerprinting, JavaScript, cookies, and the one
 /// place that wipes browsing data. Ad and tracker blocking belongs to uBlock
-/// Origin, which ships preinstalled.
+/// Origin Lite, which ships preinstalled.
 struct PrivacySettingsView: View {
+    @Environment(\.theme) private var theme
     @Query private var containers: [TabContainer]
     @Bindable private var settings = SettingsStore.shared
     @ObservedObject private var javaScriptPolicy = JavaScriptPolicyService.shared
@@ -38,26 +39,114 @@ struct PrivacySettingsView: View {
                 clearScope = .allSpaces
             }
         }
+        // Full uBlock Origin installs from the switch above, and it is not
+        // pre-consented, so this section has to be able to show the sheet.
+        .extensionConsentPrompt()
+        // A refused sheet has to take the switch back with it. The queue emptying is
+        // the only signal that the answer, whichever it was, has landed.
+        .onChange(of: ExtensionManager.shared.pendingConsent.isEmpty) { _, isEmpty in
+            if isEmpty { BundledExtensions.applyBlockingPlan() }
+        }
     }
 
     // MARK: - Blocking
 
     private var blockingCard: some View {
         SettingsCard(header: "Content blocking") {
-            Text("uBlock Origin is installed and handles ad and tracker blocking. "
-                + "Manage filter lists and per-site rules from its toolbar icon.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            Text(blockerSummary)
+                .font(.system(size: 13))
+                .foregroundStyle(theme.mutedForeground)
 
-            Button("Open uBlock Origin dashboard", action: openUBlockDashboard)
+            Button("Open \(activeBlockerName) dashboard", action: openUBlockDashboard)
                 .disabled(uBlockDashboardURL == nil)
+
+            Divider()
+
+            Toggle("Full ad blocking (uBlock Origin)", isOn: Binding(
+                get: { settings.extensionFullAdBlocking },
+                set: { BundledExtensions.setFullBlocking($0) }
+            ))
+            .disabled(settings.requestBlockingUnavailable)
+            Text("Routes web pages through a compatibility mode required for request-level "
+                + "blocking, which is how full uBlock Origin stops requests. uBlock Origin Lite is "
+                + "switched off while this is on, and extension request blocking below follows this "
+                + "switch in both directions. Applies after relaunch.")
+                .font(.system(size: 11))
+                .foregroundStyle(theme.mutedForeground)
+
+            // Said once, where the setting is, because the failure is otherwise
+            // invisible: loads stall for the broker's timeout, extensions quietly
+            // stop blocking, and in the worst case pages go blank after painting.
+            if settings.requestBlockingUnavailable {
+                Label(unavailableMessage, systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.destructive)
+            } else if let waitingMessage {
+                Text(waitingMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
+            }
+
+            Divider()
+
+            Toggle("Extension request blocking (experimental)", isOn: Binding(
+                get: { settings.extensionRequestBlocking },
+                set: { settings.extensionRequestBlocking = $0 }
+            ))
+            Text("Experimental, and uBlock Origin Lite does not need it. That blocker stops requests "
+                + "through declarativeNetRequest, which WebKit enforces on its own. This switch is for "
+                + "add-ons that block the old way, through webRequest, full uBlock Origin included. "
+                + "Pages then run in WebKit's Development WebContent service, which cannot hold the "
+                + "process assertion it needs, because that entitlement is Apple-private, so they can "
+                + "paint once and go blank. Aura checks at launch and switches back if they do. "
+                + "Applies after relaunch.")
+                .font(.system(size: 11))
+                .foregroundStyle(theme.mutedForeground)
         }
     }
 
-    /// nil until the extension engine has loaded uBlock Origin, or if the user
-    /// removed it. An extension's id is the folder it was unpacked into.
+    /// The blocker rule, asked once per body: which of the two is running, and whether
+    /// the switch above is still waiting for something.
+    private var blockingPlan: BundledExtensions.BlockingPlan {
+        BundledExtensions.plan(for: BundledExtensions.blockingInputs())
+    }
+
+    private var activeBlockerName: String {
+        blockingPlan.activeBlocker == .full ? "uBlock Origin" : "uBlock Origin Lite"
+    }
+
+    private var blockerSummary: String {
+        "\(activeBlockerName) is installed and handles ad and tracker blocking. "
+            + "Manage filter lists and per-site rules from its toolbar icon."
+    }
+
+    /// What the row says while the switch is on and full uBO is not running yet. Nil
+    /// once it is, or while it is off.
+    private var waitingMessage: String? {
+        switch blockingPlan.pending {
+        case .none:
+            return nil
+        case .consent:
+            return "Waiting for you to review what uBlock Origin can do and allow it."
+        case .relaunch:
+            return "Relaunch Aura to hand blocking over to uBlock Origin."
+        }
+    }
+
+    private var unavailableMessage: String {
+        (settings.requestBlockingUnavailableReason
+            ?? "The injected bundle did not answer when Aura checked at launch.")
+            + " uBlock Origin Lite is handling blocking, and full ad blocking stays off until "
+            + "Aura is relaunched."
+    }
+
+    /// nil until the extension engine has loaded the blocker that is running, or if the
+    /// user removed it. An extension's id is the folder it was unpacked into.
     private var uBlockDashboardURL: URL? {
-        ExtensionManager.shared.optionsPageURL(for: BundledExtensions.uBlockFolderName)
+        let id = blockingPlan.activeBlocker == .full
+            ? BundledExtensions.FullUBlockOrigin.folderName
+            : BundledExtensions.folderID
+        return ExtensionManager.shared.optionsPageURL(for: id)
     }
 
     /// Settings can be a tab or its own window, so the tab has to be asked for by
@@ -80,14 +169,6 @@ struct PrivacySettingsView: View {
             header: "Fingerprinting",
             description: "The default for new spaces. Each space can override it."
         ) {
-            Toggle("Extension request blocking (experimental)", isOn: Binding(
-                get: { SettingsStore.shared.extensionRequestBlocking },
-                set: { SettingsStore.shared.extensionRequestBlocking = $0 }
-            ))
-            Text("Lets uBlock Origin cancel requests before they leave. Pages can stop painting on this "
-                + "macOS build; turn it off if sites go blank. Applies after relaunch.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
             Toggle("Block fingerprinting", isOn: $settings.blockFingerprinting)
             Toggle("Block third-party trackers", isOn: $settings.blockThirdPartyTrackers)
         }
@@ -110,18 +191,18 @@ struct PrivacySettingsView: View {
             let rules = javaScriptPolicy.sortedRules
             if rules.isEmpty {
                 Text("No site rules yet. Use the toolbar menu's JavaScript submenu on any page.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
             } else {
                 ForEach(rules) { rule in
                     HStack(spacing: 12) {
                         Image(systemName: rule.isAllowed ? "curlybraces" : "nosign")
-                            .foregroundStyle(rule.isAllowed ? Color.green : Color.red)
+                            .foregroundStyle(rule.isAllowed ? theme.success : theme.destructive)
                         Text(rule.host)
                         Spacer()
                         Text(rule.isAllowed ? "Allowed" : "Blocked")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.mutedForeground)
                         Button("Remove", role: .destructive) {
                             javaScriptPolicy.removeRule(host: rule.host)
                         }

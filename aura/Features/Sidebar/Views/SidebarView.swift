@@ -67,19 +67,16 @@ struct SidebarView: View {
             let progress = transitionProgress(for: width)
 
             ZStack(alignment: .leading) {
-                // Spaces content - pushes back and blurs out while a panel is shown
+                // The list stays put. A panel is a flat swap on top of it, not a stack
+                // that pushes back and dims.
                 spacesContent
                     .frame(width: width)
-                    .offset(x: width * 0.12 * progress)
-                    .scaleEffect(CGFloat(1.0) - 0.06 * progress, anchor: .center)
-                    .opacity(CGFloat(1.0) - 0.5 * progress)
                     .allowsHitTesting(progress < 0.5)
 
-                // Downloads or history - slides in from the leading edge
+                // Downloads or history, sliding in over the list from the leading edge.
                 panelContent
                     .frame(width: width)
                     .offset(x: -width + width * progress)
-                    .shadow(color: .black.opacity(0.08 * Double(progress)), radius: 8, x: 4, y: 0)
                     .allowsHitTesting(progress >= 0.5)
             }
             .clipped()
@@ -102,6 +99,8 @@ struct SidebarView: View {
     private var panelContent: some View {
         if sidebarManager.panel == .history || lastPanel == .history {
             HistoryPanelView()
+        } else if sidebarManager.panel == .files || lastPanel == .files {
+            FilesPanelView()
         } else {
             DownloadsHistoryView()
         }
@@ -228,7 +227,7 @@ struct SidebarView: View {
                             dragOffset = 0
                         }
                     } else {
-                        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.9)) {
+                        withAnimation(AnimationSettings.easeOut(0.15)) {
                             dragOffset = 0
                         }
                     }
@@ -241,7 +240,7 @@ struct SidebarView: View {
                             dragOffset = 0
                         }
                     } else {
-                        withAnimation(AnimationSettings.spring(response: 0.18, dampingFraction: 0.9)) {
+                        withAnimation(AnimationSettings.easeOut(0.15)) {
                             dragOffset = 0
                         }
                     }
@@ -261,11 +260,12 @@ struct SidebarView: View {
             if toolbarManager.isToolbarHidden, !toolbarManager.isFloatingToolbarVisible {
                 SidebarHeader()
             }
-            // Same 10pt gutter the page view gives `ContainerView`, so the pill is exactly
-            // as wide as a tab row and shares its leading inset.
+            // One gutter for every row so they share edges. 8pt on the window edge, to
+            // match the pane's inset on the other side, and 0 on the pane side because
+            // the pane's own 8pt inset already is the gap.
             if !privacyMode.isPrivate {
                 SpaceHeaderRow(containers: containers)
-                    .padding(.horizontal, 10)
+                    .padding(gutter)
                     .padding(.bottom, 8)
             }
             NSPageView(
@@ -278,7 +278,7 @@ struct SidebarView: View {
                     selectedContainer: container.name,
                     containers: containers
                 )
-                .padding(.horizontal, 10)
+                .padding(gutter)
                 .environment(tabManager)
                 .environment(historyManager)
                 .environment(downloadManager)
@@ -290,19 +290,20 @@ struct SidebarView: View {
             if shouldShowMediaWidget {
                 GlobalMediaPlayer()
                     .environment(media)
-                    .padding(.horizontal, 10)
+                    .padding(gutter)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             if !privacyMode.isPrivate {
                 HStack {
                     DownloadsWidget()
+                    FilesWidget()
                     Spacer()
                     ContainerSwitcher(onContainerSelected: onContainerSelected)
                     Spacer()
                     NewContainerButton()
                 }
-                .padding(.horizontal, 10)
+                .padding(gutter)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -321,6 +322,12 @@ struct SidebarView: View {
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { toggleMaximizeWindow() }
         )
+        .auraDropTarget(handleDrop)
+    }
+
+    private var gutter: EdgeInsets {
+        let paneSide = sidebarManager.sidebarPosition == .secondary
+        return EdgeInsets(top: 0, leading: paneSide ? 0 : 8, bottom: 0, trailing: paneSide ? 8 : 0)
     }
 
     private func onContainerSelected(container: TabContainer) {
@@ -331,5 +338,79 @@ struct SidebarView: View {
 
     private func toggleMaximizeWindow() {
         window?.toggleMaximized()
+    }
+}
+
+// MARK: - Drops
+
+/// Out of the struct body so the view type stays inside the length the rest of the
+/// codebase is linted to.
+extension SidebarView {
+    /// An address, a file or a selection dropped on the sidebar opens a new tab. Aura's
+    /// own rows are handled by the drag session that started them, and the drop zones
+    /// over the rows claim those first, so anything that reaches here and still says
+    /// `.tabItem` landed on empty sidebar background.
+    private func handleDrop(_ payload: DropPayload) -> Bool {
+        switch payload {
+        case .tabItem, .nothing:
+            return false
+        case let .files(urls):
+            FileOpenService.shared.rememberGrants(for: urls)
+            for url in urls {
+                openInNewTab(url)
+            }
+            return !urls.isEmpty
+        case let .url(url):
+            openInNewTab(url)
+            return true
+        case let .search(text):
+            guard let tab = openInNewTab(.oraHome) else { return false }
+            tab.loadURL(text)
+            return true
+        }
+    }
+
+    @discardableResult
+    private func openInNewTab(_ url: URL) -> Tab? {
+        tabManager.openTab(
+            url: url,
+            historyManager: historyManager,
+            downloadManager: downloadManager,
+            focusAfterOpening: true,
+            isPrivate: privacyMode.isPrivate
+        )
+    }
+}
+
+/// The one empty state both sidebar panels use. Lives here rather than in either panel
+/// so history and downloads cannot drift apart again.
+struct SidebarPanelEmptyState: View {
+    let symbol: String
+    let title: String
+    var subtitle: String?
+
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Spacer()
+            Image(systemName: symbol)
+                .font(.system(size: 28, weight: .light))
+                .foregroundColor(theme.mutedForeground)
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.foreground)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.mutedForeground)
+                    .multilineTextAlignment(.center)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
     }
 }

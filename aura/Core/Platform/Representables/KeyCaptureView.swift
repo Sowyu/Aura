@@ -42,8 +42,10 @@ extension KeyCaptureView {
 
             guard monitor == nil else { return }
 
+            // A local monitor sees every window's keys; only the key window's are ours.
             monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-                self?.onKeyDown?(event) ?? event
+                guard let self, event.window?.isKeyWindow ?? true else { return event }
+                return self.onKeyDown?(event) ?? event
             }
         }
 

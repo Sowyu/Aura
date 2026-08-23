@@ -40,6 +40,11 @@ final class BrowserEngine {
     }
 
     static let shared = BrowserEngine()
+
+    /// Store every tab that is in no browsing container shares, Firefox's "No
+    /// container". A fixed constant rather than a fresh UUID, so the store survives
+    /// relaunches and nobody is signed out by a restart.
+    static let defaultStoreIdentifier = UUID(uuidString: "6E9F1C34-2B7A-4C05-9E1D-3A5B8C7D0F42")!
     private let profileCacheLock = NSLock()
     private var profileCache: [ProfileKey: BrowserEngineProfile] = [:]
 
@@ -59,6 +64,16 @@ final class BrowserEngine {
         let profile = BrowserEngineProfile(identifier: identifier, isPrivate: false)
         profileCache[key] = profile
         return profile
+    }
+
+    /// Releases the cached profile for a store that is going away, so its
+    /// `WKWebsiteDataStore` closes instead of staying open for the life of the app.
+    /// Only safe once nothing is using the store, so deleting a container is the one
+    /// caller.
+    func dropProfile(identifier: UUID) {
+        profileCacheLock.lock()
+        defer { profileCacheLock.unlock() }
+        profileCache[ProfileKey(identifier: identifier, isPrivate: false)] = nil
     }
 
     func makePage(

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct SearchEngineSettingsView: View {
+    @Environment(\.theme) private var theme
     private let settings = SettingsStore.shared
     @StateObject private var searchEngineService = SearchEngineService()
 
@@ -21,8 +22,8 @@ struct SearchEngineSettingsView: View {
         SettingsSection {
             SettingsCard {
                 HStack {
-                    Text("Search Engine Library")
-                        .font(.headline)
+                    Text("Search engine library")
+                        .font(.system(size: 13, weight: .semibold))
                     Spacer()
                     Button(showingAddForm ? "Cancel" : "Add Custom Engine") {
                         if showingAddForm {
@@ -35,7 +36,7 @@ struct SearchEngineSettingsView: View {
             }
 
             if showingAddForm {
-                SettingsCard(header: "Add New Search Engine") {
+                SettingsCard(header: "Add new search engine") {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Name:")
@@ -53,8 +54,8 @@ struct SearchEngineSettingsView: View {
                                 )
                                 if !newEngineURL.isEmpty, !isValidURL {
                                     Text("URL must contain {query} and be a valid URL")
-                                        .foregroundColor(.red)
-                                        .font(.caption)
+                                        .foregroundStyle(theme.destructive)
+                                        .font(.system(size: 11))
                                 }
                             }
                         }
@@ -82,15 +83,15 @@ struct SearchEngineSettingsView: View {
                 }
             }
 
-            SettingsCard(header: "Default Engines") {
+            SettingsCard(header: "Default engines") {
                 // Conventional Search Engines
                 let conventionalEngines = searchEngineService.builtInSearchEngines.filter {
                     !$0.isAIChat
                 }
                 if !conventionalEngines.isEmpty {
-                    Text("Conventional Search Engines")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text("Conventional search engines")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.mutedForeground)
                         .padding(.bottom, 4)
 
                     ForEach(conventionalEngines, id: \.name) { engine in
@@ -119,9 +120,9 @@ struct SearchEngineSettingsView: View {
                 // The AI default is per space, under Spaces.
                 let aiEngines = searchEngineService.builtInSearchEngines.filter(\.isAIChat)
                 if !aiEngines.isEmpty {
-                    Text("AI Search Engines")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text("AI search engines")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.mutedForeground)
                         .padding(.top, 8)
                         .padding(.bottom, 4)
 
@@ -130,17 +131,17 @@ struct SearchEngineSettingsView: View {
                     }
 
                     Text("Pick the AI chat each space uses under Settings › Spaces.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.mutedForeground)
                         .padding(.top, 4)
                 }
 
                 if !settings.customSearchEngines.isEmpty {
                     Divider()
 
-                    Text("Custom Search Engines")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text("Custom search engines")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.mutedForeground)
                         .padding(.top, 8)
                 }
 
@@ -199,6 +200,8 @@ struct SearchEngineSettingsView: View {
 }
 
 struct BuiltInSearchEngineRow: View {
+    @Environment(\.theme) private var theme
+
     let engine: SearchEngine
     let isDefault: Bool
     /// `nil` for a row that cannot be made the default, e.g. the AI chat engines.
@@ -213,14 +216,13 @@ struct BuiltInSearchEngineRow: View {
                         .resizable()
                         .frame(width: 16, height: 16)
                 } else {
-                    RoundedRectangle(cornerRadius: 2)
+                    RoundedRectangle(cornerRadius: AuraRadius.button, style: .continuous)
                         .fill(engine.color.opacity(0.8))
                         .frame(width: 16, height: 16)
                         .overlay(
                             Text(String(engine.name.first ?? "S"))
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundColor(.white)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white)
                         )
                 }
             }
@@ -228,16 +230,18 @@ struct BuiltInSearchEngineRow: View {
             // Name and badges
             HStack(spacing: 8) {
                 Text(engine.name)
-                    .font(.body)
+                    .font(.system(size: 13))
 
                 if isDefault {
                     Text("Default")
-                        .font(.caption)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.accent)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.2))
-                        .foregroundColor(.blue)
-                        .cornerRadius(4)
+                        .background(
+                            theme.mutedBackground,
+                            in: .rect(cornerRadius: AuraRadius.button, style: .continuous)
+                        )
                 }
             }
 
@@ -253,6 +257,7 @@ struct BuiltInSearchEngineRow: View {
 }
 
 struct CustomSearchEngineRow: View {
+    @Environment(\.theme) private var theme
     let engine: CustomSearchEngine
     let onDelete: () -> Void
     let onSetAsDefault: () -> Void
@@ -283,15 +288,15 @@ struct CustomSearchEngineRow: View {
                                     .resizable()
                                     .frame(width: 16, height: 16)
                             } else {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color.gray.opacity(0.3))
+                                RoundedRectangle(cornerRadius: AuraRadius.button, style: .continuous)
+                                    .fill(theme.mutedBackground)
                                     .frame(width: 16, height: 16)
                             }
                         }
 
-                        Text("Edit Search Engine")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Text("Edit search engine")
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.mutedForeground)
 
                         Spacer()
                     }
@@ -310,8 +315,8 @@ struct CustomSearchEngineRow: View {
                                 TextField("https://example.com/search?q={query}", text: $editURL)
                                 if !editURL.isEmpty, !isValidEditURL {
                                     Text("URL must contain {query} and be a valid URL")
-                                        .foregroundColor(.red)
-                                        .font(.caption)
+                                        .foregroundStyle(theme.destructive)
+                                        .font(.system(size: 11))
                                 }
                             }
                         }
@@ -341,8 +346,10 @@ struct CustomSearchEngineRow: View {
                     }
                 }
                 .padding(12)
-                .background(Color(.controlBackgroundColor).opacity(0.5))
-                .cornerRadius(8)
+                .background(
+                    theme.popoverMutedBackground,
+                    in: .rect(cornerRadius: AuraRadius.row, style: .continuous)
+                )
             } else {
                 // Normal display
                 HStack {
@@ -353,8 +360,8 @@ struct CustomSearchEngineRow: View {
                                 .resizable()
                                 .frame(width: 16, height: 16)
                         } else {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.gray.opacity(0.3))
+                            RoundedRectangle(cornerRadius: AuraRadius.button, style: .continuous)
+                                .fill(theme.mutedBackground)
                                 .frame(width: 16, height: 16)
                         }
                     }
@@ -362,24 +369,28 @@ struct CustomSearchEngineRow: View {
                     // Name and badges
                     HStack(spacing: 8) {
                         Text(engine.name)
-                            .font(.body)
+                            .font(.system(size: 13))
                         if isDefault {
                             Text("Default")
-                                .font(.caption)
+                                .font(.system(size: 11))
+                                .foregroundStyle(theme.accent)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.blue.opacity(0.2))
-                                .foregroundColor(.blue)
-                                .cornerRadius(4)
+                                .background(
+                                    theme.mutedBackground,
+                                    in: .rect(cornerRadius: AuraRadius.button, style: .continuous)
+                                )
                         }
                         if engine.isAIChat {
                             Text("AI")
-                                .font(.caption)
+                                .font(.system(size: 11))
+                                .foregroundStyle(theme.mutedForeground)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.purple.opacity(0.2))
-                                .foregroundColor(.purple)
-                                .cornerRadius(4)
+                                .background(
+                                    theme.mutedBackground,
+                                    in: .rect(cornerRadius: AuraRadius.button, style: .continuous)
+                                )
                         }
                     }
 
@@ -399,10 +410,9 @@ struct CustomSearchEngineRow: View {
                             startEdit()
                         }
 
-                        Button("Delete") {
+                        Button("Delete", role: .destructive) {
                             onDelete()
                         }
-                        .foregroundColor(.red)
                     }
                 }
                 .padding(.vertical, 4)

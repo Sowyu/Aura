@@ -28,7 +28,14 @@ void AuraWebRequestChannelSetBundle(WKBundleRef bundle);
 /// YES when the host currently has at least one blocking listener registered.
 BOOL AuraWebRequestChannelIsActive(void);
 
-/// Records the host's answer to `AuraWebRequestStateMessageName` ("1"/"0").
+/// YES when some listener is on `onBeforeSendHeaders`, so the ask has to carry the
+/// request's headers. Off in the common case: reading and shipping them costs a
+/// dictionary per request that nothing would look at.
+BOOL AuraWebRequestChannelWantsRequestHeaders(void);
+
+/// Records the host's answer to `AuraWebRequestStateMessageName`, a bit mask in a
+/// string: bit 0 is "a listener is registered", bit 1 is "send request headers".
+/// "0" and "1" carry the meaning they had before headers existed.
 /// Every call drops the cached verdicts: the host only sends on a change, and a
 /// new set of listeners may decide differently.
 void AuraWebRequestChannelSetActive(NSString *_Nullable state);
@@ -41,7 +48,8 @@ void AuraWebRequestChannelRefreshActive(void);
 NSString *_Nullable AuraWebRequestChannelPostSync(NSString *name, NSString *body);
 
 /// Blocks until the host answers or gives up. Returns the reply dictionary
-/// (`cancel`, `redirectUrl`), or nil for "allow, unchanged".
+/// (`cancel`, `redirectUrl`, `setHeaders`, `removeHeaders`), or nil for "allow,
+/// unchanged".
 NSDictionary *_Nullable AuraWebRequestChannelDecide(NSDictionary *request);
 
 NS_ASSUME_NONNULL_END

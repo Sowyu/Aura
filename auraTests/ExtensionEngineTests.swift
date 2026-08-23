@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 @testable import Aura
 import Testing
@@ -89,11 +90,268 @@ struct ExtensionEngineTests {
         engine.unload(id: "window-test-ext")
     }
 
-    @Test func managerAttachSkipsPrivateProfiles() {
+    /// Removing an extension used to go through the lazily creating `engine`
+    /// accessor, which built a `WKWebExtensionController` (and with it a whole
+    /// extension process) just to unload something that was never loaded.
+    @Test func removingANeverLoadedExtensionBuildsNoController() {
         guard #available(macOS 15.4, *) else { return }
-        let privateConfig = WKWebViewConfiguration()
-        ExtensionManager.shared.attach(to: privateConfig, isPrivate: true)
-        #expect(privateConfig.webExtensionController == nil)
+        let manager = ExtensionManager()
+        #expect(manager.loadedEngine == nil, "a fresh manager has no engine yet")
+
+        manager.removeExtension("never-installed")
+        #expect(manager.loadedEngine == nil)
+    }
+
+    // MARK: - Private windows
+
+    /// Private windows used to get no extension controller at all, so "run in private
+    /// windows" was not a thing a user could be granted. The gate is the per-context
+    /// private-data flag now, and it has to follow the grant in both directions.
+    @Test func privateDataAccessFollowsTheGrant() async throws {
+        guard #available(macOS 15.4, *) else {
+            Issue.record("Requires macOS 15.4; host OS too old to run this check")
+            return
+        }
+        let dir = try makeFixtureExtension()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let engine = ExtensionEngine()
+        _ = try await engine.load(directory: dir, id: "private-ext", privateAccess: true)
+        let context = try #require(engine.context(for: "private-ext"))
+        #expect(context.hasAccessToPrivateData)
+
+        engine.setPrivateAccess(false, for: "private-ext")
+        #expect(!context.hasAccessToPrivateData)
+
+        engine.unload(id: "private-ext")
+    }
+
+    /// Loading with no grant is the default, and re-loading an already-loaded id must
+    /// not quietly re-grant it.
+    @Test func privateDataAccessIsOffByDefault() async throws {
+        guard #available(macOS 15.4, *) else { return }
+        let dir = try makeFixtureExtension()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let engine = ExtensionEngine()
+        _ = try await engine.load(directory: dir, id: "normal-ext")
+        let context = try #require(engine.context(for: "normal-ext"))
+        #expect(!context.hasAccessToPrivateData)
+
+        _ = try await engine.load(directory: dir, id: "normal-ext", privateAccess: true)
+        #expect(context.hasAccessToPrivateData, "a reload has to carry the current grant")
+
+        engine.unload(id: "normal-ext")
+    }
+
+    /// Adapters are shared by every loaded extension, so the per-extension filter is
+    /// what stops one extension's grant from leaking to all of them.
+    @Test func privateWindowTabsAreHiddenWithoutAGrant() {
+        guard #available(macOS 15.4, *) else { return }
+        #expect(ExtensionWindowAdapter.showsTabs(inPrivateWindow: false, contextHasPrivateAccess: false))
+        #expect(ExtensionWindowAdapter.showsTabs(inPrivateWindow: false, contextHasPrivateAccess: true))
+        #expect(!ExtensionWindowAdapter.showsTabs(inPrivateWindow: true, contextHasPrivateAccess: false))
+        #expect(ExtensionWindowAdapter.showsTabs(inPrivateWindow: true, contextHasPrivateAccess: true))
+    }
+
+    /// The manifest read used to happen inside the first `BrowserPage.init`, on the main
+    /// actor. `prepare` is what moved off it, so it has to be callable from a detached
+    /// task and return everything the main actor needs to build the row.
+    @Test func manifestScanRunsOffTheMainActor() async throws {
+        let directory = try makeFixtureExtension()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let scanned = await Task.detached {
+            ExtensionManager.prepare(at: directory, patchesShim: false)
+        }.value
+
+        #expect(scanned.id == directory.lastPathComponent)
+        #expect(scanned.displayName == "Aura Test Extension")
+        #expect(scanned.displayVersion == "1.0")
+        #expect(scanned.directoryURL == directory)
+    }
+
+    /// A folder with no manifest still produces an entry, so the row shows the folder
+    /// name rather than the scan dropping it silently.
+    @Test func scanOfAFolderWithoutAManifestKeepsTheFolderName() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ora-empty-extension-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let scanned = await Task.detached {
+            ExtensionManager.prepare(at: directory, patchesShim: false)
+        }.value
+
+        #expect(scanned.displayName == nil)
+        #expect(scanned.geckoID == nil)
+        #expect(scanned.id == directory.lastPathComponent)
+    }
+
+    // MARK: - Install consent
+
+    private func consentRequest(
+        id: String,
+        version: String,
+        permissions: [String],
+        source: ExtensionInstallSource = .folder("Aura Test Extension")
+    ) -> ExtensionConsentRequest {
+        ExtensionConsentRequest(
+            id: id,
+            displayName: "Aura Test Extension",
+            displayDescription: nil,
+            version: version,
+            source: source,
+            permissions: permissions
+        )
+    }
+
+    /// An id nobody has agreed to yet must never reach `engine.load` unasked.
+    @Test func firstInstallOfAnIDAsksTheUser() {
+        let request = consentRequest(id: "test-ext", version: "1.0", permissions: ["storage"])
+        #expect(ExtensionConsent.decision(for: request, stored: nil) == .prompt)
+    }
+
+    /// Re-enabling or relaunching with the same build is not a new install.
+    @Test func consentedVersionAndPermissionsLoadHeadless() {
+        let request = consentRequest(id: "test-ext", version: "1.0", permissions: ["storage", "tabs"])
+        let stored = ExtensionConsentRecord(version: "1.0", permissionsHash: request.permissionsHash)
+        #expect(ExtensionConsent.decision(for: request, stored: stored) == .load)
+
+        // Same permissions, newer build: an update on its own is not worth a prompt.
+        let updated = consentRequest(id: "test-ext", version: "1.1", permissions: ["tabs", "storage"])
+        #expect(ExtensionConsent.decision(for: updated, stored: stored) == .load)
+    }
+
+    /// The case the gate exists for: an update quietly asking for more.
+    @Test func grownPermissionsAskAgain() {
+        let installed = consentRequest(id: "test-ext", version: "1.0", permissions: ["storage"])
+        let stored = ExtensionConsentRecord(version: "1.0", permissionsHash: installed.permissionsHash)
+
+        let grown = consentRequest(
+            id: "test-ext",
+            version: "1.1",
+            permissions: ["storage", "<all_urls>"]
+        )
+        #expect(ExtensionConsent.decision(for: grown, stored: stored) == .prompt)
+    }
+
+    /// uBlock Origin Lite ships inside the app, so installing Aura is the consent.
+    @Test func bundledExtensionNeedsNoConsent() {
+        let request = consentRequest(
+            id: BundledExtensions.folderID,
+            version: "2026.820.1159",
+            permissions: ["declarativeNetRequest", "scripting", "<all_urls>"],
+            source: .bundled
+        )
+        #expect(ExtensionConsent.decision(for: request, stored: nil) == .load)
+    }
+
+    /// The bundled blocker is recognised by folder or by gecko id, and nothing else
+    /// is. A stale id from the blocker Aura used to ship must not pre-consent
+    /// anything a user later drops into that folder name.
+    @Test func onlyTheBundledBlockerIsPreConsented() {
+        #expect(BundledExtensions.isBundled(id: BundledExtensions.folderID, geckoID: nil))
+        #expect(BundledExtensions.isBundled(id: "renamed-folder", geckoID: BundledExtensions.geckoID))
+        #expect(!BundledExtensions.isBundled(id: BundledExtensions.legacyFolderName, geckoID: nil))
+        #expect(!BundledExtensions.isBundled(id: "ublock-origin", geckoID: "uBlock0@raymondhill.net"))
+    }
+
+    /// The one-time swap: the old blocker goes only when Aura is the one that put it
+    /// there, and the new one is unpacked only until its marker is set.
+    @Test func replacementPlanRemovesOnlyWhatAuraInstalled() {
+        #expect(
+            BundledExtensions.replacementPlan(oldMarker: true, oldFolderExists: true, newMarker: false)
+                == .init(removesLegacy: true, installsNew: true)
+        )
+        // Marker set, folder already gone: the user removed it, nothing to do.
+        #expect(
+            BundledExtensions.replacementPlan(oldMarker: true, oldFolderExists: false, newMarker: true)
+                == .init(removesLegacy: false, installsNew: false)
+        )
+        // A folder with no marker behind it is the user's own install and stays.
+        #expect(
+            BundledExtensions.replacementPlan(oldMarker: false, oldFolderExists: true, newMarker: true)
+                == .init(removesLegacy: false, installsNew: false)
+        )
+        // Fresh profile: nothing to remove, everything to install.
+        #expect(
+            BundledExtensions.replacementPlan(oldMarker: false, oldFolderExists: false, newMarker: false)
+                == .init(removesLegacy: false, installsNew: true)
+        )
+    }
+
+    // MARK: - Row notes
+
+    /// The row used to take a snapshot of `context.errors` three seconds after loading
+    /// and never look again. It is rewritten on every error notification now, and this
+    /// is the wording it produces.
+    @Test func theRowNoteJoinsCompatibilityAndTheFirstRuntimeError() {
+        #expect(ExtensionManager.rowNote(compatibility: nil, errors: []) == nil)
+        #expect(ExtensionManager.rowNote(compatibility: "WebKit has no: proxy.", errors: [])
+            == "WebKit has no: proxy.")
+        // Only the first error: the row is two lines, and a wedged background script
+        // reports the same failure a hundred times.
+        #expect(ExtensionManager.rowNote(compatibility: nil, errors: ["boom", "again"]) == "Runtime: boom")
+        #expect(ExtensionManager.rowNote(compatibility: "Partial.", errors: ["boom"]) == "Partial. Runtime: boom")
+    }
+
+    // MARK: - Uninstall
+
+    /// Removing an extension deleted its folder and left everything else: the consent
+    /// record, the private-window grant, the update offer and every key the user had
+    /// bound to its commands. A reinstall of the same id then inherited decisions made
+    /// about the copy that was thrown away.
+    @Test @MainActor func removingAnExtensionForgetsEveryRecordAuraKept() throws {
+        guard #available(macOS 15.4, *) else { return }
+        let id = "aura-uninstall-test"
+        let settings = SettingsStore.shared
+        let previousConsent = settings.extensionConsent
+        let previousGrants = settings.extensionPrivateWindowGrants
+        let previousUpdates = settings.extensionAvailableUpdates
+        defer {
+            settings.extensionConsent = previousConsent
+            settings.extensionPrivateWindowGrants = previousGrants
+            settings.extensionAvailableUpdates = previousUpdates
+        }
+
+        settings.extensionConsent[id] = ExtensionConsentRecord(version: "1.0", permissionsHash: "abc")
+        settings.extensionPrivateWindowGrants.insert(id)
+        settings.extensionAvailableUpdates[id] = "2.0"
+
+        let binding = ExtensionCommandShortcut(
+            id: ExtensionCommandShortcut.id(extensionID: id, commandID: "toggle"),
+            extensionID: id,
+            commandID: "toggle",
+            title: "Test: Toggle",
+            suggested: nil
+        ).definition
+        let event = try #require(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 0,
+            windowNumber: 0, context: nil, characters: "j", charactersIgnoringModifiers: "j",
+            isARepeat: false, keyCode: 38
+        ))
+        CustomKeyboardShortcutManager.shared.setCustomShortcut(for: binding, event: event)
+        #expect(CustomKeyboardShortcutManager.shared.getShortcut(id: binding.id) != nil)
+
+        let manager = ExtensionManager()
+        manager.removeExtension(id)
+
+        #expect(settings.extensionConsent[id] == nil)
+        #expect(!settings.extensionPrivateWindowGrants.contains(id))
+        #expect(settings.extensionAvailableUpdates[id] == nil)
+        #expect(CustomKeyboardShortcutManager.shared.getShortcut(id: binding.id) == nil)
+        #expect(manager.loadedEngine == nil, "removing an extension that never loaded builds no controller")
+    }
+
+    /// Manifests list permissions in whatever order they please, and a reorder is
+    /// not a permission change.
+    @Test func permissionHashIgnoresOrderAndDuplicates() {
+        #expect(
+            ExtensionConsent.permissionsHash(["tabs", "storage", "tabs"])
+                == ExtensionConsent.permissionsHash(["storage", "tabs"])
+        )
+        #expect(ExtensionConsent.permissionsHash(["tabs"]) != ExtensionConsent.permissionsHash(["storage"]))
     }
 }
 

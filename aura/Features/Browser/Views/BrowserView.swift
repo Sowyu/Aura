@@ -92,7 +92,21 @@ struct BrowserView: View {
         }
     }
 
-    private static let holeRadius: CGFloat = 15
+    private static let holeRadius: CGFloat = AuraRadius.row
+
+    /// Everything stacked above the content pane. The revealed sidebar and the find bar
+    /// hang off this so neither of them covers the bookmarks bar.
+    private var chromeRowsHeight: CGFloat {
+        (isToolbarRowUp ? TopToolbar.rowHeight : 0)
+            + (showsBookmarksBar ? BookmarksBar.rowHeight : 0)
+            + (tabManager.offersSessionRestore ? SessionRestoreBar.rowHeight : 0)
+    }
+
+    /// The bar hides with the toolbar: on its own under a hidden toolbar it would float
+    /// against the window edge with no chrome above it.
+    private var showsBookmarksBar: Bool {
+        SettingsStore.shared.showBookmarksBar && isToolbarRowUp
+    }
 
     /// Pinned or hover-revealed, the row is the same 38pt of chrome in the same place.
     private var isToolbarRowUp: Bool {
@@ -119,24 +133,33 @@ struct BrowserView: View {
                         .transition(.move(edge: .top))
                         .zIndex(1)
                 }
+                // Its own row under the toolbar rather than part of it: the toolbar row
+                // balances its two button groups to centre the address field, and a
+                // second row inside that measurement would fight it.
+                if showsBookmarksBar {
+                    BookmarksBar()
+                        .transition(.move(edge: .top))
+                }
+                // Under the saved-pages row and above the page, the same band of chrome.
+                // Shows only until the user answers it, and only in the window whose
+                // launch policy is waiting on that answer.
+                if tabManager.offersSessionRestore {
+                    SessionRestoreBar()
+                        .transition(.move(edge: .top))
+                }
                 BrowserSplitView()
             }
             .overlay { urlEditingBackdrop }
             .animation(AnimationSettings.easeOut(0.12), value: appState.isURLBarEditing)
             .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isToolbarHidden)
             .animation(AnimationSettings.easeOut(0.15), value: toolbarManager.isFloatingToolbarVisible)
+            .animation(AnimationSettings.easeOut(0.15), value: showsBookmarksBar)
+            .animation(AnimationSettings.easeOut(0.15), value: tabManager.offersSessionRestore)
             .ignoresSafeArea(.all)
             .auraGlassWindowBackdrop()
-            // Window-wide, and mounted only while open: the launcher's backdrop covers
-            // the chrome as well as the page.
             .overlay {
-                ZStack {
-                    if appState.showLauncher, tabManager.activeTab != nil {
-                        LauncherView()
-                    }
-                    if appState.isFloatingTabSwitchVisible {
-                        FloatingTabSwitcher()
-                    }
+                if appState.isFloatingTabSwitchVisible {
+                    FloatingTabSwitcher()
                 }
             }
 
@@ -149,12 +172,16 @@ struct BrowserView: View {
                     sidebarFraction: sidebarManager.currentFraction,
                     isDownloadsOpen: sidebarManager.panel.isOpen
                 )
-                .padding(.top, isToolbarRowUp ? TopToolbar.rowHeight : 0)
+                .padding(.top, chromeRowsHeight)
             }
 
             // One hidden-toolbar behaviour, compact or not: the real row hover-reveals.
             if toolbarManager.isToolbarHidden {
-                FloatingTopToolbar()
+                // The whole band of chrome stays hot, not just the toolbar row: the
+                // bookmarks and session-restore rows render under it, and a pointer
+                // moving down to click a bookmark used to leave the hot rect and hide
+                // the chrome out from under itself.
+                FloatingTopToolbar(revealedExtent: chromeRowsHeight)
             }
 
             // Mounted once per window, not per tab: inside the web content view SwiftUI
@@ -162,9 +189,16 @@ struct BrowserView: View {
             // keyboard focus with it.
             if let tab = tabManager.activeTab, appState.showFinderIn == tab.id, tab.browserPage != nil {
                 FindView(tab: tab)
-                    .padding(.top, (isToolbarRowUp ? TopToolbar.rowHeight : 0) + 16)
+                    .padding(.top, chromeRowsHeight + 16)
                     .padding(.trailing, 16)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            }
+
+            // Above every piece of chrome, not just the page: the launcher centres on the
+            // window and dims all of it, so a revealed sidebar or toolbar must not draw
+            // over its backdrop. Mounted only while open.
+            if appState.showLauncher, tabManager.activeTab != nil {
+                LauncherView()
             }
 
             // Last in the stack so every menu draws over the chrome and the page. Renders
@@ -246,8 +280,12 @@ struct BrowserView: View {
 }
 
 /// The top edge while the row is hidden: a 12pt band at the window edge slides the real
-/// toolbar in, and the whole row stays hot while it is up so the pointer can use it.
+/// toolbar in, and every revealed row stays hot while it is up so the pointer can use it.
 private struct FloatingTopToolbar: View {
+    /// Every row the reveal brings up, measured by `BrowserView`: the toolbar plus the
+    /// bookmarks and session-restore rows when they are showing.
+    let revealedExtent: CGFloat
+
     @Environment(\.theme) private var theme
     @Environment(AppState.self) private var appState
     @Environment(ToolbarManager.self) private var toolbarManager
@@ -277,7 +315,7 @@ private struct FloatingTopToolbar: View {
                             set: { toolbarManager.isFloatingToolbarVisible = $0 }
                         ),
                         edge: .top,
-                        revealedExtent: TopToolbar.rowHeight,
+                        revealedExtent: revealedExtent,
                         isHeld: { isHeld }
                     )
                 )

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct AboutSettingsView: View {
+    @Environment(\.theme) private var theme
     @EnvironmentObject var updateService: UpdateService
     @Bindable private var settings = SettingsStore.shared
     @State private var notices = ""
@@ -28,12 +29,10 @@ struct AboutSettingsView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Aura")
-                        .font(.title2.weight(.semibold))
+                        .font(.system(size: 15, weight: .semibold))
                     Text(versionString)
-                        .foregroundStyle(.secondary)
-                    Text("Fast, secure, and beautiful browser built for macOS")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.mutedForeground)
                 }
 
                 Spacer()
@@ -59,21 +58,21 @@ struct AboutSettingsView: View {
 
                 if updateService.updateAvailable {
                     Text("Update available")
-                        .font(.caption)
-                        .foregroundStyle(.green)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.success)
                 }
             }
 
             if let result = updateService.lastCheckResult {
                 Text(result)
-                    .font(.caption)
-                    .foregroundStyle(updateService.updateAvailable ? .green : .secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(updateService.updateAvailable ? theme.success : theme.mutedForeground)
             }
 
             if let lastCheck = updateService.lastCheckDate {
                 Text("Last checked \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
             }
         }
     }
@@ -81,14 +80,14 @@ struct AboutSettingsView: View {
     private var licenceCard: some View {
         SettingsCard(header: "Licence and credits") {
             Text("Aura is free software under the GNU General Public License, version 3.")
-                .font(.callout)
+                .font(.system(size: 13))
 
             HStack(spacing: 6) {
                 Text("Forked from the Ora browser.")
-                    .font(.callout)
+                    .font(.system(size: 13))
                 if let url = Self.oraURL {
                     Link("the-ora/browser", destination: url)
-                        .font(.callout)
+                        .font(.system(size: 13))
                 }
             }
         }
@@ -105,7 +104,7 @@ struct AboutSettingsView: View {
             SettingsCard(header: "Third-party notices") {
                 ScrollView {
                     Text(notices)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.system(size: 11, design: .monospaced))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }

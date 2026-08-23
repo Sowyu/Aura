@@ -34,12 +34,13 @@ struct URLBarMenuButton: View {
             anchor?.presentAuraMenu(menuItems())
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: URLBarButton.iconSize, weight: .medium))
-                .foregroundColor(foregroundColor.opacity(0.85))
+                .font(.system(size: URLBarButton.iconSize, weight: URLBarButton.iconWeight))
+                .foregroundColor(foregroundColor).opacity(URLBarButton.enabledOpacity)
                 .frame(width: size, height: size)
         }
         .buttonStyle(.interactive(cornerRadius: URLBarButton.cornerRadius, tint: foregroundColor))
         .help("Menu")
+        .accessibilityLabel(Text("Menu"))
         .background(AuraMenuAnchorView { anchor = $0 })
     }
 

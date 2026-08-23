@@ -9,21 +9,34 @@ struct AuraMenuPanel: View {
     @Environment(\.theme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(level.items.enumerated()), id: \.element.id) { index, item in
-                row(item, at: index)
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(level.items.enumerated()), id: \.element.id) { index, item in
+                        row(item, at: index).id(item.id)
+                    }
+                }
+                .padding(.vertical, AuraMenuMetrics.verticalPadding)
+            }
+            // The panel is already capped to the window, so this only bounces when the
+            // list genuinely overflows. Indicators stay at the system overlay default.
+            .scrollBounceBehavior(.basedOnSize)
+            .onChange(of: level.highlighted) { _, row in
+                guard let row, level.items.indices.contains(row) else { return }
+                proxy.scrollTo(level.items[row].id, anchor: nil)
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, offset in
+                AuraMenuController.shared.scrolled(to: offset, atLevel: levelIndex)
             }
         }
-        .padding(.vertical, AuraMenuMetrics.verticalPadding)
         .frame(width: level.size.width, height: level.size.height, alignment: .top)
         .modifier(AuraMenuSurface())
         .clipShape(.rect(cornerRadius: AuraMenuMetrics.panelRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: AuraMenuMetrics.panelRadius, style: .continuous)
-                .stroke(theme.foreground.opacity(0.12), lineWidth: 1)
+                .stroke(theme.border, lineWidth: 1)
         }
-        // The design calls for a 24pt CSS blur; SwiftUI's radius is roughly half of that.
-        .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 8)
+        .auraFloatingShadow()
         .accessibilityElement(children: .contain)
     }
 
@@ -91,7 +104,10 @@ struct AuraMenuPanel: View {
             symbol("circle.fill", size: 7)
         case .none:
             if let icon = item.icon {
+                // A nil tint leaves the symbol on the row's own colour, so only the rows
+                // that stand for a coloured thing opt out of it.
                 symbol(icon)
+                    .foregroundColor(item.iconColorHex.map { Color(hex: $0) })
             } else {
                 Color.clear.frame(width: AuraMenuMetrics.iconSize, height: AuraMenuMetrics.iconSize)
             }

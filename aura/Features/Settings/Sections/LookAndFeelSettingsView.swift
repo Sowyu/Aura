@@ -1,18 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// Everything that changes how Aura looks: appearance, accent, glass, and where the
-/// window chrome sits.
+/// How Aura looks: appearance, accent, glass. Where the chrome sits lives one section
+/// over, in `WindowSettingsView`.
 struct LookAndFeelSettingsView: View {
+    @Environment(\.theme) private var theme
     @EnvironmentObject var appearanceManager: AppearanceManager
-    @Environment(SidebarManager.self) private var sidebarManager
-    @Environment(ToolbarManager.self) private var toolbarManager
     @AppStorage(AuraAccent.key) private var accentHex = AuraAccent.systemDefault
 
     var body: some View {
-        @Bindable var sidebar = sidebarManager
-        @Bindable var toolbar = toolbarManager
-
         SettingsSection {
             SettingsCard(header: "Appearance") {
                 AppearanceSelector(selection: $appearanceManager.appearance)
@@ -21,37 +17,6 @@ struct LookAndFeelSettingsView: View {
             accentCard
 
             GlassSettingsCard()
-
-            SettingsCard(header: "Window layout") {
-                HStack {
-                    Text("Sidebar position")
-                    Spacer()
-                    Picker("", selection: $sidebar.sidebarPosition) {
-                        Text("Left").tag(SidebarPosition.primary)
-                        Text("Right").tag(SidebarPosition.secondary)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(width: 160)
-                }
-
-                Toggle("Show the toolbar", isOn: Binding(
-                    get: { !toolbar.isToolbarHidden },
-                    set: { toolbar.setHidden(!$0) }
-                ))
-
-                Toggle("Show the full URL in the address bar", isOn: $toolbar.showFullURL)
-                Toggle("Blur the window behind the launcher", isOn: Binding(
-                    get: { SettingsStore.shared.launcherBlur },
-                    set: { SettingsStore.shared.launcherBlur = $0 }
-                ))
-                Toggle("Blur the window while editing the address", isOn: Binding(
-                    get: { SettingsStore.shared.addressEditingBlur },
-                    set: { SettingsStore.shared.addressEditingBlur = $0 }
-                ))
-            }
-
-            compactCard
         }
     }
 
@@ -79,15 +44,67 @@ struct LookAndFeelSettingsView: View {
                     .fill(swatch)
                     .frame(width: 24, height: 24)
                     .overlay {
-                        Circle().stroke(Color.primary.opacity(isSelected ? 0.8 : 0.15), lineWidth: 2)
+                        Circle().stroke(theme.foreground.opacity(isSelected ? 0.8 : 0.15), lineWidth: 2)
                     }
                 Text(name)
-                    .font(.caption)
+                    .font(.system(size: 11))
                     .fontWeight(isSelected ? .semibold : .regular)
             }
         }
         .buttonStyle(.plain)
         .help(name)
+    }
+}
+
+/// Where the window chrome sits, what it shows, and when it gets out of the way. Split
+/// out of Look and Feel: sidebar side and compact mode are layout, not styling. It shares
+/// that file because the app target lists its sources explicitly.
+struct WindowSettingsView: View {
+    @Environment(SidebarManager.self) private var sidebarManager
+    @Environment(ToolbarManager.self) private var toolbarManager
+
+    var body: some View {
+        @Bindable var sidebar = sidebarManager
+        @Bindable var toolbar = toolbarManager
+
+        SettingsSection {
+            SettingsCard(header: "Layout") {
+                HStack {
+                    Text("Sidebar position")
+                    Spacer()
+                    Picker("", selection: $sidebar.sidebarPosition) {
+                        Text("Left").tag(SidebarPosition.primary)
+                        Text("Right").tag(SidebarPosition.secondary)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 160)
+                }
+
+                Toggle("Show the toolbar", isOn: Binding(
+                    get: { !toolbar.isToolbarHidden },
+                    set: { toolbar.setHidden(!$0) }
+                ))
+
+                Toggle("Show the full URL in the address bar", isOn: $toolbar.showFullURL)
+            }
+
+            SettingsCard(
+                header: "Blur",
+                description: "Blurs the window behind whatever is asking for input."
+            ) {
+                Toggle("Blur the window behind the launcher", isOn: Binding(
+                    get: { SettingsStore.shared.launcherBlur },
+                    set: { SettingsStore.shared.launcherBlur = $0 }
+                ))
+                Toggle("Blur the window while editing the address", isOn: Binding(
+                    get: { SettingsStore.shared.addressEditingBlur },
+                    set: { SettingsStore.shared.addressEditingBlur = $0 }
+                ))
+            }
+
+            compactCard
+        }
     }
 
     /// Compact mode is the same switch the View menu flips, so it goes through

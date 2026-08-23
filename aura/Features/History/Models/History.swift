@@ -8,7 +8,9 @@ final class History {
     var url: URL
     var urlString: String
     var title: String
-    var faviconURL: URL
+    /// Optional: a visit whose favicon has not resolved yet used to store the page URL
+    /// itself here, which every reader then tried to load as an icon.
+    var faviconURL: URL?
     var faviconLocalFile: URL?
     var createdAt: Date
     var visitCount: Int
@@ -20,7 +22,7 @@ final class History {
         id: UUID = UUID(),
         url: URL,
         title: String,
-        faviconURL: URL,
+        faviconURL: URL? = nil,
         faviconLocalFile: URL? = nil,
         createdAt: Date,
         lastAccessedAt: Date,

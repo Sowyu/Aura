@@ -8,17 +8,9 @@ struct LauncherView: View {
     @Environment(DownloadManager.self) private var downloadManager
     @EnvironmentObject var privacyMode: PrivacyMode
     @Environment(\.theme) private var theme
+    @Environment(\.window) private var window
 
     @StateObject private var viewModel = LauncherViewModel()
-
-    /// Mid-window until suggestions show, then up, if the setting allows. The condition
-    /// has to match `LauncherMain`'s: an engine capsule hides the list, and the panel
-    /// used to rise over nothing.
-    private var isRaised: Bool {
-        SettingsStore.shared.launcherRisesForSuggestions
-            && match == nil
-            && !viewModel.suggestions.isEmpty
-    }
 
     @State private var input = ""
     @State private var isVisible = false
@@ -26,6 +18,10 @@ struct LauncherView: View {
     @State private var match: LauncherMatch?
     @State private var mouseHasMoved = false
     @State private var mouseMonitor: Any?
+    /// The panel's own rect in window coordinates, so the click-away monitor can tell a
+    /// click on the launcher from a click anywhere else.
+    @State private var panelFrame: CGRect = .zero
+    @State private var clickAwayMonitor: Any?
 
     private func onTabPress() {
         guard !input.isEmpty else { return }
@@ -87,23 +83,27 @@ struct LauncherView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let window = CGRect(origin: .zero, size: geo.size)
-            let width = LauncherPlacement.width(forWindowWidth: geo.size.width)
+            let windowBounds = windowBounds(host: geo.frame(in: .global), fallback: geo.size)
+            let width = LauncherPlacement.width(forWindowWidth: windowBounds.width)
+            let origin = LauncherPlacement.origin(
+                in: windowBounds,
+                panelWidth: width,
+                panelHeight: panelFrame.height > 0 ? panelFrame.height : LauncherField.height
+            )
             ZStack(alignment: .topLeading) {
                 backdrop
                     .frame(width: geo.size.width, height: geo.size.height)
 
                 panel
                     .frame(width: width)
-                    .offset(
-                        x: (geo.size.width - width) / 2,
-                        y: LauncherPlacement.panelTop(
-                            in: window,
-                            raised: isRaised,
-                            fieldHeight: LauncherField.height
-                        )
-                    )
-                    .animation(AnimationSettings.easeOut(0.15), value: isRaised)
+                    .offset(x: origin.x, y: origin.y)
+                    // The panel re-centres on every measured height change, so every
+                    // keystroke that adds or drops a row moves it. Animated, that reads as
+                    // the field sliding under the cursor; it has to snap.
+                    .animation(nil, value: origin.y)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                        panelFrame = $0
+                    }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -111,10 +111,51 @@ struct LauncherView: View {
         .onExitCommand(perform: dismiss)
     }
 
+    /// The window's content rect moved into this view's own coordinates. The overlay does
+    /// not always start at the window's corner, so centring on `geo.size` alone would
+    /// follow the chrome rather than the window; the geometry is only the fallback for
+    /// the frame before the window is known.
+    private func windowBounds(host: CGRect, fallback: CGSize) -> CGRect {
+        guard let content = window?.contentView else {
+            return CGRect(origin: .zero, size: fallback)
+        }
+        return CGRect(
+            origin: CGPoint(x: -host.minX, y: -host.minY),
+            size: content.bounds.size
+        )
+    }
+
+    /// A click anywhere off the panel closes the launcher and stops there: it must not
+    /// also pick a suggestion, focus the address bar or reach the page. The panel floats
+    /// over a `WKWebView`, and an AppKit monitor is the only thing that sees the click
+    /// before the web view does.
+    private func startClickAway() {
+        guard clickAwayMonitor == nil else { return }
+        clickAwayMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { event in
+            guard let eventWindow = event.window, window == nil || eventWindow === window else {
+                return event
+            }
+            let height = eventWindow.contentView?.bounds.height ?? eventWindow.frame.height
+            let point = CGPoint(x: event.locationInWindow.x, y: height - event.locationInWindow.y)
+            guard !panelFrame.contains(point) else { return event }
+            DispatchQueue.main.async { dismiss() }
+            return nil
+        }
+    }
+
+    private func stopClickAway() {
+        if let clickAwayMonitor {
+            NSEvent.removeMonitor(clickAwayMonitor)
+        }
+        clickAwayMonitor = nil
+    }
+
     /// Blurs and dims the whole window behind the panel. `withinWindow` blending is what
     /// reaches the page: SwiftUI materials sit above the WKWebView's own layer and only
-    /// tint it. The view is mounted solely while the launcher is open and never hit-tests,
-    /// so the dim below it is what takes the dismissing click.
+    /// tint it. It takes no clicks of its own; `startClickAway` handles those, and it
+    /// covers the chrome and the traffic lights too, which no SwiftUI gesture reaches.
     private var backdrop: some View {
         ZStack {
             if SettingsStore.shared.launcherBlur {
@@ -129,8 +170,7 @@ struct LauncherView: View {
         .ignoresSafeArea()
         .opacity(isVisible ? 1 : 0)
         .animation(AnimationSettings.easeOut(0.12), value: isVisible)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: dismiss)
+        .allowsHitTesting(false)
     }
 
     private var panel: some View {
@@ -141,10 +181,6 @@ struct LauncherView: View {
             onTabPress: onTabPress,
             onEscape: dismiss,
             viewModel: viewModel
-        )
-        .gradientAnimatingBorder(
-            color: match?.color ?? .clear,
-            trigger: match != nil
         )
         .opacity(isVisible ? 1.0 : 0.0)
         .animation(AnimationSettings.easeOut(0.12), value: isVisible)
@@ -167,6 +203,7 @@ struct LauncherView: View {
                     appState?.showLauncher = false
                 }
             )
+            startClickAway()
             mouseHasMoved = false
             mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { event in
                 mouseHasMoved = true
@@ -178,6 +215,8 @@ struct LauncherView: View {
             }
         }
         .onDisappear {
+            stopClickAway()
+            panelFrame = .zero
             if let monitor = mouseMonitor {
                 NSEvent.removeMonitor(monitor)
                 mouseMonitor = nil

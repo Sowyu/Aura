@@ -323,6 +323,15 @@ struct TabLifecycleTests {
         #expect(surviving.contains(secondWindowTab.id), "the policy runs once per launch")
     }
 
+    /// A private window opening before the first normal one must not spend the
+    /// once-per-launch flag against its own empty in-memory store.
+    @Test func launchPolicyBelongsToTheOnDiskStore() {
+        #expect(TabManager.ownsLaunchPolicy(isInMemoryStore: false, isTestHost: false))
+        #expect(!TabManager.ownsLaunchPolicy(isInMemoryStore: true, isTestHost: false))
+        // Every manager built here runs in memory, so the replay above still gets a turn.
+        #expect(TabManager.ownsLaunchPolicy(isInMemoryStore: true, isTestHost: true))
+    }
+
     /// Pinned and favourite tabs reopen at the URL they were pinned at. Every other tab,
     /// including one coming back from hibernation mid-session, reopens where it was.
     @Test func pinnedTabsReopenAtTheirSavedURL() throws {
@@ -346,6 +355,158 @@ struct TabLifecycleTests {
     @Test func privateWindowsUseAnInMemoryStore() {
         #expect(ModelConfiguration.oraDatabase(isPrivate: true).isStoredInMemoryOnly)
         #expect(ModelConfiguration.oraDatabase(isPrivate: false).isStoredInMemoryOnly == false)
+    }
+
+    /// A store that refuses to open used to be deleted, taking every tab, space and
+    /// history row with it. One retry, then stop, and the file stays either way.
+    @Test func aFailedStoreOpenRetriesOnceAndKeepsTheFile() {
+        #expect(StoreOpenFailure.action(for: 0) == .retry)
+        #expect(StoreOpenFailure.action(for: 1) == .giveUp)
+        #expect(StoreOpenFailure.action(for: 5) == .giveUp)
+    }
+
+    // MARK: - Closing without a web view
+
+    /// The row used to go only after `stopMedia`'s two web-process round trips, so a
+    /// tab that never loaded sat in the sidebar until the next main-queue turn.
+    @Test func closingATabWithNoWebViewDeletesTheRowImmediately() throws {
+        let (manager, space) = try makeManager()
+        try makeTab(manager, space, order: 2)
+        let closing = try makeTab(manager, space, order: 1)
+        let closingID = closing.id
+
+        manager.closeTab(tab: closing)
+
+        // No `settle()` here on purpose: the delete is part of the call.
+        #expect(!space.tabs.contains { $0.id == closingID })
+    }
+
+    // MARK: - Duplicating
+
+    @Test func duplicatingAPinnedTabKeepsItPinnedAndLandsNextToIt() throws {
+        let (manager, space) = try makeManager()
+        try makeTab(manager, space, order: 3, type: .pinned)
+        let original = try makeTab(manager, space, order: 2, type: .pinned)
+        try makeTab(manager, space, order: 1, type: .pinned)
+
+        let copy = manager.duplicateTab(original)
+
+        #expect(copy.type == .pinned, "a copy of a pinned tab is pinned")
+        let pinned = space.tabs.filter { $0.type == .pinned }.sorted { $0.order > $1.order }
+        let copyIndex = try #require(pinned.firstIndex { $0.id == copy.id })
+        let originalIndex = try #require(pinned.firstIndex { $0.id == original.id })
+        #expect(abs(copyIndex - originalIndex) == 1, "the copy sits next to the original")
+        #expect(Set(pinned.map(\.order)).count == pinned.count, "no duplicate orders")
+    }
+
+    // MARK: - Opening
+
+    /// `openTab` was wrapped in `if let host = url.host` and handed back nil for every
+    /// aura:// address, so `.openURL` on an internal page opened nothing at all.
+    @Test func openTabOpensInternalPages() throws {
+        let (manager, space) = try makeManager()
+        let historyManager = HistoryManager(
+            modelContainer: manager.modelContainer,
+            modelContext: manager.modelContext
+        )
+
+        let tab = try #require(manager.openTab(
+            url: .oraSettings(section: nil),
+            historyManager: historyManager,
+            isPrivate: false
+        ))
+
+        #expect(tab.url.isOraSettings)
+        #expect(tab.browserPage == nil, "an internal page never gets a web view")
+        #expect(space.tabs.contains { $0.id == tab.id })
+        #expect(manager.activeTab?.id == tab.id)
+    }
+
+    /// `.urlQueryAllowed` leaves &, + and # alone, so a search for "a&b" arrived at the
+    /// engine as two parameters and everything after # never left the browser.
+    @Test func theSearchFallbackEscapesQueryDelimiters() throws {
+        let encoded = try #require("a&b+c#d".addingPercentEncoding(withAllowedCharacters: .searchQueryAllowed))
+
+        #expect(encoded == "a%26b%2Bc%23d")
+        let url = try #require(URL(string: "https://www.google.com/search?q=" + encoded))
+        #expect(url.fragment == nil, "the # stays inside the query")
+    }
+
+    /// The getter deleted legacy files and re-stat'd the directory on every favicon
+    /// write; now it resolves once per process.
+    @Test func theFaviconDirectoryIsResolvedOnce() {
+        let directory = FileManager.default.faviconDirectory
+
+        #expect(directory == FileManager.faviconDirectory, "the instance accessor is the static one")
+        #expect(directory.lastPathComponent == "v3")
+        #expect(FileManager.default.fileExists(atPath: directory.path))
+    }
+
+    // MARK: - Cross-window deletes
+
+    /// A second window over the same store, built the way `OraRoot` builds one: its own
+    /// `ModelContext`, its own manager, the one shared container.
+    private func makeSecondWindow(_ first: TabManager) -> TabManager {
+        TabManager(
+            modelContainer: first.modelContainer,
+            modelContext: ModelContext(first.modelContainer),
+            mediaController: MediaController()
+        )
+    }
+
+    /// Window A closing a tab that window B is showing. B used to keep rendering the
+    /// deleted row, and its id kept exempting the ghost from hibernation.
+    @Test func closingATabInOneWindowReselectsInTheOther() async throws {
+        let (windowA, space) = try makeManager()
+        let doomed = try makeTab(windowA, space, order: 2)
+        let survivor = try makeTab(windowA, space, order: 1)
+
+        let windowB = makeSecondWindow(windowA)
+        let spaceInB = try #require(windowB.fetchContainers().first { $0.id == space.id })
+        let doomedInB = try #require(spaceInB.tabs.first { $0.id == doomed.id })
+        windowB.activateTab(doomedInB)
+        windowB.hibernating.insert(doomed.id)
+        windowB.trackRecentlyClosedTab(doomedInB)
+
+        windowA.closeTab(tab: doomed)
+        await settle()
+
+        #expect(windowB.activeTab?.id == survivor.id, "window B kept a deleted row selected")
+        #expect(!windowB.hibernating.contains(doomed.id))
+        #expect(!windowB.recentlyClosedTabs.contains { $0.id == doomed.id })
+        #expect(!TabManager.activeTabIDsAcrossWindows.contains(doomed.id))
+    }
+
+    /// The same close replayed from the other side: the window that did the closing
+    /// keeps the selection it picked itself.
+    @Test func theClosingWindowKeepsItsOwnReselection() async throws {
+        let (windowA, space) = try makeManager()
+        let doomed = try makeTab(windowA, space, order: 2)
+        let survivor = try makeTab(windowA, space, order: 1)
+        _ = makeSecondWindow(windowA)
+        windowA.activateTab(doomed)
+
+        windowA.closeTab(tab: doomed)
+        await settle()
+
+        #expect(windowA.activeTab?.id == survivor.id)
+    }
+
+    /// WebKit tracks open tabs by adapter object. A space deletion bulk-deletes its tabs
+    /// without ever reaching `closeTab`, so the adapters used to outlive the rows.
+    @Test func deletingASpaceDiscardsItsExtensionAdapters() async throws {
+        guard #available(macOS 15.4, *) else { return }
+        let (manager, space) = try makeManager()
+        let tab = try makeTab(manager, space, order: 1)
+        let tabID = tab.id
+        _ = ExtensionTabAdapter.adapter(for: tab)
+        #expect(ExtensionTabAdapter.cachedAdapter(for: tabID) != nil)
+
+        manager.deleteContainer(space)
+        await settle()
+        await settle()
+
+        #expect(ExtensionTabAdapter.cachedAdapter(for: tabID) == nil)
     }
 }
 

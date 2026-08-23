@@ -3,7 +3,7 @@ import SwiftUI
 /// Hover highlight + press feedback for every icon/chrome button in the app.
 /// 80 ms is deliberate: slow enough to read as motion, fast enough to feel instant.
 struct InteractiveButtonStyle: ButtonStyle {
-    var cornerRadius: CGFloat = 6
+    var cornerRadius: CGFloat = AuraRadius.button
     var hoverOpacity: Double = 0.10
     var pressOpacity: Double = 0.18
     var tint: Color = .primary
@@ -45,7 +45,10 @@ struct InteractiveButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == InteractiveButtonStyle {
     static var interactive: InteractiveButtonStyle { InteractiveButtonStyle() }
-    static func interactive(cornerRadius: CGFloat = 6, tint: Color = .primary) -> InteractiveButtonStyle {
+    static func interactive(
+        cornerRadius: CGFloat = AuraRadius.button,
+        tint: Color = .primary
+    ) -> InteractiveButtonStyle {
         InteractiveButtonStyle(cornerRadius: cornerRadius, tint: tint)
     }
 }

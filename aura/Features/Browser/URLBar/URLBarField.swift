@@ -36,6 +36,8 @@ struct URLBarField: View {
     @State private var suggestionsHeight: CGFloat = 0
 
     @State private var clickAwayMonitor: Any?
+    /// Zero-sized AppKit view the site panel hangs under.
+    @State private var siteInfoAnchor: NSView?
 
     private var isEditing: Bool {
         appState.isURLBarEditing
@@ -54,7 +56,7 @@ struct URLBarField: View {
     }
 
     static let height: CGFloat = 30
-    private static let cornerRadius: CGFloat = 10
+    private static let cornerRadius: CGFloat = AuraRadius.row
     /// Field layout: leading padding, the security icon and the gap after it. The
     /// suggestion rows below are inset to put their titles on the same column.
     private static let leadingPadding: CGFloat = 8
@@ -110,12 +112,14 @@ struct URLBarField: View {
             }
         }
         .animation(AnimationSettings.easeOut(0.15), value: isEditing)
-        // Hidden button for the focus-address-bar shortcut
+        // Hidden button for the focus-address-bar shortcut. Hidden from assistive
+        // technology too: it carries no label, and it is only here to own ⌘L.
         .overlay(
             Button("") { startEditing() }
                 .oraShortcut(KeyboardShortcuts.Address.focus)
                 .opacity(0)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
         )
         // Clicking anywhere outside the field or its suggestions ends the edit, the way
         // every browser's address bar behaves; AppKit alone only does it when the click
@@ -169,18 +173,24 @@ struct URLBarField: View {
     /// drag selects text instead of moving the hidden-titlebar window.
     private var field: some View {
         HStack(spacing: Self.iconSpacing) {
-            ZStack {
-                if tab?.isLoading == true, !isEditing {
-                    ProgressView()
-                        .tint(foregroundColor)
-                        .scaleEffect(0.5)
-                } else {
-                    Image(systemName: isEditing ? editingSymbol : securitySymbol)
-                        .font(.system(size: 12))
-                        .foregroundColor(foregroundColor)
+            // The lock is the site panel's handle, the way it is in Safari and Chrome.
+            // Left as a plain icon while editing or with no tab: there is no site to
+            // describe, and a button that opens an empty menu is worse than no button.
+            draggableAddress {
+                Button {
+                    siteInfoAnchor?.presentAuraMenu(SiteInfoMenu.items(for: tab, tabManager: tabManager))
+                } label: {
+                    iconContent
+                        .frame(width: Self.iconWidth, height: Self.iconWidth)
                 }
+                .buttonStyle(.interactive(cornerRadius: 5, tint: foregroundColor))
+                // On an `aura://` page `SiteInfoMenu` has nothing to say and answers with
+                // one disabled row, and an empty menu is worse than no button.
+                .disabled(tab == nil || isEditing || tab?.url.isOraInternal == true)
             }
-            .frame(width: Self.iconWidth, height: Self.iconWidth)
+            .background(AuraMenuAnchorView { siteInfoAnchor = $0 })
+            .help("Site information")
+            .accessibilityLabel(Text("Site information"))
 
             ZStack(alignment: .leading) {
                 CopiedURLOverlay(
@@ -199,7 +209,7 @@ struct URLBarField: View {
                     onMoveDown: { launcherViewModel.moveFocusedElement(.down) },
                     cursorColor: textColor.opacity(0.8),
                     textColor: isEditing ? textColor.opacity(0.7) : foregroundColor,
-                    placeholder: isEditing ? "Search the web or enter URL..." : "Search or enter address",
+                    placeholder: "Search or enter address",
                     displayText: displayText,
                     isEditing: isEditing,
                     onBeginEditing: startEditing,
@@ -222,6 +232,10 @@ struct URLBarField: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !isEditing {
+                SiteZoomBadge(tab: tab, foregroundColor: foregroundColor)
+            }
 
             Button {
                 if let activeTab = tabManager.activeTab {
@@ -247,6 +261,37 @@ struct URLBarField: View {
         .padding(.leading, Self.leadingPadding)
         .padding(.trailing, 4)
         .background(pill)
+    }
+
+    /// The leading icon is the page's handle: dragging it carries the address, the way
+    /// Safari's and Chrome's do, which is how a page reaches the bookmarks bar without
+    /// going through a menu. Internal pages and an empty field have nothing to hand over,
+    /// so they stay a plain icon rather than starting a drag that drops nothing.
+    ///
+    /// The drag sits on the button, not inside its label: a `.draggable` in the label is
+    /// under the button's own gesture, which claims the press first.
+    @ViewBuilder
+    private func draggableAddress(@ViewBuilder _ content: () -> some View) -> some View {
+        if let url = tab?.url, !url.isOraInternal, !isEditing {
+            content().draggable(url)
+        } else {
+            content()
+        }
+    }
+
+    private var iconContent: some View {
+        ZStack {
+            if tab?.isLoading == true, !isEditing {
+                ProgressView()
+                    .tint(foregroundColor)
+                    .scaleEffect(0.5)
+            } else {
+                Image(systemName: isEditing ? editingSymbol : securitySymbol)
+                    .font(.system(size: 12))
+                    .foregroundColor(foregroundColor)
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     private var securitySymbol: String {
@@ -300,13 +345,13 @@ struct URLBarField: View {
             }
             .background(theme.launcherMainBackground)
             .background(BlurEffectView(material: .popover, blendingMode: .withinWindow))
-            .clipShape(ConditionallyConcentricRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
             .overlay(
-                ConditionallyConcentricRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(theme.foreground.opacity(0.05), lineWidth: 1)
+                ConditionallyConcentricRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                    .stroke(theme.border, lineWidth: 1)
                     .padding(0.25)
             )
-            .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
+            .auraFloatingShadow()
             .environment(\.launcherMouseHasMoved, mouseHasMoved)
         }
     }

@@ -10,7 +10,7 @@ enum DownloadStatus: String, Codable {
 }
 
 @Model
-class Download: ObservableObject, Identifiable {
+class Download: Identifiable {
     var id: UUID
     var originalURL: URL
     var originalURLString: String
@@ -24,10 +24,15 @@ class Download: ObservableObject, Identifiable {
     var completedAt: Date?
     var error: String?
 
-    @Transient @Published var isActive: Bool = false
-    @Transient @Published var displayProgress: Double = 0.0
-    @Transient @Published var displayDownloadedBytes: Int64 = 0
-    @Transient @Published var displayFileSize: Int64 = 0
+    @Transient var isActive: Bool = false
+
+    /// The row reads these. They were `@Published` mirrors kept in step from a main-queue
+    /// hop, which nothing subscribed to: the row holds its download as a plain `let`, so
+    /// only the manager touching its arrays redrew it. `@Model` is already observable, so
+    /// reading the stored value straight through is what makes a progress tick land.
+    var displayProgress: Double { progress }
+    var displayDownloadedBytes: Int64 { downloadedBytes }
+    var displayFileSize: Int64 { fileSize }
 
     init(
         id: UUID = UUID(),
@@ -45,11 +50,6 @@ class Download: ObservableObject, Identifiable {
         self.status = .pending
         self.progress = 0.0
         self.createdAt = Date()
-
-        // Initialize published properties
-        self.displayFileSize = max(0, fileSize)
-        self.displayDownloadedBytes = 0
-        self.displayProgress = 0.0
     }
 
     /// A server that sends no `Content-Length` reports an expected size of `-1`, and
@@ -60,15 +60,6 @@ class Download: ObservableObject, Identifiable {
         self.downloadedBytes = downloadedBytes
         if totalBytes > 0 { self.fileSize = totalBytes }
         self.progress = self.fileSize > 0 ? Double(downloadedBytes) / Double(self.fileSize) : 0.0
-
-        let knownSize = self.fileSize
-        let currentProgress = self.progress
-        // Update published properties for UI
-        DispatchQueue.main.async {
-            self.displayDownloadedBytes = downloadedBytes
-            self.displayFileSize = knownSize
-            self.displayProgress = currentProgress
-        }
     }
 
     func markCompleted(destinationURL: URL) {
@@ -91,13 +82,10 @@ class Download: ObservableObject, Identifiable {
     }
 
     var formattedFileSize: String {
-        return ByteCountFormatter.string(
-            fromByteCount: displayFileSize > 0 ? displayFileSize : fileSize,
-            countStyle: .file
-        )
+        return ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
     }
 
     var formattedDownloadedSize: String {
-        return ByteCountFormatter.string(fromByteCount: displayDownloadedBytes, countStyle: .file)
+        return ByteCountFormatter.string(fromByteCount: downloadedBytes, countStyle: .file)
     }
 }

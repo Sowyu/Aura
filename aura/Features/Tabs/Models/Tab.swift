@@ -48,6 +48,12 @@ class Tab: ObservableObject, Identifiable {
     /// launch has no web view to restore it into anyway.
     @Transient var hibernatedScrollOffset: CGPoint?
     @Transient var hibernatedScrollURL: URL?
+    /// The saved offset is offered to the page once per tab per launch. Without this a
+    /// tab that keeps navigating would keep being pulled back to where it was yesterday.
+    @Transient var didOfferSavedScroll = false
+    /// Stands in for the page's unsaved-input probe when set. Only tests set it: a veto
+    /// is otherwise a web-process round trip, which no unit test can produce.
+    @Transient var unsavedInputProbe: ((@escaping (Bool) -> Void) -> Void)?
     @Transient var maybeIsActive = false
     /// Retries exist only for the case where the snapshot cannot be taken at all: a tab
     /// that is not laid out yet. A painted page is done after the first one.
@@ -64,6 +70,15 @@ class Tab: ObservableObject, Identifiable {
     @Relationship(inverse: \TabContainer.tabs) var container: TabContainer
     /// Set when the tab lives inside a sidebar folder; nil means top level.
     @Relationship var folder: Folder?
+    /// Cookie jar this tab browses in. `nil` is Firefox's "No container": the shared
+    /// default store. Independent of the space the tab sits in.
+    @Relationship(inverse: \BrowsingContainer.tabs) var browsingContainer: BrowsingContainer?
+
+    /// Identifier of the `WKWebsiteDataStore` this tab's web view is built on. Used to
+    /// come from the space; a space is no longer a cookie jar.
+    var storeIdentifier: UUID {
+        browsingContainer?.storeIdentifier ?? BrowserEngine.defaultStoreIdentifier
+    }
 
     /// Whether this tab is considered alive (recently accessed)
     var isAlive: Bool {
@@ -184,20 +199,6 @@ class Tab: ObservableObject, Identifiable {
         }
     }
 
-    func updateHistory() {
-        if let historyManager = self.historyManager {
-            Task { @MainActor in
-                historyManager.record(
-                    title: self.title,
-                    url: self.url,
-                    faviconURL: self.favicon,
-                    faviconLocalFile: self.faviconLocalFile,
-                    container: self.container
-                )
-            }
-        }
-    }
-
     func setupBrowserPageDelegate(for page: BrowserPage) {
         let delegate = TabBrowserPageDelegate()
         delegate.tab = self
@@ -258,7 +259,7 @@ class Tab: ObservableObject, Identifiable {
         }
 
         let engine = BrowserEngine.shared
-        let profile = engine.makeProfile(identifier: container.id, isPrivate: isPrivate)
+        let profile = engine.makeProfile(identifier: storeIdentifier, isPrivate: isPrivate)
         let privacySettings = SettingsStore.shared.privacySettings(for: container.id)
         let userScripts = OraBrowserScripts.userScripts() + BrowserPrivacyService.privacyScripts(for: privacySettings)
         let page = engine.makePage(
@@ -279,16 +280,22 @@ class Tab: ObservableObject, Identifiable {
         self.syncBackgroundColorFromHex()
         // Load after a short delay to ensure layout
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-            page.load(URLRequest(url: loading ?? self.launchURL))
+            self.startRestoredLoad(page: page, loading: loading)
             self.isWebViewReady = true
         }
     }
 
-    func stopMedia(completed: @escaping () -> Void) {
+    /// Fire and forget by design: the two round trips below go to the web process, and
+    /// the caller closing the tab must not wait on them. The page is detached up front
+    /// so nothing here touches the tab once its row is gone.
+    func stopMedia(completed: @escaping () -> Void = {}) {
         guard let page = browserPage else {
             completed()
             return
         }
+        browserPage = nil
+        pageDelegate = nil
+        isWebViewReady = false
 
         let js = """
         document.querySelectorAll('video, audio').forEach(el => {
@@ -299,13 +306,9 @@ class Tab: ObservableObject, Identifiable {
             } catch (e) {}
         });
         """
-        page.evaluateJavaScript(js) { [weak self] _, _ in
+        page.evaluateJavaScript(js) { _, _ in
             page.closeMediaPresentations {
                 page.teardown()
-                if self?.browserPage === page {
-                    self?.browserPage = nil
-                    self?.pageDelegate = nil
-                }
                 completed()
             }
         }
@@ -317,22 +320,38 @@ class Tab: ObservableObject, Identifiable {
 
         // 1) Try to construct a direct URL (has scheme or valid domain+TLD/IP)
         if let directURL = constructURL(from: input) {
+            // A path typed here carries no sandbox grant, unlike one that arrived from the
+            // open panel, a drop or Finder. The gate asks for one and takes over when it
+            // has to; false means the file is readable and this can navigate as usual.
+            // Only file URLs take the main-actor step, so nothing else pays for it.
+            if directURL.isFileURL {
+                let gated = MainActor.assumeIsolated {
+                    FileOpenService.shared.prepareToOpen(directURL, tabID: self.id, isPrivate: self.isPrivate)
+                }
+                if gated { return }
+            }
             navigate(to: directURL)
             return
         }
 
-        // 2) Otherwise, treat as a search query using the selected search engine
-        let searchEngineService = SearchEngineService()
-        if let engine = searchEngineService.getDefaultSearchEngine(for: self.container.id),
-           let searchURL = searchEngineService.createSearchURL(for: engine, query: input)
-        {
+        // 2) Otherwise, treat as a search query using the selected search engine.
+        // Every caller is a view or a main-actor manager, and the navigate below drives
+        // WebKit, which is main-only regardless.
+        let searchURL = MainActor.assumeIsolated { () -> URL? in
+            let searchEngineService = SearchEngineService()
+            guard let engine = searchEngineService.getDefaultSearchEngine(for: self.container.id) else {
+                return nil
+            }
+            return searchEngineService.createSearchURL(for: engine, query: input)
+        }
+        if let searchURL {
             navigate(to: searchURL)
             return
         }
 
         // 3) Fallback to Google if for some reason engine lookup fails
         if let fallbackURL = URL(string: "https://www.google.com/search?client=safari&rls=en&ie=UTF-8&oe=UTF-8&q="
-            + (input.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")
+            + (input.addingPercentEncoding(withAllowedCharacters: .searchQueryAllowed) ?? "")
         ) {
             navigate(to: fallbackURL)
         }
@@ -467,19 +486,26 @@ extension FileManager {
     /// v3: touch/launcher tiles no longer outrank real favicons, so cached tiles go. The old
     /// folder holds 16 px TIFFs written under a `.png` name, so it is dropped outright
     /// and every tab refetches at full resolution.
-    var faviconDirectory: URL {
-        let root = urls(for: .cachesDirectory, in: .userDomainMask).first!
+    ///
+    /// Resolved once per process. As a computed property this swept the legacy folder and
+    /// re-stat'd the directory on every favicon read and write.
+    static let faviconDirectory: URL = {
+        let manager = FileManager.default
+        // swiftlint:disable:next force_unwrapping
+        let root = manager.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Favicons")
         let dir = root.appendingPathComponent("v3")
-        if !fileExists(atPath: dir.path) {
-            let legacy = (try? contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+        if !manager.fileExists(atPath: dir.path) {
+            let legacy = (try? manager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
             for file in legacy where file.lastPathComponent != "v3" {
-                try? removeItem(at: file)
+                try? manager.removeItem(at: file)
             }
-            try? createDirectory(at: dir, withIntermediateDirectories: true)
+            try? manager.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         return dir
-    }
+    }()
+
+    var faviconDirectory: URL { Self.faviconDirectory }
 }
 
 extension NSColor {

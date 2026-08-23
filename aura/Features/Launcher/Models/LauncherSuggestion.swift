@@ -2,12 +2,15 @@ import SwiftUI
 
 enum LauncherSuggestionType {
     case openedTab, suggestedQuery, suggestedLink, aiChat
+    /// One of the app's own commands, from `AppCommandCatalog`.
+    case command
 }
 
 struct LauncherSuggestion: Identifiable {
     let id = UUID()
     let type: LauncherSuggestionType
     let title: String
+    /// The engine an AI row asks, and the chord a command row prints on the right.
     let name: String?
     let url: URL?
     let icon: String?

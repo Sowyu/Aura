@@ -4,13 +4,14 @@ import SwiftUI
 /// that previews the chrome against a stand-in page so the tint can be judged before it
 /// is applied to the window.
 struct GlassSettingsCard: View {
+    @Environment(\.theme) private var theme
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(AuraGlass.enabledKey) private var enabled = false
     @AppStorage(AuraGlass.tintKey) private var tintHex = AuraGlass.defaultTintHex
     @AppStorage(AuraGlass.opacityKey) private var tintOpacity = AuraGlass.defaultOpacity
     @AppStorage(AuraGlass.blurKey) private var blur = AuraGlass.defaultBlur
 
-    private var tint: Color { Color(hex: tintHex) }
+    private var tint: Color { AuraGlass.tint(forHex: tintHex, colorScheme: colorScheme) }
 
     /// Older builds could store 0, which reads as no chrome at all. Clamping the getter
     /// keeps the slider and the rendered chrome showing the same number.
@@ -71,7 +72,7 @@ struct GlassSettingsCard: View {
                 .frame(maxWidth: 220)
             Text("\(Int(value.wrappedValue * 100))%")
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedForeground)
                 .frame(width: 40, alignment: .trailing)
         }
     }
@@ -89,16 +90,16 @@ struct GlassSettingsCard: View {
             .frame(maxHeight: .infinity)
             .background { previewChrome }
 
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor))
+            RoundedRectangle(cornerRadius: AuraRadius.button, style: .continuous)
+                .fill(theme.background)
                 .padding(6)
         }
         .frame(height: 92)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(theme.mutedBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 1)
+            RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                .stroke(theme.border, lineWidth: 1)
         )
     }
 
@@ -112,13 +113,13 @@ struct GlassSettingsCard: View {
                 blending: .withinWindow
             )
         } else {
-            Color(nsColor: .underPageBackgroundColor)
+            theme.mutedBackground
         }
     }
 
     private func previewRow(width: CGFloat) -> some View {
         Capsule()
-            .fill((enabled ? chromeForeground : Color.primary).opacity(0.55))
+            .fill((enabled ? chromeForeground : theme.foreground).opacity(0.55))
             .frame(width: width, height: 6)
     }
 }

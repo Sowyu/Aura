@@ -1,5 +1,6 @@
 import Foundation
 @testable import Aura
+import SwiftData
 import Testing
 
 @Suite("legacy data migration")
@@ -86,5 +87,89 @@ struct LegacyDataMigratorTests {
         let copied = try LegacyDataMigrator(oldRoot: root.appending(path: "Ora"), newRoot: new).migrate()
         #expect(!copied)
         #expect(!fileManager.fileExists(atPath: new.path))
+    }
+}
+
+@Suite("schema migration")
+struct SchemaMigrationTests {
+    /// The pre-container graph, written by the V1 schema itself rather than by a binary
+    /// store checked into the repo: the fixture is then always in step with the types
+    /// the plan migrates from.
+    private struct FixtureIDs {
+        let space = UUID()
+        let tab = UUID()
+        let visit = UUID()
+    }
+
+    private func writeV1Store(at url: URL) throws -> FixtureIDs {
+        let ids = FixtureIDs()
+        try autoreleasepool {
+            let schema = Schema(versionedSchema: AuraSchemaV1.self)
+            let container = try ModelContainer(
+                for: schema,
+                configurations: ModelConfiguration(schema: schema, url: url)
+            )
+            let context = ModelContext(container)
+            let space = AuraSchemaV1.TabContainer(id: ids.space, name: "Old Space")
+            context.insert(space)
+            let tab = try AuraSchemaV1.Tab(
+                id: ids.tab,
+                url: #require(URL(string: "https://example.com/old")),
+                title: "old tab",
+                container: space,
+                order: 1
+            )
+            context.insert(tab)
+            let visit = try AuraSchemaV1.History(
+                id: ids.visit,
+                url: #require(URL(string: "https://example.com/visited")),
+                title: "old visit",
+                faviconURL: #require(URL(string: "https://example.com/favicon.ico")),
+                container: space
+            )
+            context.insert(visit)
+            try context.save()
+        }
+        return ids
+    }
+
+    @Test("a store written by the pre-container schema opens through the plan")
+    func aV1StoreMigratesToV2() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory.appending(path: "aura-schema-\(UUID().uuidString)")
+        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: root) }
+
+        let ids = try writeV1Store(at: root.appending(path: "OraData.sqlite"))
+
+        let schema = Schema(versionedSchema: AuraSchemaV2.self)
+        let migrated = try ModelContainer(
+            for: schema,
+            migrationPlan: AuraMigrationPlan.self,
+            configurations: ModelConfiguration(schema: schema, url: root.appending(path: "OraData.sqlite"))
+        )
+        let context = ModelContext(migrated)
+
+        let spaces = try context.fetch(FetchDescriptor<TabContainer>())
+        #expect(spaces.map(\.id) == [ids.space])
+        let tabs = try context.fetch(FetchDescriptor<Tab>())
+        #expect(tabs.map(\.id) == [ids.tab])
+        // The relationships the new entity added come back empty, which is what "no
+        // container" means for a tab that predates them.
+        #expect(tabs.first?.browsingContainer == nil)
+        #expect(spaces.first?.defaultBrowsingContainer == nil)
+        let containerCount = try context.fetchCount(FetchDescriptor<BrowsingContainer>())
+        #expect(containerCount == 0)
+
+        let visits = try context.fetch(FetchDescriptor<History>())
+        #expect(visits.map(\.id) == [ids.visit])
+        // Non-optional in V1, optional in V2, and the value survives the change.
+        #expect(visits.first?.faviconURL?.absoluteString == "https://example.com/favicon.ico")
+    }
+
+    @Test("the plan names every schema its stages walk through")
+    func theStagesCoverEverySchema() {
+        #expect(AuraMigrationPlan.schemas.count == AuraMigrationPlan.stages.count + 1)
+        #expect(AuraSchemaV1.versionIdentifier < AuraSchemaV2.versionIdentifier)
     }
 }

@@ -1,4 +1,42 @@
 import Foundation
+import OSLog
+
+/// One security-scoped folder held open. Resolving a bookmark starts access once and
+/// stops the folder it replaces, instead of opening a fresh unbalanced access on every
+/// lookup. `start` and `stop` are injectable so the once-only behaviour is testable.
+final class SecurityScopedFolder {
+    private var bookmark: Data?
+    private var resolved: URL?
+    private var started = false
+    private let start: (URL) -> Bool
+    private let stop: (URL) -> Void
+
+    init(
+        start: @escaping (URL) -> Bool = { $0.startAccessingSecurityScopedResource() },
+        stop: @escaping (URL) -> Void = { $0.stopAccessingSecurityScopedResource() }
+    ) {
+        self.start = start
+        self.stop = stop
+    }
+
+    /// The folder for `bookmark`, calling `resolve` only when the bookmark changed.
+    func url(for bookmark: Data?, resolve: (Data) -> URL?) -> URL? {
+        if let bookmark, bookmark == self.bookmark { return resolved }
+        release()
+        guard let bookmark, let url = resolve(bookmark) else { return nil }
+        self.bookmark = bookmark
+        resolved = url
+        started = start(url)
+        return url
+    }
+
+    func release() {
+        if started, let resolved { stop(resolved) }
+        bookmark = nil
+        resolved = nil
+        started = false
+    }
+}
 
 /// Every user-facing preference that is not per-space, cached in memory and written
 /// back through `didSet`. Nothing here reads `UserDefaults` after `init`, so a view
@@ -20,8 +58,11 @@ class SettingsStore {
     private let fingerprintingKey = "settings.tracking.blockFingerprinting"
     private let cookiesPolicyKey = "settings.cookies.policy"
     private let blockJavaScriptByDefaultKey = "privacy.javascript.blockedByDefault"
-    private let launcherRisesForSuggestionsKey = "launcher.risesForSuggestions"
     private let extensionRequestBlockingKey = "privacy.extensionRequestBlocking"
+    /// Static and internal, unlike its neighbours: the extension scan runs off the main
+    /// actor and reads this key straight from `UserDefaults`, so spelling it twice is
+    /// what it would cost to keep it private.
+    static let extensionFullAdBlockingKey = "privacy.fullAdBlocking"
     private let launcherBlurKey = "ui.launcher.blur"
     private let addressEditingBlurKey = "ui.addressEditing.blur"
     private let sitePermissionsKey = "settings.permissions.sitePermissions"
@@ -39,6 +80,11 @@ class SettingsStore {
     private let passwordAutofillSubmitEnabledKey = "settings.passwords.autofillSubmitEnabled"
     private let passwordSavePromptsEnabledKey = "settings.passwords.savePromptsEnabled"
     private let suppressedPasswordSavePromptHostsKey = "settings.passwords.suppressedSavePromptHosts"
+    private let passwordSyncViaICloudKey = "passwords.syncViaICloud"
+    private let extensionConsentKey = "extensions.consent"
+    private let extensionPrivateWindowGrantsKey = "extensions.privateWindowGrants"
+    private let extensionUpdateLastCheckKey = "extensions.updates.lastChecked"
+    private let extensionAvailableUpdatesKey = "extensions.updates.available"
     private let newTabPositionKey = "tabs.newTabPosition"
     private let unloadMediaTabsKey = "tabs.unloadMedia"
     private let hibernationPresetKey = "tabs.hibernationPreset"
@@ -53,6 +99,9 @@ class SettingsStore {
     private let confirmBeforeQuitKey = "browser.confirmBeforeQuit"
     private let alwaysShowScrollBarsKey = "a11y.alwaysShowScrollBars"
     private let spellCheckEnabledKey = "languages.spellCheck"
+    private let showBookmarksBarKey = "ui.bookmarksBar.visible"
+    private let siteZoomLevelsKey = "settings.zoom.siteLevels"
+    private let firstRunCardDismissedKey = "browser.firstRunCard.dismissed"
 
     /// Read straight from `UserDefaults` off the main actor by `AnimationSettings`
     /// and `BrowserPage`, so both keys are public.
@@ -96,16 +145,31 @@ class SettingsStore {
     // MARK: - Search
 
     /// The floating launcher sits mid-window and slides up when suggestions appear.
-    var launcherRisesForSuggestions: Bool {
-        didSet { defaults.set(launcherRisesForSuggestions, forKey: launcherRisesForSuggestionsKey) }
-    }
-
     /// Loads the injected web bundle that gives extensions a blocking `webRequest`.
     /// Off by default: WebKit runs bundle-hosting pages in its Development WebContent
     /// service, which cannot take RunningBoard foreground assertions, and the page's
     /// layers get purged a second after they paint. Takes effect on the next launch.
     var extensionRequestBlocking: Bool {
         didSet { defaults.set(extensionRequestBlocking, forKey: extensionRequestBlockingKey) }
+    }
+
+    /// Set for this session only when `AuraWebBundle.probe` finds the injected
+    /// bundle silent, which is what a half-changed OS build looks like. Never
+    /// persisted: the setting above stays the user's answer, this one is the
+    /// running system's.
+    var requestBlockingUnavailable = false
+
+    /// Which of the two ways the probe failed, in the words the settings row shows.
+    /// Session-only for the same reason as the flag above.
+    var requestBlockingUnavailableReason: String?
+
+    /// Full uBlock Origin instead of the Lite build. Off by default, and not
+    /// pre-consented: full uBO blocks through `webRequest`, which only answers with
+    /// the injected bundle loaded, and that moves every page onto WebKit's Development
+    /// WebContent service. `BundledExtensions.plan(for:)` decides what this means for a
+    /// given launch. Takes effect on the next launch, like the setting above.
+    var extensionFullAdBlocking: Bool {
+        didSet { defaults.set(extensionFullAdBlocking, forKey: Self.extensionFullAdBlockingKey) }
     }
 
     /// Blur the window behind the Cmd+T launcher.
@@ -177,11 +241,48 @@ class SettingsStore {
         didSet { defaults.set(passwordSavePromptsEnabled, forKey: passwordSavePromptsEnabledKey) }
     }
 
+    /// Whether a newly saved credential is marked `kSecAttrSynchronizable`. Off unless
+    /// the user asks: syncing puts the password, its host and its username on every
+    /// device signed into the Apple ID, including ones that have never run Aura.
+    var passwordSyncViaICloud: Bool {
+        didSet { defaults.set(passwordSyncViaICloud, forKey: passwordSyncViaICloudKey) }
+    }
+
     private(set) var suppressedPasswordSavePromptHosts: Set<String> {
         didSet { defaults.set(
             Array(suppressedPasswordSavePromptHosts).sorted(),
             forKey: suppressedPasswordSavePromptHostsKey
         ) }
+    }
+
+    // MARK: - Extensions
+
+    /// What the user agreed to when each extension was installed, keyed by the folder id
+    /// the extension lives under. An entry missing means nobody has seen this extension's
+    /// permissions yet, which is what makes `ExtensionConsent` ask.
+    var extensionConsent: [String: ExtensionConsentRecord] {
+        didSet { saveCodable(extensionConsent, forKey: extensionConsentKey) }
+    }
+
+    /// Extensions the user let run in private windows, by folder id. Off for everything
+    /// that is not in here, which is Firefox's rule: an extension is installed for normal
+    /// browsing and has to be allowed into private browsing separately.
+    var extensionPrivateWindowGrants: Set<String> {
+        didSet {
+            defaults.set(Array(extensionPrivateWindowGrants).sorted(), forKey: extensionPrivateWindowGrantsKey)
+        }
+    }
+
+    /// When the AMO version check last ran. Nil until the first check; the check itself
+    /// runs at most once a day off this.
+    var extensionUpdateLastCheck: Date? {
+        didSet { defaults.set(extensionUpdateLastCheck, forKey: extensionUpdateLastCheckKey) }
+    }
+
+    /// The newest version AMO reported per extension id, from the last check. Kept so the
+    /// "Update available" row survives a relaunch without asking AMO again.
+    var extensionAvailableUpdates: [String: String] {
+        didSet { saveCodable(extensionAvailableUpdates, forKey: extensionAvailableUpdatesKey) }
     }
 
     // MARK: - Tab management
@@ -246,6 +347,20 @@ class SettingsStore {
         didSet { defaults.set(confirmBeforeQuit, forKey: confirmBeforeQuitKey) }
     }
 
+    /// Whether the bookmarks bar sits under the toolbar. On by default: a bar nobody can
+    /// see is a feature nobody finds, and ⇧⌘B is one keystroke away from hiding it.
+    var showBookmarksBar: Bool {
+        didSet { defaults.set(showBookmarksBar, forKey: showBookmarksBarKey) }
+    }
+
+    /// Set once the home page's first-run card has been dismissed, or acted on. Sticky
+    /// rather than session-scoped: a card offering to change the default browser is a
+    /// question, and asking it again on every new tab after the answer was no is the
+    /// behaviour people uninstall a browser over.
+    var firstRunCardDismissed: Bool {
+        didSet { defaults.set(firstRunCardDismissed, forKey: firstRunCardDismissedKey) }
+    }
+
     // MARK: - Accessibility and languages
 
     /// `AnimationSettings` reads this from view bodies dozens of times a frame, so the
@@ -277,6 +392,16 @@ class SettingsStore {
         }
     }
 
+    // MARK: - Per-site zoom
+
+    /// Page zoom the user pinned to a site, keyed by registrable domain so every
+    /// subdomain of a site shares one level. 100% is never stored: a site that is back
+    /// at the default leaves the map rather than sitting in it as 1.0.
+    /// Mutated through `SettingsStore+Collections`.
+    var siteZoomLevels: [String: Double] {
+        didSet { saveCodable(siteZoomLevels, forKey: siteZoomLevelsKey) }
+    }
+
     // MARK: - Per-space storage
 
     /// Bumped by every per-space setter so the getters in `SettingsStore+Spaces` have
@@ -293,8 +418,8 @@ class SettingsStore {
         cookiesPolicy = defaults.string(forKey: cookiesPolicyKey)
             .flatMap(CookiesPolicy.init(rawValue:)) ?? .allowAll
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
-        launcherRisesForSuggestions = defaults.object(forKey: launcherRisesForSuggestionsKey) as? Bool ?? true
         extensionRequestBlocking = defaults.bool(forKey: extensionRequestBlockingKey)
+        extensionFullAdBlocking = defaults.bool(forKey: Self.extensionFullAdBlockingKey)
         launcherBlur = defaults.object(forKey: launcherBlurKey) as? Bool ?? true
         addressEditingBlur = defaults.object(forKey: addressEditingBlurKey) as? Bool ?? true
         sitePermissions = Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]
@@ -310,8 +435,9 @@ class SettingsStore {
         tabAliveTimeout = timeouts.alive
         tabRemovalTimeout = timeouts.removal
 
-        let maxRecentTabsValue = defaults.integer(forKey: maxRecentTabsKey)
-        maxRecentTabs = maxRecentTabsValue == 0 ? 5 : maxRecentTabsValue
+        // `integer(forKey:)` cannot tell "never set" from a stored 0, so a user who
+        // picked 0 recent tabs used to get 5 back on the next launch.
+        maxRecentTabs = defaults.object(forKey: maxRecentTabsKey) as? Int ?? 5
         maxLiveTabs = defaults.object(forKey: maxLiveTabsKey) as? Int ?? 12
         autoPiPEnabled = defaults.object(forKey: autoPiPEnabledKey) as? Bool ?? true
 
@@ -321,6 +447,11 @@ class SettingsStore {
         passwordAutofillEnabled = defaults.object(forKey: passwordAutofillEnabledKey) as? Bool ?? true
         passwordAutofillSubmitEnabled = defaults.object(forKey: passwordAutofillSubmitEnabledKey) as? Bool ?? true
         passwordSavePromptsEnabled = defaults.object(forKey: passwordSavePromptsEnabledKey) as? Bool ?? true
+        passwordSyncViaICloud = defaults.bool(forKey: passwordSyncViaICloudKey)
+        extensionConsent = Self.loadCodable([String: ExtensionConsentRecord].self, key: extensionConsentKey) ?? [:]
+        extensionPrivateWindowGrants = Set(defaults.stringArray(forKey: extensionPrivateWindowGrantsKey) ?? [])
+        extensionUpdateLastCheck = defaults.object(forKey: extensionUpdateLastCheckKey) as? Date
+        extensionAvailableUpdates = Self.loadCodable([String: String].self, key: extensionAvailableUpdatesKey) ?? [:]
         suppressedPasswordSavePromptHosts = Set(
             defaults.stringArray(forKey: suppressedPasswordSavePromptHostsKey) ?? []
         )
@@ -342,11 +473,14 @@ class SettingsStore {
             .flatMap(ExternalLinkTarget.init(rawValue:)) ?? .currentSpace
         restoreTabsOnLaunch = defaults.object(forKey: restoreTabsOnLaunchKey) as? Bool ?? true
         confirmBeforeQuit = defaults.object(forKey: confirmBeforeQuitKey) as? Bool ?? true
+        showBookmarksBar = defaults.object(forKey: showBookmarksBarKey) as? Bool ?? true
+        firstRunCardDismissed = defaults.bool(forKey: firstRunCardDismissedKey)
 
         reduceMotion = defaults.bool(forKey: Self.reduceMotionKey)
         minimumFontSize = defaults.double(forKey: Self.minimumFontSizeKey)
         alwaysShowScrollBars = defaults.bool(forKey: alwaysShowScrollBarsKey)
         spellCheckEnabled = defaults.object(forKey: spellCheckEnabledKey) as? Bool ?? true
+        siteZoomLevels = Self.loadCodable([String: Double].self, key: siteZoomLevelsKey) ?? [:]
         defaults.set(spellCheckEnabled, forKey: Self.webKitSpellCheckKey)
     }
 
@@ -372,30 +506,36 @@ class SettingsStore {
 
     // MARK: - Download folder
 
+    @ObservationIgnored private let downloadFolderAccess = SecurityScopedFolder()
+
     /// The folder downloads are written to, or nil when the system Downloads folder
-    /// (granted outright by the sandbox) should be used.
-    ///
-    /// ponytail: access is started once and never stopped, which is fine for a folder
-    /// used for the app's whole lifetime. Balance it if the picker ever moves per-window.
+    /// (granted outright by the sandbox) should be used. Called per download and from the
+    /// save panel, so the security-scoped access is started once per bookmark rather than
+    /// once per call and never stopped.
     func resolvedDownloadFolder() -> URL? {
-        guard let bookmark = downloadFolderBookmark else { return nil }
-        var isStale = false
-        guard let url = try? URL(
-            resolvingBookmarkData: bookmark,
-            options: [.withSecurityScope],
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        ) else {
-            downloadFolderBookmark = nil
+        guard downloadFolderBookmark != nil else {
+            downloadFolderAccess.release()
             return nil
         }
-        _ = url.startAccessingSecurityScopedResource()
-        if isStale { storeDownloadFolderBookmark(for: url) }
-        return url
+        return downloadFolderAccess.url(for: downloadFolderBookmark) { bookmark in
+            var isStale = false
+            guard let url = try? URL(
+                resolvingBookmarkData: bookmark,
+                options: [.withSecurityScope],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            ) else {
+                downloadFolderBookmark = nil
+                return nil
+            }
+            if isStale { storeDownloadFolderBookmark(for: url) }
+            return url
+        }
     }
 
     func setDownloadFolder(_ url: URL?) {
         guard let url else {
+            downloadFolderAccess.release()
             downloadFolderBookmark = nil
             return
         }
@@ -425,15 +565,31 @@ class SettingsStore {
 
     /// Internal rather than private: the extensions in the sibling files use both.
     func saveCodable(_ value: some Encodable, forKey key: String) {
-        if let data = try? JSONEncoder().encode(value) {
-            defaults.set(data, forKey: key)
+        do {
+            defaults.set(try JSONEncoder().encode(value), forKey: key)
+        } catch {
+            Self.log.error(
+                "Failed to encode \(key, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
-    static func loadCodable<T: Decodable>(_ type: T.Type, key: String) -> T? {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(T.self, from: data)
+    /// `previous` is what the caller already holds in memory. A blob that will not decode
+    /// used to silently reset the setting to empty; keeping the live value means a
+    /// corrupt write cannot wipe the user's search engines or shortcuts.
+    static func loadCodable<T: Decodable>(_ type: T.Type, key: String, previous: T? = nil) -> T? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return previous }
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            log.error(
+                "Failed to decode \(key, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+            return previous
+        }
     }
+
+    static let log = AuraLog.category("Settings")
 
     // MARK: - Normalization helpers
 

@@ -20,7 +20,7 @@ struct PinnedTabsList: View {
             Text("Pinned")
                 .font(.callout)
                 .foregroundColor(theme.mutedForeground)
-                .padding(.top, 8)
+                .padding(.leading, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if tabs.isEmpty {
                 EmptyPinnedTabs()
@@ -41,12 +41,18 @@ struct PinnedTabsList: View {
                     .overlay(alignment: indicatorEdge(tab)) {
                         if dragSession.indicator(for: tab.id, in: zone) != nil {
                             Capsule()
-                                .fill(Color.accentColor)
+                                .fill(theme.accent)
                                 .frame(height: 2)
                                 .padding(.horizontal, 6)
                         }
                     }
-                    .tabDragSource(id: tab.id, in: zone)
+                    .tabDragSource(
+                        id: tab.id,
+                        in: zone,
+                        url: tab.url,
+                        title: tab.title,
+                        onMiddleClick: { onClose(tab) }
+                    )
                 }
             }
         }

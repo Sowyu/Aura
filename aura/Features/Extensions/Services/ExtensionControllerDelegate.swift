@@ -251,3 +251,4 @@ enum ExtensionActionError: LocalizedError {
         }
     }
 }
+

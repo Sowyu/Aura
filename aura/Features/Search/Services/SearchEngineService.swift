@@ -3,6 +3,14 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "com.aurabrowser.app", category: "SearchEngineService")
 
+extension CharacterSet {
+    /// One search term inside a query parameter. `.urlQueryAllowed` passes &, +, # and =
+    /// straight through, which turns a search for "a&b" into two query parameters and
+    /// drops everything after a "#" before the request ever leaves the browser.
+    static let searchQueryAllowed = CharacterSet.urlQueryAllowed
+        .subtracting(CharacterSet(charactersIn: "&+#=?"))
+}
+
 enum SearchEngineID: String, CaseIterable {
     case youtube = "YouTube"
     case chatgpt = "ChatGPT"
@@ -32,6 +40,7 @@ struct SuggestResponse: Decodable {
     }
 }
 
+@MainActor
 class SearchEngineService: ObservableObject {
     private var theme: Theme?
     private let settingsStore = SettingsStore.shared
@@ -295,21 +304,21 @@ class SearchEngineService: ObservableObject {
 
     func createSearchURL(for engine: SearchEngine, query: String) -> URL? {
         let encodedQuery =
-            query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            query.addingPercentEncoding(withAllowedCharacters: .searchQueryAllowed) ?? ""
         let urlString = engine.searchURL.replacingOccurrences(of: "{query}", with: encodedQuery)
         return URL(string: urlString)
     }
 
     func createSearchURL(for match: LauncherMatch, query: String) -> URL? {
         let encodedQuery =
-            query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            query.addingPercentEncoding(withAllowedCharacters: .searchQueryAllowed) ?? ""
         let urlString = match.searchURL.replacingOccurrences(of: "{query}", with: encodedQuery)
         return URL(string: urlString)
     }
 
     func createSuggestionsURL(urlString: String, query: String) -> URL? {
         let encodedQuery =
-            query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            query.addingPercentEncoding(withAllowedCharacters: .searchQueryAllowed) ?? ""
         let urlString = urlString.replacingOccurrences(of: "{query}", with: encodedQuery)
         return URL(string: urlString)
     }

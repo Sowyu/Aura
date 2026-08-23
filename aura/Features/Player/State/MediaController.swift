@@ -35,6 +35,9 @@ final class MediaController {
     @ObservationIgnored private var tabRefs: [UUID: WeakTab] = [:]
     @ObservationIgnored private var titleSyncTimer: Timer?
 
+    /// How many tabs the controller still holds a box for. Only the prune check reads it.
+    var trackedTabCount: Int { tabRefs.count }
+
     init() {
         startPeriodicTitleSync()
     }
@@ -235,7 +238,10 @@ final class MediaController {
         }
     }
 
-    private func syncTitlesForPlayingSessions() {
+    /// Also the prune point for `tabRefs`. A closed tab leaves a box with a nil value
+    /// behind, and nothing else walks the map.
+    func syncTitlesForPlayingSessions() {
+        tabRefs = tabRefs.filter { $0.value.value != nil }
         let playingSessions = sessions.filter(\.isPlaying)
         for session in playingSessions {
             if let tab = tabRefs[session.tabID]?.value,

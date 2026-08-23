@@ -5,7 +5,9 @@ import SwiftUI
 /// Every decision Aura has recorded about a single site, in one table, plus the data
 /// each space has stored.
 struct PermissionsSettingsView: View {
+    @Environment(\.theme) private var theme
     @Query private var containers: [TabContainer]
+    @Bindable private var settings = SettingsStore.shared
     @ObservedObject private var javaScriptPolicy = JavaScriptPolicyService.shared
     @ObservedObject private var siteRules = SiteSpaceRuleService.shared
     @Environment(DialogManager.self) private var dialogManager
@@ -23,6 +25,7 @@ struct PermissionsSettingsView: View {
 
     var body: some View {
         SettingsSection {
+            devicePermissionsCard
             javaScriptCard
             spaceRulesCard
             siteDataCard
@@ -31,6 +34,37 @@ struct PermissionsSettingsView: View {
             if siteDataSpaceID == nil { siteDataSpaceID = containers.first?.id }
             loadSiteData()
         }
+    }
+
+    /// Camera and microphone are the whole list on purpose: they are the only requests
+    /// WebKit routes through the app, so a row for location or notifications here would
+    /// promise a control Aura cannot honour.
+    private var devicePermissionsCard: some View {
+        SettingsCard(
+            header: "Camera and microphone",
+            description: "Answered from the prompt a page raises, or from the site panel in the address bar."
+        ) {
+            let sites = settings.sitePermissions.values
+                .filter { !$0.decided.isEmpty }
+                .sorted { $0.host < $1.host }
+            if sites.isEmpty {
+                emptyRow("No site has been given a decision yet.")
+            } else {
+                ForEach(sites) { site in
+                    ruleRow(host: site.host, detail: Self.grantSummary(site)) {
+                        settings.removeSitePermission(host: site.host)
+                    }
+                }
+            }
+        }
+    }
+
+    /// "Camera allowed, microphone blocked".
+    private static func grantSummary(_ site: SitePermissionSettings) -> String {
+        let text = site.decided
+            .map { "\($0.kind.phrase) \($0.isAllowed ? "allowed" : "blocked")" }
+            .joined(separator: ", ")
+        return text.prefix(1).uppercased() + text.dropFirst()
     }
 
     private var javaScriptCard: some View {
@@ -115,8 +149,8 @@ struct PermissionsSettingsView: View {
             Text(host)
             Spacer()
             Text(detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11))
+                .foregroundStyle(theme.mutedForeground)
             Button("Remove", role: .destructive, action: remove)
                 .buttonStyle(.borderless)
         }
@@ -124,8 +158,8 @@ struct PermissionsSettingsView: View {
 
     private func emptyRow(_ message: String) -> some View {
         Text(message)
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(.system(size: 11))
+            .foregroundStyle(theme.mutedForeground)
     }
 
     private func loadSiteData() {

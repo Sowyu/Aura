@@ -25,6 +25,7 @@ final class ExtensionTabAdapter: NSObject, WKWebExtensionTab {
     }
 
     static func adapter(for tab: Tab) -> ExtensionTabAdapter {
+        pruneStaleAdapters()
         if let existing = cache[tab.id] {
             // SwiftData can hand back a fresh Tab object for the same row; keep
             // the adapter (WebKit knows it) and re-point it at the live tab.
@@ -36,11 +37,32 @@ final class ExtensionTabAdapter: NSObject, WKWebExtensionTab {
         return adapter
     }
 
+    /// The adapter WebKit is still tracking for `tabID`, if any.
+    static func cachedAdapter(for tabID: UUID) -> ExtensionTabAdapter? {
+        pruneStaleAdapters()
+        return cache[tabID]
+    }
+
+    /// Forgets adapters whose tab is gone. `discardAdapter` only covers the closes that
+    /// go through `closeTab`; a space deletion and the launch tab policy delete rows in
+    /// bulk, and every adapter they left behind kept `tabs.query` reporting a tab that
+    /// no longer exists.
+    ///
+    /// ponytail: linear over the cache on every read, which is one entry per open tab.
+    /// Keep an explicit removal list if a window ever holds thousands. A `Tab` object
+    /// that deallocates while its row survives loses its adapter too, and WebKit gets a
+    /// fresh object the next time it asks; key the cache off the persistent id if that
+    /// ever shows up as a duplicated tab.
+    private static func pruneStaleAdapters() {
+        cache = cache.filter { $0.value.tab?.isDeleted == false }
+    }
+
     /// Forgets a closed tab. Returns the adapter so the caller can still report
     /// the close to WebKit using the object WebKit already has.
     @discardableResult
     static func discardAdapter(for tab: Tab) -> ExtensionTabAdapter? {
-        cache.removeValue(forKey: tab.id)
+        defer { pruneStaleAdapters() }
+        return cache.removeValue(forKey: tab.id)
     }
 
     // MARK: - Identity
@@ -57,9 +79,11 @@ final class ExtensionTabAdapter: NSObject, WKWebExtensionTab {
         tab?.title
     }
 
+    /// Nil for a private window an extension has no grant for, so a tab it should not
+    /// know about cannot be reached through the window it sits in either.
     func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
-        guard let tab else { return nil }
-        return ExtensionWindowAdapter.adapter(containing: tab)
+        guard let tab, let adapter = ExtensionWindowAdapter.adapter(containing: tab) else { return nil }
+        return adapter.isVisible(to: context) ? adapter : nil
     }
 
     func indexInWindow(for context: WKWebExtensionContext) -> Int {

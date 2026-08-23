@@ -27,7 +27,7 @@
     const RELAY_BACKGROUND = 'app.aurabrowser.relay.background';
     const RELAY_PAGE = 'app.aurabrowser.relay.page';
     // Bumped when the protocol changes so a stale patched extension is repatched.
-    const SHIM_VERSION = 3;
+    const SHIM_VERSION = 4;
 
     const api = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
     if (!api || globalThis.__auraShimInstalled) { return; }
@@ -565,6 +565,14 @@
             details.originUrl = raw.documentUrl;
             details.initiator = raw.documentUrl;
         }
+        // Present only while some listener is on onBeforeSendHeaders; the host tells
+        // the bundle whether reading them off the request is worth it.
+        if (Array.isArray(raw.requestHeaders)) {
+            details.requestHeaders = raw.requestHeaders.map(header => ({
+                name: String(header.name || ''),
+                value: String(header.value === undefined ? '' : header.value),
+            }));
+        }
         return details;
     }
 
@@ -600,26 +608,79 @@
         return expression;
     }
 
-    function decide(id, raw) {
-        const details = detailsFromHost(raw);
-        let verdict = null;
+    // Chrome has the listener return the full header array it wants sent, so the
+    // difference against what it was handed is what the host is told: names to set,
+    // names to drop. Sending the whole array back would make the host guess which of
+    // the headers it never showed the listener were meant to survive.
+    function headerDiff(before, after) {
+        const patch = { set: null, remove: null };
+        if (!Array.isArray(after)) { return patch; }
+        const originals = new Map();
+        for (const header of before || []) { originals.set(String(header.name).toLowerCase(), header.value); }
+        const kept = new Set();
+        for (const header of after) {
+            if (!header || typeof header.name !== 'string') { continue; }
+            const key = header.name.toLowerCase();
+            kept.add(key);
+            const value = header.value === undefined ? '' : String(header.value);
+            if (originals.has(key) && originals.get(key) === value) { continue; }
+            if (patch.set === null) { patch.set = {}; }
+            patch.set[header.name] = value;
+        }
+        for (const key of originals.keys()) {
+            if (kept.has(key)) { continue; }
+            if (patch.remove === null) { patch.remove = []; }
+            patch.remove.push(key);
+        }
+        return patch;
+    }
+
+    // Runs every listener on one event and stops at the first cancel or redirect.
+    // `mutate` lets the caller carry a running value between listeners, which is what
+    // makes a second header listener see what the first one changed.
+    function runListeners(event, details, mutate) {
         for (const entry of blockingListeners.values()) {
-            if (entry.event !== 'onBeforeRequest' || !matchesFilter(entry, details)) { continue; }
+            if (entry.event !== event || !matchesFilter(entry, details)) { continue; }
             let result;
             try {
-                result = entry.fn(details);
+                result = entry.fn(mutate ? mutate.details() : details);
             } catch (error) {
                 continue;
             }
             if (!result || typeof result !== 'object') { continue; }
-            if (result.cancel === true) { verdict = { cancel: true }; break; }
+            if (result.cancel === true) { return { cancel: true }; }
             if (typeof result.redirectUrl === 'string' && result.redirectUrl !== '') {
-                verdict = { redirectUrl: result.redirectUrl };
-                break;
+                return { redirectUrl: result.redirectUrl };
+            }
+            if (mutate) { mutate.apply(result); }
+        }
+        return null;
+    }
+
+    // One ask covers both events: the bundle sees a request once, on its way out, and
+    // onBeforeSendHeaders fires at that same point rather than later. The events still
+    // run in Chrome's order, whatever order the extension registered them in.
+    function decide(id, raw) {
+        const details = detailsFromHost(raw);
+        let headers = details.requestHeaders;
+        let patch = { set: null, remove: null };
+
+        let verdict = runListeners('onBeforeRequest', details, null);
+        if (verdict === null && headers !== undefined) {
+            verdict = runListeners('onBeforeSendHeaders', details, {
+                details: () => Object.assign({}, details, { requestHeaders: headers }),
+                apply: result => {
+                    if (Array.isArray(result.requestHeaders)) { headers = result.requestHeaders; }
+                },
+            });
+            if (verdict === null && headers !== details.requestHeaders) {
+                patch = headerDiff(details.requestHeaders, headers);
             }
         }
+
         send({ op: 'verdict', id: id, cancel: verdict ? verdict.cancel === true : false,
-               redirectUrl: verdict && verdict.redirectUrl ? verdict.redirectUrl : null });
+               redirectUrl: verdict && verdict.redirectUrl ? verdict.redirectUrl : null,
+               setHeaders: patch.set, removeHeaders: patch.remove });
     }
 
     function onHostMessage(message) {
@@ -636,10 +697,11 @@
     // -----------------------------------------------------------------------
 
     const BLOCKING_EVENTS = ['onBeforeRequest', 'onBeforeSendHeaders', 'onHeadersReceived'];
-    // ponytail: only onBeforeRequest is answered natively. The injected bundle
-    // sees a request before headers exist and never sees a response, so the
-    // other two run observe-only. Wire them up when header rewriting lands.
-    const NATIVE_EVENTS = ['onBeforeRequest'];
+    // onHeadersReceived stays observe-only and always will: the injected bundle hooks
+    // a request on its way out and never sees the response, so a response-header
+    // change has nowhere to be applied. Registering it without "blocking" still runs
+    // the extension's own bookkeeping.
+    const NATIVE_EVENTS = ['onBeforeRequest', 'onBeforeSendHeaders'];
 
     const nativeWebRequest = api.webRequest || {};
     const webRequestMembers = new Map();

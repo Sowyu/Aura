@@ -149,10 +149,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         webView.allowsBackForwardNavigationGestures = configuration.allowsBackForwardNavigationGestures
         webView.wantsLayer = true
         webView.isInspectable = configuration.allowsInspectableDebugging
-        if let layer = webView.layer {
-            layer.isOpaque = true
-            layer.drawsAsynchronously = true
-        }
+        webView.layer?.isOpaque = true
 
         BrowserPrivacyService.shared.prepareConfiguration(
             webConfiguration,
@@ -210,13 +207,44 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         webView.estimatedProgress
     }
 
+    /// The layout scale the page is drawn at. Not `magnification`: that one is the
+    /// pinch gesture, which resets itself and is not what a site's remembered zoom
+    /// means. `pageZoom` belongs to the web view, so it outlives a navigation and has
+    /// to be reassigned whenever the tab lands on a different site.
+    var zoom: Double {
+        get { Double(webView.pageZoom) }
+        set { webView.pageZoom = CGFloat(newValue) }
+    }
+
     func load(_ request: URLRequest) {
         guard isReadyForNavigation else {
             pendingLoadRequest = request
             pendingReload = false
+            pendingSessionState = nil
             return
         }
 
+        performLoad(request)
+    }
+
+    /// Where every load ends up, so a `file://` URL is handled the same whether it
+    /// arrived now or was parked waiting for the space's privacy configuration.
+    ///
+    /// A sandboxed app cannot hand WebKit a file URL through `load(_:)`: the web process
+    /// is given no read extension for it and the load fails with a permissions error.
+    /// `loadFileURL(_:allowingReadAccessTo:)` is what issues one. Read access is granted
+    /// on the file's folder rather than the file, which is the smallest scope that still
+    /// lets a local HTML page load the stylesheet and images sitting next to it.
+    private func performLoad(_ request: URLRequest) {
+        if let url = request.url, url.isFileURL {
+            // The stored grant is opened first, and this is the only place that covers
+            // every route to a local file: a restored tab at launch, a tray row, a typed
+            // path. `assumeIsolated` is safe because a load is always driven from the main
+            // thread, which WebKit requires of every call on this object.
+            _ = MainActor.assumeIsolated { FileAccessStore.shared.beginAccess(to: url) }
+            webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+            return
+        }
         webView.load(request)
     }
 
@@ -224,10 +252,30 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         guard isReadyForNavigation else {
             pendingReload = true
             pendingLoadRequest = nil
+            pendingSessionState = nil
             return
         }
 
         webView.reload()
+    }
+
+    /// A session blob waiting on the privacy configuration, the same way a request does.
+    private var pendingSessionState: Data?
+
+    /// Puts WebKit's own session state back: the back/forward list with its titles, which
+    /// item is current, and where that item was scrolled to. WebKit loads that item as a
+    /// result, which is why this replaces the load a restored tab would otherwise do
+    /// rather than joining it, and why it goes through the same gate: a restored tab must
+    /// not start fetching before the space's content rules are attached.
+    func restoreSession(_ state: Data) {
+        guard isReadyForNavigation else {
+            pendingSessionState = state
+            pendingLoadRequest = nil
+            pendingReload = false
+            return
+        }
+
+        webView.interactionState = state
     }
 
     func goBack() {
@@ -283,9 +331,15 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     }
 
     private func flushPendingNavigationIfNeeded() {
+        if let pendingSessionState {
+            self.pendingSessionState = nil
+            webView.interactionState = pendingSessionState
+            return
+        }
+
         if let pendingLoadRequest {
             self.pendingLoadRequest = nil
-            webView.load(pendingLoadRequest)
+            performLoad(pendingLoadRequest)
             return
         }
 
@@ -361,6 +415,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         let action = BrowserNavigationAction(
             request: navigationAction.request,
             modifierFlags: navigationAction.modifierFlags,
+            buttonNumber: navigationAction.buttonNumber,
             isMainFrame: navigationAction.targetFrame?.isMainFrame ?? true,
             isUserInitiated: navigationAction.navigationType == .linkActivated
                 || navigationAction.navigationType == .formSubmitted
@@ -504,16 +559,13 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         decidePolicyFor navigationResponse: WKNavigationResponse,
         decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
     ) {
-        // A server can force a download of something WebKit is perfectly able to render
-        // (a PDF, an image, plain text) by marking it an attachment. Checked before
-        // `canShowMIMEType`, which would otherwise display it inline.
-        // Ported from Nook, `Nook/Models/Tab/Tab.swift` by Maciek Bagiński (GPL-3.0).
-        let isAttachment = (navigationResponse.response as? HTTPURLResponse)?
-            .value(forHTTPHeaderField: "Content-Disposition")?
-            .lowercased()
-            .contains("attachment") ?? false
+        let disposition = Self.responseDisposition(
+            canShowMIMEType: navigationResponse.canShowMIMEType,
+            contentDisposition: (navigationResponse.response as? HTTPURLResponse)?
+                .value(forHTTPHeaderField: "Content-Disposition")
+        )
 
-        if navigationResponse.canShowMIMEType, !isAttachment {
+        if disposition == .inline {
             if navigationResponse.isForMainFrame {
                 isDownloadNavigation = false
                 originalURL = nil
@@ -561,20 +613,46 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         delegate?.browserPage(self, didStartDownload: task)
     }
 
+    /// The selector has to match WebKit's exactly or WebKit falls back to its own raw
+    /// dialog, which is what happened while this was declared without `type:`. The type
+    /// is also the only thing that says whether the page wants the camera, the
+    /// microphone or both, and each is a separate grant.
     func webView(
         _ webView: WKWebView,
         requestMediaCapturePermissionFor origin: WKSecurityOrigin,
         initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
         decisionHandler: @escaping (WKPermissionDecision) -> Void
     ) {
-        let pageURL = URL(string: "\(origin.protocol)://\(origin.host):\(origin.port)")
-        delegate?.browserPage(self, requestPermission: .mediaCapture, origin: pageURL) { decision in
+        let kind: BrowserPermissionKind
+        switch type {
+        case .camera: kind = .camera
+        case .microphone: kind = .microphone
+        case .cameraAndMicrophone: kind = .cameraAndMicrophone
+        @unknown default: kind = .cameraAndMicrophone
+        }
+
+        guard let delegate else {
+            // WebKit waits forever on an uncalled handler, and a page with no delegate
+            // has no window to ask in.
+            decisionHandler(.deny)
+            return
+        }
+
+        delegate.browserPage(self, requestPermission: kind, origin: Self.originURL(origin)) { decision in
             switch decision {
             case .grant: decisionHandler(.grant)
             case .deny: decisionHandler(.deny)
             case .prompt: decisionHandler(.prompt)
             }
         }
+    }
+
+    /// `WKSecurityOrigin` reports port 0 for a scheme's default port, so the port is
+    /// only spelled out when the page really is on an unusual one.
+    private static func originURL(_ origin: WKSecurityOrigin) -> URL? {
+        let base = "\(origin.protocol)://\(origin.host)"
+        return URL(string: origin.port == 0 ? base : "\(base):\(origin.port)")
     }
 
     func webView(
@@ -677,8 +755,9 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping () -> Void
     ) {
-        delegate?.browserPage(self, runJavaScriptAlert: message)
-        completionHandler()
+        // The page's alert() returns only once the dialog is dismissed.
+        guard let delegate else { return completionHandler() }
+        delegate.browserPage(self, runJavaScriptAlert: message, completion: completionHandler)
     }
 
     func webView(

@@ -10,13 +10,7 @@ let browserContentInset: CGFloat = 8
 let browserContentTopInset: CGFloat = 0
 
 /// Radius of every card the window draws: the content pane and the revealed sidebar.
-let browserContentCornerRadius: CGFloat = {
-    if #available(macOS 26, *) {
-        return 13
-    } else {
-        return 6
-    }
-}()
+let browserContentCornerRadius: CGFloat = AuraRadius.pane
 
 struct BrowserContentContainer<Content: View>: View {
     @Environment(TabManager.self) private var tabManager
@@ -60,7 +54,8 @@ struct BrowserContentContainer<Content: View>: View {
             .padding(.bottom, isCompleteFullscreen ? 0 : browserContentInset)
             .animation(AnimationSettings.easeOut(0.15), value: appState.isFullscreen)
             .animation(AnimationSettings.easeOut(0.15), value: isToolbarRowUp)
-            .shadow(color: .black.opacity(0.15), radius: isCompleteFullscreen ? 0 : cornerRadius, x: 0, y: 2)
+            // No lifting shadow: the pane is flat against the chrome, the 8pt inset is
+            // the only separation it needs.
             .ignoresSafeArea(.all)
     }
 }

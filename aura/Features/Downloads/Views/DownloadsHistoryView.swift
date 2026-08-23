@@ -61,12 +61,12 @@ struct DownloadsHistoryView: View {
                     .padding(.vertical, 4)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.interactive(cornerRadius: 6))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .onHover { isClearHovered = $0 }
                 .animation(AnimationSettings.easeOut(0.1), value: isClearHovered)
             }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 10)
         .frame(height: 38)
     }
 
@@ -98,11 +98,11 @@ struct DownloadsHistoryView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
             }
-            .buttonStyle(.interactive(cornerRadius: 6))
+            .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 10)
         .padding(.vertical, 16)
     }
 
@@ -111,8 +111,12 @@ struct DownloadsHistoryView: View {
     @ViewBuilder
     private var content: some View {
         let filteredActive = filteredDownloads(from: downloadManager.activeDownloads)
+        // Waiting rows sit in the Active section, so the history list has to skip them
+        // too or a queued download shows up twice.
         let filteredHistory = filteredDownloads(
-            from: downloadManager.recentDownloads.filter { $0.status != .downloading }
+            from: downloadManager.recentDownloads.filter {
+                $0.status != .downloading && $0.status != .pending
+            }
         )
         let groupedHistory = groupByDate(filteredHistory)
 
@@ -124,7 +128,7 @@ struct DownloadsHistoryView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if !filteredActive.isEmpty {
-                        sectionHeader("Active")
+                        sectionHeader(activeSectionLabel)
                         ForEach(filteredActive) { download in
                             DownloadHistoryRow(download: download)
                         }
@@ -148,42 +152,20 @@ struct DownloadsHistoryView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Spacer()
-
-            Image(systemName: "arrow.down.circle")
-                .font(.system(size: 36, weight: .light))
-                .foregroundColor(theme.mutedForeground)
-
-            Text("No Downloads")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(theme.foreground)
-
-            Text("Files you download will appear here")
-                .font(.system(size: 12))
-                .foregroundColor(theme.mutedForeground)
-                .multilineTextAlignment(.center)
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .padding(24)
+        SidebarPanelEmptyState(
+            symbol: "arrow.down.circle",
+            title: "No downloads",
+            subtitle: "Files you download will appear here"
+        )
     }
 
     // MARK: - No Results State
 
     private var noResultsState: some View {
-        VStack(spacing: 8) {
-            Spacer()
-            Text("No results for \u{201C}\(searchText)\u{201D}")
-                .font(.system(size: 13))
-                .foregroundColor(theme.mutedForeground)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .padding(24)
+        SidebarPanelEmptyState(
+            symbol: "magnifyingglass",
+            title: "No results for \u{201C}\(searchText)\u{201D}"
+        )
     }
 
     // MARK: - Helpers
@@ -259,6 +241,13 @@ struct DownloadsHistoryView: View {
             .padding(.horizontal, 6)
             .padding(.top, 10)
             .padding(.bottom, 4)
+    }
+
+    /// The one place in the chrome with room for the aggregate speed and ETA in words.
+    /// The 28pt downloads button carries the same number as a ring and a tooltip.
+    private var activeSectionLabel: String {
+        let summary = downloadManager.throughput.summary
+        return summary.isEmpty ? "Active" : "Active \u{00B7} \(summary)"
     }
 
     private var hasNonActiveDownloads: Bool {

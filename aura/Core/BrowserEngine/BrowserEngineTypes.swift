@@ -29,8 +29,13 @@ struct BrowserOpenPanelOptions {
     let allowsMultipleSelection: Bool
 }
 
+/// What a page asked for. Media capture is the whole list because it is the whole list
+/// WebKit routes through `WKUIDelegate`: geolocation and web notifications have no
+/// public hook, so a page asking for those is answered by WebKit itself.
 enum BrowserPermissionKind {
-    case mediaCapture
+    case camera
+    case microphone
+    case cameraAndMicrophone
 }
 
 enum BrowserPermissionDecision {
@@ -42,10 +47,25 @@ enum BrowserPermissionDecision {
 struct BrowserNavigationAction {
     let request: URLRequest
     let modifierFlags: NSEvent.ModifierFlags
+    /// Which mouse button started the navigation: 0 is the left one, 2 the middle one.
+    var buttonNumber = 0
     /// A nil target frame means a brand-new frame or window, which counts as main frame.
     var isMainFrame = true
     /// True for a link click or a form submission, as opposed to a redirect or a reload.
     var isUserInitiated = false
+}
+
+/// Where a clicked link should land. Middle button or command opens a tab behind the
+/// current one; holding shift as well brings that tab forward, as Safari and Chrome do.
+enum LinkOpenIntent {
+    case sameTab
+    case background
+    case foreground
+
+    static func from(buttonNumber: Int, modifiers: NSEvent.ModifierFlags) -> LinkOpenIntent {
+        guard buttonNumber == 2 || modifiers.contains(.command) else { return .sameTab }
+        return modifiers.contains(.shift) ? .foreground : .background
+    }
 }
 
 enum BrowserNavigationActionDisposition {

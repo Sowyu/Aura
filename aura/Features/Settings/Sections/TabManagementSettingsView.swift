@@ -1,7 +1,12 @@
 import SwiftUI
 
 /// How long tabs stay live, how many may be live at once, and where new ones land.
-struct TabManagementSettingsView: View {
+///
+/// Not a page of its own any more. "Tab Management" and "Tabs and Browsing" sat next to
+/// each other in the sidebar with no line between what belonged in which, so these cards
+/// are now the tab half of `BrowsingSettingsView`. Every setting and defaults key is
+/// unchanged.
+struct TabManagementSettingsGroup: View {
     @Bindable private var settings = SettingsStore.shared
 
     private static let timeouts: [(label: String, seconds: TimeInterval)] = [
@@ -14,7 +19,7 @@ struct TabManagementSettingsView: View {
     ]
 
     var body: some View {
-        SettingsSection {
+        VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
             SettingsCard(
                 header: "Keeping tabs live",
                 description: "A hibernated tab keeps its row, title and scroll position, "

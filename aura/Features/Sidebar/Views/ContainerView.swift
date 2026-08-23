@@ -14,6 +14,7 @@ struct ContainerView: View {
     @Environment(TabManager.self) private var tabManager
     @EnvironmentObject var privacyMode: PrivacyMode
     @Environment(ToastManager.self) private var toastManager
+    @Environment(\.theme) private var theme
 
     @State var isDragging = false
     @ObservedObject private var dragSession = TabDragSession.shared
@@ -40,29 +41,25 @@ struct ContainerView: View {
                     )
                 }
             } else {
-                VStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .center, spacing: 2) {
                     Text("Private Browsing")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.foreground)
 
                     Text("Your activity is not being saved")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.mutedForeground)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.1))
-                )
-                .padding(.horizontal)
+                .padding(8)
+                .background(theme.mutedBackground, in: .rect(cornerRadius: AuraRadius.row))
             }
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     // An empty pinned section is pure clutter, so it only exists
-                    // while a tab is being dragged.
+                    // while a tab is being dragged. Not animated: the run loop is in
+                    // drag-tracking mode and SwiftUI would freeze on the first frame.
                     if !privacyMode.isPrivate, !pinnedTabs.isEmpty || dragSession.isDragging {
                         PinnedTabsList(
                             tabs: pinnedTabs,
@@ -75,7 +72,6 @@ struct ContainerView: View {
                             onMoveToContainer: moveTab,
                             containers: containers
                         )
-                        .transition(.opacity)
                         Divider()
                     }
                     NormalTabsList(
@@ -93,7 +89,6 @@ struct ContainerView: View {
                         containers: containers
                     )
                 }
-                .animation(AnimationSettings.easeOut(0.12), value: dragSession.isDragging)
                 .adaptiveScrollElasticity()
             }
         }

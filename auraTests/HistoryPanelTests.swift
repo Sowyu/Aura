@@ -200,4 +200,90 @@ struct HistoryPanelTests {
         let monthCutoff = try #require(HistoryRange.month.cutoff(from: now, calendar: calendar))
         #expect(calendar.component(.day, from: monthCutoff) == 1)
     }
+
+    // MARK: - Recording
+
+    /// The page script reports on every `<title>` mutation. Two reports for the same URL
+    /// are one visit, with the newer title winning.
+    @Test func titleOnlyChangeDoesNotCountAsASecondVisit() throws {
+        let (manager, space) = try makeManager()
+        let url = try #require(URL(string: "https://example.com/live"))
+        var gate = HistoryVisitGate()
+
+        for title in ["Loading", "Loaded (3 new)"] {
+            manager.record(
+                title: title,
+                url: url,
+                container: space,
+                countsAsVisit: gate.countsAsVisit(url)
+            )
+        }
+
+        let rows = manager.recent(limit: 10, in: space.id)
+        #expect(rows.count == 1)
+        #expect(rows.first?.visitCount == 1)
+        #expect(rows.first?.title == "Loaded (3 new)")
+    }
+
+    /// A real navigation away and back is still two visits.
+    @Test func navigatingAwayAndBackCountsTwoVisits() throws {
+        let (manager, space) = try makeManager()
+        let first = try #require(URL(string: "https://example.com/a"))
+        let second = try #require(URL(string: "https://example.com/b"))
+        var gate = HistoryVisitGate()
+
+        for url in [first, second, first] {
+            manager.record(title: "Page", url: url, container: space, countsAsVisit: gate.countsAsVisit(url))
+        }
+
+        let visits = Dictionary(
+            uniqueKeysWithValues: manager.recent(limit: 10, in: space.id).map { ($0.urlString, $0.visitCount) }
+        )
+        #expect(visits[first.absoluteString] == 2)
+        #expect(visits[second.absoluteString] == 1)
+    }
+
+    /// A repeat visit used to keep the row's first-ever title and favicon forever.
+    @Test func repeatVisitRefreshesTitleAndFavicon() throws {
+        let (manager, space) = try makeManager()
+        let url = try #require(URL(string: "https://example.com/renamed"))
+        let icon = try #require(URL(string: "https://example.com/favicon.ico"))
+
+        manager.record(title: "Old title", url: url, container: space)
+        manager.record(title: "New title", url: url, faviconURL: icon, container: space)
+
+        let row = try #require(manager.recent(limit: 10, in: space.id).first)
+        #expect(row.visitCount == 2)
+        #expect(row.title == "New title")
+        #expect(row.faviconURL == icon)
+
+        // An empty title from a page that has not set one yet must not blank the row.
+        manager.record(title: "", url: url, container: space)
+        #expect(try #require(manager.recent(limit: 10, in: space.id).first).title == "New title")
+    }
+
+    /// The page URL is not a favicon. Storing it made every reader fetch the HTML as an image.
+    @Test func visitWithNoFaviconStoresNil() throws {
+        let (manager, space) = try makeManager()
+        let url = try #require(URL(string: "https://example.com/no-icon"))
+
+        manager.record(title: "No icon", url: url, container: space)
+
+        #expect(manager.recent(limit: 10, in: space.id).first?.faviconURL == nil)
+    }
+}
+
+
+@Suite("History visit gate")
+struct HistoryVisitGateTests {
+    @Test("A title tick with nothing new is no work at all")
+    func titleTickWithNoChangeIsSkipped() {
+        var gate = HistoryVisitGate()
+        let url = URL(string: "https://mail.example.com/inbox")!
+        #expect(gate.change(url: url, title: "Inbox", favicon: nil) == .visit)
+        #expect(gate.change(url: url, title: "Inbox", favicon: nil) == .none)
+        #expect(gate.change(url: url, title: "(1) Inbox", favicon: nil) == .details)
+        #expect(gate.change(url: url, title: "(1) Inbox", favicon: nil) == .none)
+        #expect(gate.change(url: URL(string: "https://example.com")!, title: "(1) Inbox", favicon: nil) == .visit)
+    }
 }

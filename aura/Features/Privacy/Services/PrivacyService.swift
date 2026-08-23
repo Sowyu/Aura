@@ -20,8 +20,11 @@ class PrivacyService {
         }
     }
 
+    /// Stores belong to browsing containers now, not spaces. A space's data is the data of
+    /// the container it defaults to, or the shared store when it has none.
     private static func profile(for container: TabContainer) -> BrowserEngineProfile {
-        BrowserEngine.shared.makeProfile(identifier: container.id, isPrivate: false)
+        let identifier = container.defaultBrowsingContainer?.storeIdentifier ?? BrowserEngine.defaultStoreIdentifier
+        return BrowserEngine.shared.makeProfile(identifier: identifier, isPrivate: false)
     }
 
     private static func clearData(

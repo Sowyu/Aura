@@ -61,3 +61,30 @@ enum SpaceMenuItems {
         ]
     }
 }
+
+/// Browsing-container rows: "No Container" plus one row per container, each marked with
+/// its own colour. Shared by the tab menus and the space header so all three read the
+/// same, and kept beside the space rows rather than in a file of its own.
+@MainActor
+enum ContainerMenuItems {
+    static func choices(
+        current: BrowsingContainer?,
+        containers: [BrowsingContainer],
+        select: @escaping (BrowsingContainer?) -> Void
+    ) -> [AuraMenuItem] {
+        [
+            .item(
+                "No Container",
+                icon: "circle.dashed",
+                state: current == nil ? .checked : .none
+            ) { select(nil) }
+        ] + containers.map { container in
+            .item(
+                container.name,
+                icon: "circle.fill",
+                iconColorHex: container.colorHex,
+                state: container.id == current?.id ? .checked : .none
+            ) { select(container) }
+        }
+    }
+}

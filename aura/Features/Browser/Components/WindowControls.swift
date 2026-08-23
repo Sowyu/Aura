@@ -11,7 +11,7 @@ struct WindowControls: View {
 
     var body: some View {
         if !isFullscreen {
-            HStack(spacing: 9) {
+            HStack(spacing: 6) {
                 WindowControlButton(type: .close, isHovered: $isHovered)
                 WindowControlButton(type: .minimize, isHovered: $isHovered)
                 WindowControlButton(type: .zoom, isHovered: $isHovered)

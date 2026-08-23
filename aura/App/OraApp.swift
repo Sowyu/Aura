@@ -7,6 +7,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Disable automatic window tabbing for all NSWindow instances
         NSWindow.allowsAutomaticWindowTabbing = false
+        // Reading it is what drops this run's marker, so it happens whether or not a
+        // launch policy gets as far as asking whether the last run crashed. Never before
+        // `LegacyDataMigrator`, which refuses to move the old data folder into a support
+        // folder that already has files in it, and the marker is a file.
+        _ = TabManager.previousRunCrashed
         AppearanceManager.shared.updateAppearance()
         StartupProfiler.mark("didFinishLaunching")
         #if DEBUG
@@ -43,6 +48,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
+    /// The quit half of the crash marker, and the last chance to write down where every
+    /// live tab had got to. Both are cheap and synchronous: this method is the only
+    /// notice the app gets, and nothing scheduled from it would run.
+    func applicationWillTerminate(_ notification: Notification) {
+        TabManager.captureLiveSessions()
+        SessionMarker.shared.endSession()
+    }
+
     static func isBrowserWindow(_ window: NSWindow) -> Bool {
         guard let identifier = window.identifier?.rawValue else { return false }
         return identifier.hasPrefix("normal") || identifier.hasPrefix("private")
@@ -63,6 +76,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func handleIncomingURLs(_ urls: [URL]) {
+        // Finder, the dock and the open panel all arrive here, and each of them hands the
+        // sandbox a read grant that dies with this process. Writing the grants down at the
+        // one place every outside-the-app open passes through is what lets the file tray
+        // reopen the same file after a relaunch.
+        let files = urls.filter(\.isFileURL)
+        if !files.isEmpty {
+            MainActor.assumeIsolated { FileOpenService.shared.rememberGrants(for: files) }
+        }
+
         if SettingsStore.shared.externalLinkTarget == .newWindow {
             for url in urls {
                 DispatchQueue.main.async { WindowFactory.openWindow(with: url) }
@@ -78,16 +100,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
-}
-
-func deleteSwiftDataStore(_ loc: String) {
-    let fileManager = FileManager.default
-    let storeURL = URL.applicationSupportDirectory.appending(path: loc)
-    let shmURL = storeURL.appendingPathExtension("-shm")
-    let walURL = storeURL.appendingPathExtension("-wal")
-    try? fileManager.removeItem(at: storeURL)
-    try? fileManager.removeItem(at: shmURL)
-    try? fileManager.removeItem(at: walURL)
 }
 
 @Observable

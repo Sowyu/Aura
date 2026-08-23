@@ -114,6 +114,25 @@ struct BrowserPageTests {
         #expect(opener == "yes", "window.opener was severed, so the popup cannot talk back")
     }
 
+    // MARK: - Link clicks
+
+    /// Middle-clicking or command-clicking a link has to leave the current page where it
+    /// is. The bug this pins down was the command path opening the tab and then returning
+    /// `.openInNewTab`, which had the page open a second tab on the same URL, in front.
+    @Test
+    func middleAndCommandClickOpenLinksBehindThePage() {
+        #expect(LinkOpenIntent.from(buttonNumber: 0, modifiers: []) == .sameTab)
+        #expect(LinkOpenIntent.from(buttonNumber: 2, modifiers: []) == .background)
+        #expect(LinkOpenIntent.from(buttonNumber: 0, modifiers: .command) == .background)
+        // Shift on top of either is the "and take me there" variant.
+        #expect(LinkOpenIntent.from(buttonNumber: 2, modifiers: .shift) == .foreground)
+        #expect(LinkOpenIntent.from(buttonNumber: 0, modifiers: [.command, .shift]) == .foreground)
+        // Shift on its own is a new window in other browsers, never a background tab.
+        #expect(LinkOpenIntent.from(buttonNumber: 0, modifiers: .shift) == .sameTab)
+        // The back and forward thumb buttons are not link clicks.
+        #expect(LinkOpenIntent.from(buttonNumber: 3, modifiers: []) == .sameTab)
+    }
+
     // MARK: - Helpers
 
     @MainActor
@@ -224,5 +243,37 @@ private final class PopupAdoptingDelegate: BrowserPageDelegate {
             window = hosting
             return true
         }
+    }
+}
+
+/// The two decisions behind the chrome colour: what is rendered, and whether it is
+/// rendered at all. Both are pure, so neither needs a web view.
+struct HeaderColorSnapshotTests {
+    @Test func theSnapshotIsTheWholeViewAtThumbnailWidthNeverARect() {
+        let config = HeaderColorSnapshot.configuration(for: CGSize(width: 1440, height: 900))
+        // A rect-scoped snapshot flashes the page; the strip is cropped from the bitmap.
+        #expect(config.rect == nil)
+        #expect(config.snapshotWidth == 32)
+        #expect(config.afterScreenUpdates)
+    }
+
+    @Test func theStripIsCutFromTheScaledBitmap() {
+        // 1440x900 view scaled to 32x20: 24pt of 900 is 2.67% of 20px, rounded up to 1px.
+        let strip = HeaderColorSnapshot.stripRect(imageSize: CGSize(width: 32, height: 20), viewSize: CGSize(width: 1440, height: 900))
+        #expect(strip == CGRect(x: 0, y: 0, width: 32, height: 1))
+        // A view shorter than the strip uses the whole bitmap.
+        let whole = HeaderColorSnapshot.stripRect(imageSize: CGSize(width: 32, height: 2), viewSize: CGSize(width: 300, height: 10))
+        #expect(whole == CGRect(x: 0, y: 0, width: 32, height: 2))
+        // Before layout the height is unknown; the whole bitmap stands in.
+        let unlaidOut = HeaderColorSnapshot.stripRect(imageSize: CGSize(width: 32, height: 20), viewSize: CGSize(width: 300, height: 0))
+        #expect(unlaidOut.height == 20)
+    }
+
+    @Test func onlyTheVisibleTabInTheKeyWindowForcesARender() {
+        #expect(HeaderColorSnapshot.shouldSnapshot(windowIsKey: true, isVisibleTab: true))
+        // A background tab has no window, and a background window is behind something.
+        #expect(!HeaderColorSnapshot.shouldSnapshot(windowIsKey: true, isVisibleTab: false))
+        #expect(!HeaderColorSnapshot.shouldSnapshot(windowIsKey: false, isVisibleTab: true))
+        #expect(!HeaderColorSnapshot.shouldSnapshot(windowIsKey: false, isVisibleTab: false))
     }
 }

@@ -23,6 +23,8 @@ struct ClosedTabSnapshot {
     let folderID: UUID?
     let backgroundColorHex: String
     let isPrivate: Bool
+    /// Cookie jar the tab browsed in, so reopening does not sign it out.
+    let browsingContainerID: UUID?
 
     init(tab: Tab) {
         id = tab.id
@@ -39,6 +41,7 @@ struct ClosedTabSnapshot {
         folderID = tab.folder?.id
         backgroundColorHex = tab.backgroundColorHex
         isPrivate = tab.isPrivate
+        browsingContainerID = tab.browsingContainer?.id
     }
 }
 
@@ -75,8 +78,15 @@ extension TabManager {
 
         modelContext.insert(restoredTab)
         container.tabs.append(restoredTab)
+        // A container deleted since the tab was closed just means it comes back
+        // uncontained, on the shared default store.
+        restoredTab.browsingContainer = snapshot.browsingContainerID
+            .flatMap { id in
+                let descriptor = FetchDescriptor<BrowsingContainer>(predicate: #Predicate { $0.id == id })
+                return try? modelContext.fetch(descriptor).first
+            } ?? container.defaultBrowsingContainer
         activateTab(restoredTab)
-        try? modelContext.save()
+        saveOrLog(modelContext)
     }
 
     func trackRecentlyClosedTab(_ tab: Tab) {

@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Spell checking, and the languages Aura tells websites it reads.
 struct LanguagesSettingsView: View {
+    @Environment(\.theme) private var theme
     @Bindable private var settings = SettingsStore.shared
 
     var body: some View {
@@ -31,12 +32,12 @@ struct LanguagesSettingsView: View {
                 HStack {
                     Text("\(index + 1).")
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.mutedForeground)
                     Text(Locale.current.localizedString(forIdentifier: identifier) ?? identifier)
                     Spacer()
                     Text(identifier)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.mutedForeground)
                 }
             }
 

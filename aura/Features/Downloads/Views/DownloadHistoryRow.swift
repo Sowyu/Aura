@@ -5,9 +5,13 @@ import UniformTypeIdentifiers
 struct DownloadHistoryRow: View {
     let download: Download
     @Environment(DownloadManager.self) private var downloadManager
+    @Environment(TabManager.self) private var tabManager
     @Environment(\.theme) private var theme
     @State private var isHovered = false
     @State private var menuAnchor: NSView?
+    /// Resolved once the row appears, not per redraw: answering it reads an extended
+    /// attribute off the disk, and the row redraws with every progress tick around it.
+    @State private var openAction: DownloadOpenAction?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -56,16 +60,25 @@ struct DownloadHistoryRow: View {
                 if download.status == .downloading {
                     progressBar
                 }
+
+                if let hint = quarantineHint {
+                    Text(hint)
+                        .font(.system(size: 10))
+                        .foregroundColor(theme.warning)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
-            if isHovered {
-                moreMenuButton
-            }
+            // Always laid out, so hovering toggles opacity only: the file name never shifts.
+            moreMenuButton
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 6)
         .background(
-            ConditionallyConcentricRectangle(cornerRadius: 12)
+            ConditionallyConcentricRectangle(cornerRadius: AuraRadius.row)
                 .fill(isHovered ? theme.mutedBackground.opacity(0.5) : .clear)
         )
         .contentShape(Rectangle())
@@ -74,21 +87,20 @@ struct DownloadHistoryRow: View {
                 isHovered = hovering
             }
         }
-        .onTapGesture {
-            if download.status == .completed {
-                downloadManager.openFile(download)
-            }
-        }
+        .onTapGesture(perform: activate)
         .auraContextMenu { downloadMenuItems }
+        .onAppear(perform: resolveOpenAction)
+        .onChange(of: download.status) { _, _ in resolveOpenAction() }
     }
 
     // MARK: - Subviews
 
+    /// The same 16pt slot a history row gives a favicon, so the two panels line up.
     private var fileIconView: some View {
-        Image(nsImage: nativeFileIcon)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: 32, height: 32)
+        Image(systemName: fileSymbol)
+            .font(.system(size: 13))
+            .foregroundColor(theme.mutedForeground)
+            .frame(width: 16, height: 16)
     }
 
     private var progressBar: some View {
@@ -117,7 +129,7 @@ struct DownloadHistoryRow: View {
                 .foregroundColor(.secondary)
                 .frame(width: 20, height: 20)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
         .background(AuraMenuAnchorView { menuAnchor = $0 })
         .fixedSize()
     }
@@ -125,9 +137,7 @@ struct DownloadHistoryRow: View {
     private var downloadMenuItems: [AuraMenuItem] {
         Array {
             if download.status == .completed {
-                AuraMenuItem.item("Open", icon: "arrow.up.doc") {
-                    downloadManager.openFile(download)
-                }
+                AuraMenuItem.item("Open", icon: "arrow.up.doc", action: activate)
                 AuraMenuItem.item("Show in Finder", icon: "folder") {
                     downloadManager.openDownloadInFinder(download)
                 }
@@ -143,17 +153,24 @@ struct DownloadHistoryRow: View {
                     }
                 }
             }
-            if download.status == .downloading {
+            if isInFlight {
                 AuraMenuItem.item("Cancel Download", icon: "xmark.circle", isDestructive: true) {
                     downloadManager.cancelDownload(download)
                 }
             }
             if download.status == .failed || download.status == .cancelled {
-                AuraMenuItem.item("Retry Download", icon: "arrow.clockwise") {
-                    downloadManager.retryDownload(download)
+                switch retryAction {
+                case .resume:
+                    AuraMenuItem.item("Resume Download", icon: "play.circle") {
+                        downloadManager.resumeDownload(download, using: tabManager.activeTab?.browserPage)
+                    }
+                case .retry:
+                    AuraMenuItem.item("Retry Download", icon: "arrow.clockwise") {
+                        downloadManager.retryDownload(download)
+                    }
                 }
             }
-            if download.status != .downloading {
+            if !isInFlight {
                 AuraMenuItem.separator
                 AuraMenuItem.item("Remove from Aura", icon: "minus.circle") {
                     withAnimation(AnimationSettings.easeOut(0.15)) {
@@ -164,7 +181,55 @@ struct DownloadHistoryRow: View {
         }
     }
 
+    // MARK: - Actions
+
+    /// Clicking the row, and the Open menu item, answer to the same rule the auto-open
+    /// after a finished download uses. An archive Aura would not open for you is not one
+    /// it opens because you clicked it.
+    private func activate() {
+        guard download.status == .completed else { return }
+        switch openAction ?? .open {
+        case .open:
+            downloadManager.openFile(download)
+        case let .reveal(reason):
+            downloadManager.revealDownload(download, explaining: reason)
+        }
+    }
+
+    private func resolveOpenAction() {
+        guard download.status == .completed, let url = download.destinationURL else {
+            openAction = nil
+            return
+        }
+        openAction = DownloadManager.openAction(
+            fileExtension: url.pathExtension,
+            isQuarantined: DownloadManager.isQuarantined(url)
+        )
+    }
+
     // MARK: - Computed Properties
+
+    /// Downloading and waiting for a slot are both "in flight": the row offers Cancel
+    /// and withholds Remove for either.
+    private var isInFlight: Bool {
+        download.status == .downloading || download.status == .pending
+    }
+
+    private var retryAction: DownloadRetryAction {
+        DownloadManager.retryAction(
+            hasResumeData: downloadManager.canResume(download),
+            hasPage: tabManager.activeTab?.browserPage != nil,
+            hasDestination: download.destinationURL != nil
+        )
+    }
+
+    /// Only shown where it changes what the reader should do: a stamped installer or
+    /// archive is the case where Finder is the way through Gatekeeper. A stamped PDF
+    /// opens on its own and needs no advice.
+    private var quarantineHint: String? {
+        guard case let .reveal(reason) = openAction, reason == .quarantined else { return nil }
+        return reason.explanation
+    }
 
     /// Only the leading `www.` comes off. Replacing every occurrence turned hosts like
     /// `newww.example.com` into `neexample.com`.
@@ -173,26 +238,27 @@ struct DownloadHistoryRow: View {
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
-    /// Returns the native macOS file icon for this download, matching what Finder shows.
-    private var nativeFileIcon: NSImage {
-        if let url = download.destinationURL,
-           FileManager.default.fileExists(atPath: url.path)
-        {
-            return NSWorkspace.shared.icon(forFile: url.path)
-        }
+    /// A symbol for the file's broad kind. Finder's own icon is a full-colour 32pt asset
+    /// and reads as a foreign object next to the panel's flat 16pt glyphs.
+    private var fileSymbol: String {
         let ext = (download.fileName as NSString).pathExtension
-        if !ext.isEmpty, let utType = UTType(filenameExtension: ext) {
-            return NSWorkspace.shared.icon(for: utType)
-        }
-        return NSWorkspace.shared.icon(for: .data)
+        guard !ext.isEmpty, let type = UTType(filenameExtension: ext) else { return "doc" }
+        if type.conforms(to: .image) { return "photo" }
+        if type.conforms(to: .movie) { return "film" }
+        if type.conforms(to: .audio) { return "music.note" }
+        if type.conforms(to: .pdf) { return "doc.richtext" }
+        if type.conforms(to: .archive) { return "doc.zipper" }
+        if type.conforms(to: .application) { return "app" }
+        if type.conforms(to: .text) { return "doc.text" }
+        return "doc"
     }
 
     private var statusColor: Color {
         switch download.status {
         case .downloading: return theme.accent
-        case .failed: return .red
-        case .cancelled: return .orange
-        default: return .secondary
+        case .failed: return theme.destructive
+        case .cancelled: return theme.warning
+        default: return theme.mutedForeground
         }
     }
 
@@ -210,8 +276,10 @@ struct DownloadHistoryRow: View {
             return "Failed"
         case .cancelled:
             return "Cancelled"
-        default:
-            return "Pending"
+        case .pending:
+            // No progress bar for these: a bar stuck at zero reads as broken rather
+            // than as a download that has not been given a slot yet.
+            return "Waiting"
         }
     }
 

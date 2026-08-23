@@ -83,6 +83,7 @@ struct SidebarURLDisplay: View {
                         .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.interactive(cornerRadius: 6))
+                .accessibilityLabel(Text("Copy URL"))
                 .onHover { hovering in
                     isHoveringCopy = hovering
                 }
@@ -92,7 +93,7 @@ struct SidebarURLDisplay: View {
                     .font(.system(size: 12))
                     .foregroundColor(theme.mutedForeground)
 
-                Text("Search or enter URL")
+                Text("Search or enter address")
                     .font(.system(size: 14))
                     .foregroundColor(theme.mutedForeground)
                 Spacer(minLength: 0)
@@ -103,6 +104,8 @@ struct SidebarURLDisplay: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .contentShape(Rectangle())
         .onTapGesture { openLauncher() }
+        .accessibilityLabel(Text("Search or enter address"))
+        .accessibilityAddTraits(.isButton)
         .onHover { hovering in
             isHovering = hovering
         }
@@ -115,6 +118,8 @@ struct SidebarURLDisplay: View {
                 .oraShortcut(KeyboardShortcuts.Address.focus)
                 .opacity(0)
                 .allowsHitTesting(false)
+                // Unlabelled and unclickable: it exists only to own ⌘L.
+                .accessibilityHidden(true)
                 .disabled(
                     !toolbarManager.isToolbarHidden || sidebarManager.sidebarPosition != .primary
                 )

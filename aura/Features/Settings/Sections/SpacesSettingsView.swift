@@ -3,6 +3,7 @@ import SwiftUI
 
 // swiftlint:disable type_body_length large_tuple
 struct SpacesSettingsView: View {
+    @Environment(\.theme) private var theme
     /// Creation order, so the paged space switcher lands on the same space every time.
     /// Unsorted, SwiftData returns store order, which can change after a save.
     @Query(sort: [SortDescriptor(\TabContainer.createdAt)]) var containers: [TabContainer]
@@ -16,6 +17,7 @@ struct SpacesSettingsView: View {
     @AppStorage("a11y.alwaysShowScrollBars") private var alwaysShowScrollBars = false
     @Environment(HistoryManager.self) private var historyManager
     @Environment(ToastManager.self) private var toastManager
+    @Environment(ContainerManager.self) private var containerManager
 
     private var selectedContainer: TabContainer? {
         containers.first { $0.id == selectedContainerId } ?? containers.first
@@ -44,7 +46,7 @@ struct SpacesSettingsView: View {
                         SettingsCard(header: "Defaults") {
                             Grid(alignment: .leading, verticalSpacing: 12) {
                                 GridRow {
-                                    Text("Search Engine")
+                                    Text("Search engine")
                                         .frame(width: 140, alignment: .leading)
                                     Picker(
                                         "",
@@ -70,7 +72,7 @@ struct SpacesSettingsView: View {
                                 }
 
                                 GridRow {
-                                    Text("AI Chat")
+                                    Text("AI chat")
                                         .frame(width: 140, alignment: .leading)
                                     Picker(
                                         "",
@@ -96,7 +98,36 @@ struct SpacesSettingsView: View {
                                 }
 
                                 GridRow {
-                                    Text("Auto Clear Tabs")
+                                    Text("Default container")
+                                        .frame(width: 140, alignment: .leading)
+                                    // The only binding between a space and a container.
+                                    // New tabs in this space open in whatever is picked.
+                                    Picker(
+                                        "",
+                                        selection: Binding(
+                                            get: { container.defaultBrowsingContainer?.id },
+                                            set: { newID in
+                                                containerManager.setDefault(
+                                                    containerManager.containers
+                                                        .first { $0.id == newID },
+                                                    for: container
+                                                )
+                                            }
+                                        )
+                                    ) {
+                                        Text("None").tag(nil as UUID?)
+                                        Divider()
+                                        ForEach(containerManager.containers, id: \.id) { browsing in
+                                            Text(browsing.name).tag(Optional(browsing.id))
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .labelsHidden()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+
+                                GridRow {
+                                    Text("Auto clear tabs")
                                         .frame(width: 140, alignment: .leading)
                                     Picker(
                                         "",
@@ -123,12 +154,12 @@ struct SpacesSettingsView: View {
 
                     } else {
                         Text("No spaces found")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.mutedForeground)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(SettingsMetrics.pagePadding)
+                .padding(SettingsMetrics.gutter)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .scrollIndicators(alwaysShowScrollBars ? .visible : .automatic)
@@ -144,7 +175,7 @@ struct SpacesSettingsView: View {
     /// disable themselves for the rest of the session, so a second clear was impossible
     /// without closing Settings.
     private func clearDataCard(for container: TabContainer) -> some View {
-        SettingsCard(header: "Clear Data") {
+        SettingsCard(header: "Clear data") {
             VStack(spacing: 8) {
                 clearButton("Clear Cache") {
                     PrivacyService.clearCache(container) {
@@ -179,11 +210,11 @@ struct SpacesSettingsView: View {
     /// Sites pinned to this space by "Always open … in this space".
     private func siteRulesCard(for container: TabContainer) -> some View {
         let rules = siteRules.sortedRules.filter { $0.containerID == container.id }
-        return SettingsCard(header: "Site Rules") {
+        return SettingsCard(header: "Site rules") {
             VStack(alignment: .leading, spacing: 6) {
                 if rules.isEmpty {
                     Text("No site rules for this space yet.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.mutedForeground)
                 } else {
                     ForEach(rules) { rule in
                         HStack {
@@ -207,8 +238,8 @@ struct SpacesSettingsView: View {
         SettingsCard(header: "Privacy") {
             Text("These protections apply only to \(container.name). "
                 + "Open tabs in this space are refreshed automatically.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11))
+                .foregroundStyle(theme.mutedForeground)
 
             Toggle(
                 "Block third-party trackers",
@@ -221,8 +252,8 @@ struct SpacesSettingsView: View {
 
             Text("Reduces the browser and device fingerprint this space shows. "
                 + "It does not block cookies or other storage on its own.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11))
+                .foregroundStyle(theme.mutedForeground)
 
             Divider()
 

@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Where downloaded files go and what happens once they arrive.
 struct DownloadsSettingsView: View {
+    @Environment(\.theme) private var theme
     @Bindable private var settings = SettingsStore.shared
     @State private var folderPath = ""
 
@@ -11,7 +12,7 @@ struct DownloadsSettingsView: View {
             SettingsCard(header: "Save files to") {
                 HStack(spacing: 12) {
                     Image(systemName: "folder")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.mutedForeground)
                     Text(folderPath.isEmpty ? defaultFolderPath : folderPath)
                         .lineLimit(1)
                         .truncationMode(.middle)

@@ -70,3 +70,23 @@ final class BrowserDownloadTask: NSObject, WKDownloadDelegate {
         onFail?(error, resumeData)
     }
 }
+
+extension BrowserDownloadTask {
+    /// Picks a failed transfer up from the blob WebKit handed back with the failure.
+    ///
+    /// The page is not navigated. `resumeDownload(fromResumeData:)` is a `WKWebView`
+    /// method because the view is what names the network session, the cookies and the
+    /// space's data store the transfer started with, so resuming through the tab the
+    /// user is looking at is what keeps an authenticated download authenticated.
+    @MainActor
+    static func resume(
+        from resumeData: Data,
+        in page: BrowserPage,
+        originalURL: URL,
+        completion: @escaping (BrowserDownloadTask) -> Void
+    ) {
+        page.auraWebView.resumeDownload(fromResumeData: resumeData) { download in
+            completion(BrowserDownloadTask(download: download, originalURL: originalURL))
+        }
+    }
+}

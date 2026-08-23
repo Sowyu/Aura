@@ -25,6 +25,81 @@ struct WebBundleTests {
         #expect(FileManager.default.fileExists(atPath: bundleURL.path))
         #expect(bundleURL.path.hasPrefix(Bundle.main.bundlePath))
     }
+
+    /// The whole blocking path rests on four transcribed private symbols and on
+    /// pages being hosted in the Development WebContent service. This is the
+    /// round trip that says all of it still works on the running OS build.
+    @Test(.enabled(if: WebBundleTests.isEnabled))
+    @MainActor
+    func theBundleAnswersTheStartupProbe() async {
+        guard AuraWebBundle.isEnabled else { return }
+        #expect(await AuraWebBundle.probe(timeout: 5), "the injected bundle never answered")
+        #expect(SettingsStore.shared.requestBlockingUnavailable == false)
+    }
+
+    /// The visual stage, end to end on whatever macOS is running: load the fixture on
+    /// the bundle pool, snapshot it twice, reach a verdict.
+    ///
+    /// It asserts only that the probe reaches one and comes back, because every verdict
+    /// is a legitimate answer here: `.blank` means this OS build really does purge the
+    /// layers, `.painted` means it does not, and `.inconclusive` means an offscreen
+    /// window is not enough to reproduce either on this build. Which one it is is what
+    /// gets read off the log by hand each OS beta; the reducers behind it are pinned by
+    /// `FullUBlockOriginTests`.
+    @Test(.enabled(if: WebBundleTests.isEnabled))
+    @MainActor
+    func thePaintProbeReachesAVerdict() async throws {
+        let pool = try #require(AuraWebBundle.processPool)
+        let verdict = await AuraWebBundle.PaintProbe.run(pool: pool, settle: 2)
+        // swiftlint:disable:next no_print_statements
+        print("PAINT PROBE verdict=\(verdict)")
+        #expect([.painted, .blank, .inconclusive].contains(verdict))
+    }
+}
+
+/// The health check behind item 7: when the private-API stack half-breaks, the
+/// symptom used to be stalled loads and silently muted extensions with nothing
+/// in the interface to say so.
+@Suite(.serialized)
+struct WebBundleHealthTests {
+    /// A failed probe takes blocking off for the session and leaves the stored
+    /// preference alone: the next OS build may well fix the stack, and a setting
+    /// the app turned off behind the user's back never turns itself back on.
+    @Test
+    @MainActor
+    func aFailedProbeTakesBlockingOffForThisSessionOnly() {
+        let store = SettingsStore.shared
+        let previousFlag = store.requestBlockingUnavailable
+        let previousSetting = store.extensionRequestBlocking
+        defer {
+            store.requestBlockingUnavailable = previousFlag
+            store.extensionRequestBlocking = previousSetting
+        }
+
+        store.requestBlockingUnavailable = false
+        store.extensionRequestBlocking = true
+        AuraWebBundle.markUnavailable("probe timed out in a test")
+
+        #expect(store.requestBlockingUnavailable)
+        #expect(store.extensionRequestBlocking, "the stored preference is the user's, not the probe's")
+        #expect(AuraWebBundle.isEnabled == false, "no further page may be put on the injected-bundle pool")
+    }
+
+    /// The probe answers on the bundle's own traffic: anything the bundle says,
+    /// including the active-flag pull every page creation makes, proves the
+    /// channel works end to end.
+    @Test
+    @MainActor
+    func anyMessageFromTheBundleCountsAsProofOfLife() {
+        let store = SettingsStore.shared
+        let previousFlag = store.requestBlockingUnavailable
+        defer { store.requestBlockingUnavailable = previousFlag }
+        store.requestBlockingUnavailable = false
+
+        AuraWebBundle.noteBundleReplied()
+        #expect(AuraWebBundle.didHearFromBundle)
+        #expect(store.requestBlockingUnavailable == false)
+    }
 }
 
 /// What an extension is told a request is. The classifier is shared verbatim

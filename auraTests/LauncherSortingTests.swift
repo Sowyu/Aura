@@ -191,4 +191,56 @@ struct LauncherSortingTests {
         #expect(LauncherScoring.longestCommonPrefixRange(of: "panda", in: "red panda") == 4 ..< 9)
         #expect(LauncherScoring.longestCommonPrefixRange(of: "anda", in: "red panda") == nil)
     }
+
+    /// The local half of a keystroke (a bounded history fetch plus a scan of every open
+    /// tab) used to run on the main thread for every character typed.
+    @Test("The first keystroke after a pause searches now, a burst waits out the window")
+    func localSearchDebouncePolicy() {
+        let now = Date()
+
+        // Nothing has run yet, so the first character gets its list straight away.
+        #expect(LauncherViewModel.runsLocalSearchNow(lastRunAt: nil, now: now))
+        // Typing fast: the run is deferred and the pending one replaced.
+        #expect(!LauncherViewModel.runsLocalSearchNow(lastRunAt: now.addingTimeInterval(-0.01), now: now))
+        #expect(!LauncherViewModel.runsLocalSearchNow(lastRunAt: now.addingTimeInterval(-0.039), now: now))
+        // A pause longer than the window counts as idle again.
+        #expect(LauncherViewModel.runsLocalSearchNow(lastRunAt: now.addingTimeInterval(-0.05), now: now))
+        #expect(LauncherViewModel.runsLocalSearchNow(lastRunAt: now.addingTimeInterval(-5), now: now))
+
+        #expect(LauncherViewModel.localSearchDebounce == 0.04)
+    }
+
+    /// The launcher and the address bar hand the same string to `createSearchURL`.
+    /// `.urlQueryAllowed` passes &, + and # straight through, which used to split one
+    /// search into several query parameters and drop everything after the "#".
+    @Test("A search query keeps &, + and # inside one query parameter")
+    func searchQueryEncodingSurvivesPunctuation() throws {
+        let service = SearchEngineService()
+        let engine = try #require(service.getSearchEngine(byName: "Google"))
+        let raw = "c++ tutorials & more #1"
+
+        let url = try #require(service.createSearchURL(for: engine, query: raw))
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+
+        // Nothing leaked into a fragment, and the query is still one "q" parameter.
+        #expect(components.fragment == nil)
+        let item = try #require(components.queryItems?.first { $0.name == "q" })
+        #expect(item.value == raw)
+
+        let encoded = try #require(components.percentEncodedQuery?
+            .components(separatedBy: "q=").last)
+        #expect(!encoded.contains("+"))
+        #expect(!encoded.contains("&"))
+        #expect(!encoded.contains("#"))
+
+        // Same rule for the suggestions endpoint.
+        let suggestions = try #require(service.createSuggestionsURL(
+            urlString: "https://example.com/complete?q={query}", query: raw
+        ))
+        let suggestionQuery = try #require(
+            URLComponents(url: suggestions, resolvingAgainstBaseURL: false)?.queryItems?
+                .first { $0.name == "q" }
+        )
+        #expect(suggestionQuery.value == raw)
+    }
 }

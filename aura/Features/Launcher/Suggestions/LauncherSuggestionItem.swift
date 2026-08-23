@@ -58,6 +58,11 @@ struct LauncherSuggestionItem: View {
             Image(suggestionIcon)
                 .resizable()
                 .frame(width: 14, height: 14)
+        } else if suggestion.type == .command {
+            Image(systemName: "command")
+                .resizable()
+                .frame(width: 14, height: 14)
+                .foregroundStyle(isFocused ? theme.foreground : .secondary)
         } else if suggestion.faviconURL != nil {
             FavIcon(
                 isWebViewReady: true,
@@ -86,7 +91,13 @@ struct LauncherSuggestionItem: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(theme.foreground.opacity(0.07))
-            .clipShape(ConditionallyConcentricRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(ConditionallyConcentricRectangle(cornerRadius: AuraRadius.button, style: .continuous))
+        } else if suggestion.type == .command, let chord = suggestion.name {
+            // Just the chord, in the menu's own shortcut style: the row's title already
+            // says what it does, and a command with no binding shows nothing here.
+            Text(chord)
+                .font(.system(size: 12))
+                .foregroundStyle(isFocused ? theme.foreground.opacity(0.6) : .secondary)
         } else if suggestion.type == .openedTab {
             HStack(alignment: .center, spacing: 8) {
                 Text("Switch to tab ")
@@ -100,7 +111,7 @@ struct LauncherSuggestionItem: View {
                     .frame(width: 12, height: 12)
                     .padding(6)
                     .background(
-                        ConditionallyConcentricRectangle(cornerRadius: 8, style: .continuous)
+                        ConditionallyConcentricRectangle(cornerRadius: AuraRadius.button, style: .continuous)
                             .fill(
                                 isFocused
                                     ? theme.foreground : theme.foreground.opacity(0.07)
@@ -110,7 +121,7 @@ struct LauncherSuggestionItem: View {
                         isFocused ? theme.background : .secondary
                     )
             }
-            .clipShape(ConditionallyConcentricRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(ConditionallyConcentricRectangle(cornerRadius: AuraRadius.button, style: .continuous))
         }
     }
 
@@ -141,7 +152,7 @@ struct LauncherSuggestionItem: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(backgroundColor)
-        .clipShape(ConditionallyConcentricRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(ConditionallyConcentricRectangle(cornerRadius: AuraRadius.button, style: .continuous))
         .onTapGesture {
             suggestion.action()
             DispatchQueue.main.async {

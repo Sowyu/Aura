@@ -102,11 +102,13 @@ static AuraBlockDecision AuraExtensionDecision(
     WKBundleFrameRef frame,
     uint64_t resourceIdentifier,
     WKURLRequestRef request,
+    NSURLRequest *bridged,
     NSURL *url,
     uint32_t typeMask,
     BOOL isMainFrame,
     BOOL isMainDocument,
-    NSURL *__autoreleasing *outURL)
+    NSURL *__autoreleasing *outURL,
+    NSDictionary *__autoreleasing *outVerdict)
 {
     NSString *method = CFBridgingRelease(WKURLRequestCopyHTTPMethod(request)) ?: @"GET";
     // Frames have no id in the injected-bundle API. The frame pointer is stable
@@ -131,7 +133,21 @@ static AuraBlockDecision AuraExtensionDecision(
         if (!isMainDocument) { ask[@"documentUrl"] = pageURL; }
     }
 
+    // Only when some listener is on onBeforeSendHeaders. Chrome's shape: an array of
+    // {name, value}, in the order the request carries them.
+    if (AuraWebRequestChannelWantsRequestHeaders() && bridged) {
+        NSDictionary<NSString *, NSString *> *fields = bridged.allHTTPHeaderFields;
+        if (fields.count > 0) {
+            NSMutableArray *headers = [NSMutableArray arrayWithCapacity:fields.count];
+            for (NSString *name in fields) {
+                [headers addObject:@{ @"name": name, @"value": fields[name] ?: @"" }];
+            }
+            ask[@"requestHeaders"] = headers;
+        }
+    }
+
     NSDictionary *verdict = AuraWebRequestChannelDecide(ask);
+    if (outVerdict) { *outVerdict = verdict; }
     if ([verdict[@"cancel"] boolValue]) { return AuraBlockDecisionBlock; }
     NSString *redirect = verdict[@"redirectUrl"];
     if ([redirect isKindOfClass:NSString.class] && redirect.length > 0) {
@@ -144,24 +160,75 @@ static AuraBlockDecision AuraExtensionDecision(
     return AuraBlockDecisionAllow;
 }
 
-/// Best available resource type for a request. The C resource-load client
-/// carries none and offers no header accessor, so the request is bridged to
-/// NSURLRequest once and two headers are read off it.
+/// The request as Foundation sees it. The C resource-load client offers no header
+/// accessor, so this bridge is the only way to read (or, with the reverse call,
+/// write) headers. Done once per request and passed around: it is a copy, and the
+/// type sniffing and the header patch both need it.
+static NSURLRequest *AuraBridgedRequest(WKURLRequestRef request)
+{
+    if (!request) { return nil; }
+    id object = CFBridgingRelease(WKURLRequestCopyNSURLRequest(request));
+    return [object isKindOfClass:NSURLRequest.class] ? object : nil;
+}
+
+/// Best available resource type for a request. The C resource-load client carries
+/// none, so two headers off the bridged request answer it.
 ///
 /// `Sec-Fetch-Dest` names the kind outright and is preferred. `Accept` is the
 /// fallback: it separates documents, images and stylesheets cleanly and says
 /// nothing about the rest, which is what the URL's extension is for.
-static uint32_t AuraRequestTypeMask(WKURLRequestRef request, NSURL *url, BOOL isMainFrame)
+static uint32_t AuraRequestTypeMask(NSURLRequest *bridged, NSURL *url, BOOL isMainFrame)
 {
-    NSURLRequest *bridged = nil;
-    if (request) {
-        id object = CFBridgingRelease(WKURLRequestCopyNSURLRequest(request));
-        if ([object isKindOfClass:NSURLRequest.class]) { bridged = object; }
-    }
     const uint32_t fromDestination =
         AuraResourceTypeForFetchDestination([bridged valueForHTTPHeaderField:@"Sec-Fetch-Dest"]);
     if (fromDestination != 0) { return fromDestination; }
     return AuraResourceTypeMaskForURL(url, [bridged valueForHTTPHeaderField:@"Accept"], isMainFrame);
+}
+
+/// True for the methods that carry a body. A request whose body did not survive the
+/// bridge must not be rebuilt from it, and this is how that is recognised.
+static BOOL AuraMethodCarriesBody(NSString *method)
+{
+    NSString *upper = method.uppercaseString ?: @"GET";
+    return [upper isEqualToString:@"POST"] || [upper isEqualToString:@"PUT"]
+        || [upper isEqualToString:@"PATCH"];
+}
+
+/// A copy of `bridged` with the extension's header changes applied, or NULL when
+/// there is nothing to change or the change cannot be made safely.
+///
+/// The C request has no header setter, so the only route is bridge out, mutate,
+/// bridge back. What that cannot do is put back a body the bridge dropped, so a
+/// body-carrying request that arrives here without one is left exactly as it was:
+/// a POST sent with its body missing is worse than an unmodified header.
+static WKURLRequestRef AuraCreateRequestWithHeaders(NSURLRequest *bridged, NSDictionary *verdict)
+{
+    NSDictionary *setHeaders = verdict[@"setHeaders"];
+    NSArray *removeHeaders = verdict[@"removeHeaders"];
+    const BOOL hasSet = [setHeaders isKindOfClass:NSDictionary.class] && setHeaders.count > 0;
+    const BOOL hasRemove = [removeHeaders isKindOfClass:NSArray.class] && removeHeaders.count > 0;
+    if (!bridged || (!hasSet && !hasRemove)) { return NULL; }
+    if (!bridged.HTTPBody && !bridged.HTTPBodyStream && AuraMethodCarriesBody(bridged.HTTPMethod)) {
+        os_log_debug(AuraBundleLog(), "header patch skipped: %{public}@ body did not survive the bridge",
+                     bridged.HTTPMethod);
+        return NULL;
+    }
+
+    NSMutableURLRequest *patched = [bridged mutableCopy];
+    if (hasRemove) {
+        for (NSString *name in removeHeaders) {
+            if ([name isKindOfClass:NSString.class]) { [patched setValue:nil forHTTPHeaderField:name]; }
+        }
+    }
+    if (hasSet) {
+        for (NSString *name in setHeaders) {
+            NSString *value = setHeaders[name];
+            if ([name isKindOfClass:NSString.class] && [value isKindOfClass:NSString.class]) {
+                [patched setValue:value forHTTPHeaderField:name];
+            }
+        }
+    }
+    return WKURLRequestCreateWithNSURLRequest((__bridge CFTypeRef)patched);
 }
 
 /// True when `url` is the document `frame` is navigating to rather than a
@@ -234,15 +301,18 @@ static WKURLRequestRef AuraWillSendRequestForFrame(
             // so it is deliberately generous.
             const BOOL isDocument = AuraIsFrameDocumentRequest(frame, url)
                 || (isMainFrame && AuraIsMainDocumentIdentifier(page, resourceIdentifier));
-            uint32_t typeMask = AuraRequestTypeMask(request, url, isMainFrame);
+            NSURLRequest *bridged = AuraBridgedRequest(request);
+            uint32_t typeMask = AuraRequestTypeMask(bridged, url, isMainFrame);
             if (isDocument) {
                 typeMask = isMainFrame ? AuraResourceTypeDocument : AuraResourceTypeSubdocument;
             }
             const BOOL isMainDocument = isMainFrame
                 && (isDocument || typeMask == AuraResourceTypeDocument);
             NSURL *replacement = nil;
-            AuraBlockDecision decision = AuraExtensionDecision(page, frame, resourceIdentifier, request, url,
-                                                              typeMask, isMainFrame, isMainDocument, &replacement);
+            NSDictionary *verdict = nil;
+            AuraBlockDecision decision = AuraExtensionDecision(page, frame, resourceIdentifier, request, bridged,
+                                                              url, typeMask, isMainFrame, isMainDocument,
+                                                              &replacement, &verdict);
             // Extensions may cancel subresources and subframes, never the top
             // document: WebKit reports a blanked main resource as a failed
             // navigation and the tab goes blank. A navigation the UI process
@@ -274,6 +344,16 @@ static WKURLRequestRef AuraWillSendRequestForFrame(
                     os_log_debug(AuraBundleLog(), "redirect id=%llu url=%{private}@ -> %{private}@",
                                  resourceIdentifier, url, replacement);
                     return rewritten;
+                }
+            }
+            // onBeforeSendHeaders. Only on an allow: a cancelled request sends nothing
+            // and a redirect leaves with a request built from the new URL alone.
+            if (decision == AuraBlockDecisionAllow) {
+                WKURLRequestRef patched = AuraCreateRequestWithHeaders(bridged, verdict);
+                if (patched) {
+                    os_log_debug(AuraBundleLog(), "headers patched id=%llu url=%{private}@",
+                                 resourceIdentifier, url);
+                    return patched;
                 }
             }
         }

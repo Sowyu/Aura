@@ -36,6 +36,48 @@ struct WindowAccessor: NSViewRepresentable {
         /// Origins AppKit gave the window buttons before we moved them.
         var defaultOrigins: [NSWindow.ButtonType: NSPoint] = [:]
 
+        /// Where the buttons belong right now. AppKit re-lays the titlebar out on
+        /// window moves, activation and the end of a live resize, and every one of
+        /// those puts the buttons back on its own 32pt midline. Setting the origin
+        /// once is not enough, so every drift is corrected from `frameObservers`.
+        var desiredOrigins: [NSWindow.ButtonType: NSPoint] = [:]
+        var frameObservers: [Any] = []
+        private var hasPendingPass = false
+
+        /// Straight away, then once more on the next turn of the run loop. AppKit
+        /// finishes moving the other two buttons after the first one's notification
+        /// reaches us, so a purely synchronous pass leaves the last button behind.
+        func applyDesiredOrigins(to buttons: [(NSWindow.ButtonType, NSButton)]) {
+            setOrigins(on: buttons)
+            guard !hasPendingPass else { return }
+            hasPendingPass = true
+            DispatchQueue.main.async { [weak self] in
+                self?.hasPendingPass = false
+                self?.setOrigins(on: buttons)
+            }
+        }
+
+        private func setOrigins(on buttons: [(NSWindow.ButtonType, NSButton)]) {
+            for (type, button) in buttons {
+                guard let origin = desiredOrigins[type], button.frame.origin != origin else { continue }
+                button.setFrameOrigin(origin)
+            }
+        }
+
+        func observeFrames(of buttons: [(NSWindow.ButtonType, NSButton)]) {
+            guard frameObservers.isEmpty else { return }
+            frameObservers = buttons.map { _, button in
+                button.postsFrameChangedNotifications = true
+                return NotificationCenter.default.addObserver(
+                    forName: NSView.frameDidChangeNotification,
+                    object: button,
+                    queue: nil
+                ) { [weak self] _ in
+                    self?.applyDesiredOrigins(to: buttons)
+                }
+            }
+        }
+
         /// `invalidateShadow` on every SwiftUI update flickers the window edge, so the
         /// glass setting is only pushed at the window when it actually moved.
         var appliedGlass: Bool?
@@ -105,9 +147,10 @@ struct WindowAccessor: NSViewRepresentable {
     }
 
     func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        for observer in coordinator.observers {
+        for observer in coordinator.observers + coordinator.frameObservers {
             NotificationCenter.default.removeObserver(observer)
         }
+        coordinator.frameObservers = []
     }
 
     private func applyGlass(to window: NSWindow, coordinator: Coordinator) {
@@ -133,26 +176,28 @@ struct WindowAccessor: NSViewRepresentable {
             coordinator.defaultOrigins[type] = button.frame.origin
         }
 
+        coordinator.observeFrames(of: buttons)
+
         guard showInToolbar else {
-            for (type, button) in buttons {
-                if let origin = coordinator.defaultOrigins[type] {
-                    button.setFrameOrigin(origin)
-                }
-            }
+            coordinator.desiredOrigins = coordinator.defaultOrigins
+            coordinator.applyDesiredOrigins(to: buttons)
             return
         }
 
         guard let containerHeight = buttons.first?.1.superview?.bounds.height else { return }
-        // The titlebar container's top edge lines up with the top of the toolbar
-        // row, and AppKit coordinates run upward from its bottom. The container is
-        // usually shorter than the toolbar row, so the origin goes negative; that is
+        // The titlebar view's top edge lines up with the top of the toolbar row, and
+        // AppKit coordinates run upward from its bottom. Measured on macOS 26: the
+        // view is 32pt and the buttons are 14pt, so AppKit's own placement centres
+        // them 16pt from the top of the window while the row's midline is at 19pt.
+        // The view is shorter than the row, so the origin can go negative; that is
         // correct, and NSView does not clip its subviews by default.
         let rowCenterY = containerHeight - Self.toolbarHeight / 2
         for (index, entry) in buttons.enumerated() {
             let size = entry.1.frame.size
             let originY = (rowCenterY - size.height / 2).rounded()
             let originX = Self.trafficLightLeading + CGFloat(index) * Self.trafficLightSpacing
-            entry.1.setFrameOrigin(NSPoint(x: originX, y: originY))
+            coordinator.desiredOrigins[entry.0] = NSPoint(x: originX, y: originY)
         }
+        coordinator.applyDesiredOrigins(to: buttons)
     }
 }

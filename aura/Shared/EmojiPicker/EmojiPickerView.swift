@@ -62,7 +62,7 @@ struct EmojiGridView: View {
             .font(.system(size: size))
             .frame(width: 32, height: 32)
             .background(hoveredEmoji == emoji ? theme.mutedBackground : Color.clear)
-            .cornerRadius(6)
+            .cornerRadius(AuraRadius.button)
             .contentShape(Rectangle())
             .onHover { hoveredEmoji = $0 ? emoji : nil }
     }
@@ -72,16 +72,22 @@ struct EmojiGridView: View {
 struct SearchBar: View {
     @Binding var text: String
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         HStack {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(.gray)
+                .foregroundColor(theme.mutedForeground)
             TextField("Search", text: $text)
                 .textFieldStyle(PlainTextFieldStyle())
                 .frame(maxWidth: .infinity)
         }
         .padding(8)
-        .background(Color.gray.opacity(0.2))
-        .cornerRadius(8)
+        .background(theme.mutedBackground)
+        .cornerRadius(AuraRadius.row)
+        .overlay(
+            RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                .stroke(theme.border, lineWidth: 1)
+        )
     }
 }

@@ -13,7 +13,7 @@ struct TopToolbar: View {
     /// Empty space the row leaves above and below its controls. Views placed under
     /// the row subtract it so the visible gap matches the window's other insets.
     static var verticalSlack: CGFloat { (rowHeight - contentHeight) / 2 }
-    private static let buttonSize: CGFloat = 28
+    static let buttonSize: CGFloat = 28
     /// Between two buttons that read as one control.
     private static let pairSpacing: CGFloat = 2
     /// Between button groups.
@@ -35,9 +35,13 @@ struct TopToolbar: View {
     @EnvironmentObject private var privacyMode: PrivacyMode
 
     @State private var historyAnchor: NSView?
+    /// Where the back/forward history menus hang from.
+    @State private var backAnchor: NSView?
+    @State private var forwardAnchor: NSView?
 
+    /// Plain: `URLBarButton` does the one muting for every icon in the row.
     private var buttonForegroundColor: Color {
-        theme.foreground.opacity(0.7)
+        theme.foreground
     }
 
     private var sidebarIcon: String {
@@ -106,26 +110,50 @@ struct TopToolbar: View {
 
     private var navigationGroup: some View {
         HStack(spacing: Self.pairSpacing) {
-            toolbarButton(
-                "chevron.left",
-                isEnabled: tabManager.activeTab?.canGoBack ?? false,
-                action: { tabManager.activeTab?.goBack() }
-            )
-            .oraShortcutHelp("Go Back", for: KeyboardShortcuts.Navigation.back)
+            navigationButton(.back, forward: false)
+                .oraShortcutHelp("Go Back", for: KeyboardShortcuts.Navigation.back)
 
-            toolbarButton(
-                "chevron.right",
-                isEnabled: tabManager.activeTab?.canGoForward ?? false,
-                action: { tabManager.activeTab?.goForward() }
-            )
-            .oraShortcutHelp("Go Forward", for: KeyboardShortcuts.Navigation.forward)
+            navigationButton(.forward, forward: true)
+                .oraShortcutHelp("Go Forward", for: KeyboardShortcuts.Navigation.forward)
         }
+    }
+
+    /// Back or forward, with the tab's own history list on right-click and press-and-hold,
+    /// the way both buttons behave in every other browser.
+    private func navigationButton(_ icon: ToolbarIcon, forward: Bool) -> some View {
+        URLBarButton(
+            icon: icon,
+            isEnabled: forward
+                ? (tabManager.activeTab?.canGoForward ?? false)
+                : (tabManager.activeTab?.canGoBack ?? false),
+            foregroundColor: buttonForegroundColor,
+            size: Self.buttonSize,
+            action: {
+                if forward {
+                    tabManager.activeTab?.goForward()
+                } else {
+                    tabManager.activeTab?.goBack()
+                }
+            },
+            longPressAction: {
+                let anchor = forward ? forwardAnchor : backAnchor
+                anchor?.presentAuraMenu(navigationHistoryItems(forward: forward))
+            }
+        )
+        .background(AuraMenuAnchorView { view in
+            if forward {
+                forwardAnchor = view
+            } else {
+                backAnchor = view
+            }
+        })
+        .auraContextMenu { navigationHistoryItems(forward: forward) }
     }
 
     private var historyGroup: some View {
         HStack(spacing: Self.groupSpacing) {
             toolbarButton(
-                "arrow.clockwise",
+                .reload,
                 isEnabled: tabManager.activeTab != nil,
                 action: { tabManager.activeTab?.reload() }
             )
@@ -134,8 +162,9 @@ struct TopToolbar: View {
             HStack(spacing: Self.pairSpacing) {
                 historyMenu
 
-                toolbarButton("house", isEnabled: tabManager.activeTab != nil, action: goHome)
+                toolbarButton(.home, isEnabled: tabManager.activeTab != nil, action: goHome)
                     .help("Home")
+                    .accessibilityLabel(Text("Home"))
             }
         }
     }
@@ -186,22 +215,76 @@ struct TopToolbar: View {
         )
     }
 
+    private func toolbarButton(
+        _ icon: ToolbarIcon,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        URLBarButton(
+            icon: icon,
+            isEnabled: isEnabled,
+            foregroundColor: buttonForegroundColor,
+            size: Self.buttonSize,
+            action: action
+        )
+    }
+
+    // MARK: - Back/forward history
+
+    /// The list a history menu is drawn from: WebKit's own while the tab has a web view,
+    /// and the copy saved with the session once it does not. A hibernated tab and a tab
+    /// restored at launch both still have a history worth showing.
+    private func navigationHistory(for tab: Tab) -> TabHistorySnapshot {
+        if let page = tab.browserPage {
+            return page.historySnapshot
+        }
+        let saved = tabManager.sessionStore.session(for: tab.id)?.historyEntries
+        return TabHistorySnapshot.decoded(from: saved) ?? TabHistorySnapshot()
+    }
+
+    /// Empty when there is nothing that way, which `AuraMenuController` renders as no
+    /// menu at all rather than an empty panel.
+    private func navigationHistoryItems(forward: Bool) -> [AuraMenuItem] {
+        guard let tab = tabManager.activeTab else { return [] }
+        let snapshot = navigationHistory(for: tab)
+        // Nearest page first, so the one step the button itself takes sits closest to
+        // the pointer.
+        let rows = NavigationHistoryMenu.rows(from: forward ? snapshot.forward : snapshot.back)
+        return rows.map { row in
+            .item(row.title) { travel(to: row, forward: forward, in: tab) }
+        }
+    }
+
+    /// Goes to one page of the list. Through WebKit while the tab is live, because it
+    /// restores that entry's scroll position and form state; re-loading the address is
+    /// all a tab without a web view can offer.
+    private func travel(to row: NavigationHistoryRow, forward: Bool, in tab: Tab) {
+        if let page = tab.browserPage,
+           let item = page.backForwardItem(atOffset: forward ? row.steps : -row.steps)
+        {
+            page.go(to: item)
+            return
+        }
+        guard let url = row.url else { return }
+        tab.loadURL(url.absoluteString)
+    }
+
     // MARK: - History
 
     private var historyMenu: some View {
         Button {
             historyAnchor?.presentAuraMenu(historyItems())
         } label: {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(buttonForegroundColor.opacity(0.85))
+            ToolbarIconView(icon: .history)
+                .foregroundColor(buttonForegroundColor.opacity(URLBarButton.enabledOpacity))
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.interactive(cornerRadius: 6, tint: buttonForegroundColor))
+        .buttonStyle(.interactive(cornerRadius: URLBarButton.cornerRadius, tint: buttonForegroundColor))
         .background(AuraMenuAnchorView { historyAnchor = $0 })
         .frame(width: Self.buttonSize, height: Self.buttonSize)
         .help("Recent History")
+        .accessibilityLabel(Text("Recent History"))
     }
 
     private func historyItems() -> [AuraMenuItem] {
@@ -270,6 +353,7 @@ private struct ExtensionIconButton: View {
     let foregroundColor: Color
 
     private let extensionManager = ExtensionManager.shared
+    @Environment(\.theme) private var theme
     @State private var anchor: NSView?
 
     private static let iconSize = CGSize(width: 16, height: 16)
@@ -280,10 +364,13 @@ private struct ExtensionIconButton: View {
             extensionManager.performAction(extensionID: item.id, anchor: anchor)
         } label: {
             icon
-                .frame(width: 28, height: 28)
+                // The one muting the rest of the row carries, applied to the extension's
+                // own artwork as well as the fallback glyph.
+                .opacity(URLBarButton.enabledOpacity)
+                .frame(width: TopToolbar.buttonSize, height: TopToolbar.buttonSize)
                 .overlay(alignment: .topTrailing) { badge }
         }
-        .buttonStyle(.interactive(cornerRadius: 6, tint: foregroundColor))
+        .buttonStyle(.interactive(cornerRadius: URLBarButton.cornerRadius, tint: foregroundColor))
         .background(ExtensionActionAnchor { anchor = $0 })
         .help(item.displayName)
         .accessibilityLabel(Text(item.displayName))
@@ -311,7 +398,7 @@ private struct ExtensionIconButton: View {
                 .frame(width: Self.iconSize.width, height: Self.iconSize.height)
         } else {
             Image(systemName: "puzzlepiece.extension")
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: URLBarButton.iconSize, weight: URLBarButton.iconWeight))
                 .foregroundColor(foregroundColor)
         }
     }
@@ -323,7 +410,7 @@ private struct ExtensionIconButton: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 3)
                 .padding(.vertical, 0.5)
-                .background(Capsule().fill(Color.accentColor))
+                .background(Capsule().fill(theme.accent))
                 .fixedSize()
                 .offset(x: 4, y: -2)
         }

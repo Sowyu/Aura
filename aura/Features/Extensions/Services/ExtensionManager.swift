@@ -9,6 +9,9 @@ struct InstalledExtension: Identifiable, Equatable {
     let id: String
     let directoryURL: URL
     var displayName: String
+    /// The manifest's own description, translated. Shown on the consent sheet, which
+    /// is where a user is deciding about an extension they may not know.
+    var displayDescription: String?
     var displayVersion: String?
     /// The manifest's gecko id, which is the same string AMO reports as a guid.
     /// Nil for extensions whose manifest declares none (Chrome-only ones).
@@ -16,6 +19,26 @@ struct InstalledExtension: Identifiable, Equatable {
     var isEnabled: Bool
     var icon: NSImage?
     var loadError: String?
+}
+
+/// The manifest fields the browser shows, already translated out of `_locales`.
+struct ParsedManifest {
+    var name: String?
+    var description: String?
+    var version: String?
+    var geckoID: String?
+}
+
+/// One extension as the background scan found it: the disk reads, the shim patch and
+/// the manifest parse are already done by the time this reaches the main actor.
+struct ScannedExtension: Sendable {
+    let id: String
+    let directoryURL: URL
+    let displayName: String?
+    let displayDescription: String?
+    let displayVersion: String?
+    let geckoID: String?
+    let loadError: String?
 }
 
 /// Weak handle on a toolbar button so a closed window's view can be released.
@@ -44,15 +67,23 @@ enum ExtensionInstallError: LocalizedError {
 /// Loads unpacked web extensions (a folder containing manifest.json) through
 /// WebKit's native web-extension support and exposes them to Settings.
 ///
-/// v1 scope: extensions run in normal windows only (never private), and every
-/// permission an extension requests is granted at install time. Toolbar
-/// actions, popups, and the tabs API bridge are follow-up work.
+/// Extensions run in every window. Private ones are hidden from them until the user
+/// grants "run in private windows" per extension, which is Firefox's rule. Installing
+/// grants every permission the manifest asks for, so nothing loads before
+/// `ExtensionConsent` confirms the user saw that list and agreed to it.
 @Observable
 @MainActor
 final class ExtensionManager {
     static let shared = ExtensionManager()
 
-    private(set) var installedExtensions: [InstalledExtension] = []
+    /// Internal setter rather than private: the extensions in the sibling files
+    /// (`+Loading`, `+Updates`) are this class and write rows through it.
+    var installedExtensions: [InstalledExtension] = []
+
+    /// Installs waiting on the user. `ExtensionConsentPrompt` puts the front one on
+    /// screen; until it is answered the extension sits on disk, unloaded. Internal
+    /// setter for the same reason as `installedExtensions`.
+    var pendingConsent: [ExtensionConsentRequest] = []
 
     /// Bumped whenever WebKit updates an action (icon, badge, enabled state) so
     /// the toolbar redraws. The values themselves are pulled on demand.
@@ -69,14 +100,38 @@ final class ExtensionManager {
     }
 
     private static let disabledIDsKey = "extensions.disabledIDs"
+    private static let consentGrandfatheredKey = "extensions.consent.grandfathered"
+    static let awaitingConsentNote = "Not loaded: waiting for you to review what it can do."
+
+    /// Ids whose update is downloading right now, so the row can say so. Stored here,
+    /// and internal rather than private, because `ExtensionManager+Updates` is an
+    /// extension: it can hold no state of its own and writes through this.
+    var updatingIDs: Set<String> = []
+
+    /// The local key-down monitor `ExtensionManager+Commands` installs, for the same
+    /// reason.
+    @ObservationIgnored var commandMonitor: Any?
+
+    /// One observer per loaded context, keyed by extension id. Internal because
+    /// `ExtensionManager+Loading` registers and drops them.
+    @ObservationIgnored var errorObservers: [String: NSObjectProtocol] = [:]
+
+    /// One surface shows a given consent request, not every open window: the store tab
+    /// and the settings section both watch the queue, and two copies of the same sheet
+    /// would let the user answer one and stare at the other.
+    @ObservationIgnored var presentingConsent: Set<String> = []
 
     @ObservationIgnored private var hasStarted = false
+    @ObservationIgnored private var hasScanned = false
+    @ObservationIgnored private var scanTask: Task<Void, Never>?
+    @ObservationIgnored var updateCheckTask: Task<Void, Never>?
     /// AnyObject storage because WKWebExtensionController's type is 15.4+;
     /// typed access goes through the `engine` accessor below.
     @ObservationIgnored private var engineStorage: AnyObject?
 
+    /// Internal rather than private: `ExtensionManager+Loading` loads through it.
     @available(macOS 15.4, *)
-    private var engine: ExtensionEngine {
+    var engine: ExtensionEngine {
         if let engine = engineStorage as? ExtensionEngine {
             return engine
         }
@@ -87,8 +142,9 @@ final class ExtensionManager {
 
     /// The engine only if something already built it. Lifecycle hooks use this so
     /// a profile with no extensions never spins up a `WKWebExtensionController`.
+    /// Not private: the tests read it to prove nothing built one behind them.
     @available(macOS 15.4, *)
-    private var loadedEngine: ExtensionEngine? {
+    var loadedEngine: ExtensionEngine? {
         engineStorage as? ExtensionEngine
     }
 
@@ -97,7 +153,9 @@ final class ExtensionManager {
         return base.appendingPathComponent("Aura/Extensions", isDirectory: true)
     }
 
-    private var disabledIDs: Set<String> {
+    /// Internal rather than private: `ExtensionManager+Loading` reads it while building
+    /// a row.
+    var disabledIDs: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: Self.disabledIDsKey) ?? []) }
         set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: Self.disabledIDsKey) }
     }
@@ -105,13 +163,49 @@ final class ExtensionManager {
     // MARK: - Wiring
 
     /// Called from BrowserPage while building its WKWebViewConfiguration.
+    ///
+    /// Private configurations get the controller as well. What keeps an extension out of
+    /// private browsing is `hasAccessToPrivateData` on its own context, not withholding
+    /// the controller from the web view: without the controller there, an extension the
+    /// user did allow into private windows could neither block nor inject there.
+    /// `isPrivate` stays in the signature because the caller knows it and a future
+    /// per-store decision belongs here rather than at the call site.
     func attach(to configuration: WKWebViewConfiguration, isPrivate: Bool) {
-        guard #available(macOS 15.4, *), !isPrivate else { return }
+        guard #available(macOS 15.4, *) else { return }
         configuration.webExtensionController = engine.controller
         start()
     }
 
+    // MARK: - Private windows
+
+    /// True when `id` may see private windows, tabs and cookies. Default off: an
+    /// extension is installed for normal browsing, and private browsing is a separate
+    /// decision the user makes once per extension.
+    func runsInPrivateWindows(_ id: String) -> Bool {
+        SettingsStore.shared.extensionPrivateWindowGrants.contains(id)
+    }
+
+    /// Grants or revokes private-window access. The live context is updated too, so the
+    /// change applies to the next page load rather than the next launch.
+    func setRunsInPrivateWindows(_ enabled: Bool, for id: String) {
+        var grants = SettingsStore.shared.extensionPrivateWindowGrants
+        if enabled {
+            grants.insert(id)
+        } else {
+            grants.remove(id)
+        }
+        SettingsStore.shared.extensionPrivateWindowGrants = grants
+        if #available(macOS 15.4, *) {
+            loadedEngine?.setPrivateAccess(enabled, for: id)
+        }
+    }
+
     /// Scans the extensions directory and loads every enabled extension.
+    ///
+    /// The scan runs off the main actor. `attach(to:)` calls this from the first
+    /// `BrowserPage.init`, and reading every extension folder, parsing its manifest
+    /// and rewriting it for the shim used to happen there, before the first page
+    /// could start loading. Only `engine.controller` is needed synchronously.
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
@@ -122,21 +216,102 @@ final class ExtensionManager {
             WebRequestBroker.prepare()
         }
 
-        BundledExtensions.installIfNeeded(into: extensionsDirectory)
+        let directory = extensionsDirectory
+        let patchesShim = AuraWebBundle.isEnabled
+        scanTask = Task { [weak self] in
+            let found = await Task.detached(priority: .utility) {
+                ExtensionManager.scan(directory: directory, patchesShim: patchesShim)
+            }.value
+            guard !Task.isCancelled else { return }
+            self?.adoptScan(found)
+        }
+    }
 
+    /// Installing needs the finished list to recognise a duplicate, so an install that
+    /// beats the background scan finishes the scan itself first. The work is idempotent:
+    /// whichever of the two lands first wins and the other is dropped.
+    private func finishScanNow() {
+        guard hasStarted, !hasScanned else { return }
+        scanTask?.cancel()
+        adoptScan(Self.scan(directory: extensionsDirectory, patchesShim: AuraWebBundle.isEnabled))
+    }
+
+    private func adoptScan(_ found: [ScannedExtension]) {
+        guard !hasScanned else { return }
+        hasScanned = true
+        scanTask = nil
+        grandfatherExistingConsent(found)
+        // Which of the two bundled blockers this launch runs, before the rows are built:
+        // `disabledIDs` is what decides whether `register` loads one of them at all.
+        BundledExtensions.applyBlockingPlan()
+        for entry in found { register(entry) }
+        checkForUpdates()
+    }
+
+    /// Extensions already on disk when the consent gate shipped were installed under the
+    /// old rule, where installing granted everything without asking. Prompting for them
+    /// at launch would ask about choices the user cannot remember making, so they are
+    /// recorded as consented once. Anything arriving after that goes through the sheet,
+    /// including a folder dropped straight into the profile.
+    private func grandfatherExistingConsent(_ found: [ScannedExtension]) {
+        guard !UserDefaults.standard.bool(forKey: Self.consentGrandfatheredKey) else { return }
+        UserDefaults.standard.set(true, forKey: Self.consentGrandfatheredKey)
+
+        var consent = SettingsStore.shared.extensionConsent
+        for entry in found where consent[entry.id] == nil {
+            let request = ExtensionConsentRequest(
+                id: entry.id,
+                displayName: entry.displayName ?? entry.id,
+                displayDescription: entry.displayDescription,
+                version: entry.displayVersion,
+                source: .folder(entry.directoryURL.lastPathComponent),
+                permissions: Self.requestedPermissions(at: entry.directoryURL)
+            )
+            consent[entry.id] = ExtensionConsent.record(for: request)
+        }
+        SettingsStore.shared.extensionConsent = consent
+    }
+
+    /// Everything that touches disk, off the main actor: the folder listing, the shim
+    /// patch and the manifest parse.
+    nonisolated static func scan(directory: URL, patchesShim: Bool) -> [ScannedExtension] {
         let fileManager = FileManager.default
-        try? fileManager.createDirectory(at: extensionsDirectory, withIntermediateDirectories: true)
-        let directories = (try? fileManager.contentsOfDirectory(
-            at: extensionsDirectory,
+        BundledExtensions.installIfNeeded(into: directory)
+        try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        let contents = (try? fileManager.contentsOfDirectory(
+            at: directory,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         )) ?? []
 
-        for directory in directories where (try? directory.resourceValues(
-            forKeys: [.isDirectoryKey]
-        ).isDirectory) == true {
-            registerExtension(at: directory)
+        return contents
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .map { prepare(at: $0, patchesShim: patchesShim) }
+    }
+
+    nonisolated static func prepare(at directory: URL, patchesShim: Bool) -> ScannedExtension {
+        // Before the manifest is read: patching rewrites it, and a shim version
+        // bump has to take effect on the next launch rather than the next
+        // install.
+        var shimError: String?
+        if patchesShim {
+            do {
+                try ExtensionShim.apply(at: directory)
+            } catch {
+                shimError = error.localizedDescription
+            }
         }
+
+        let manifest = Self.parseManifest(at: directory.appendingPathComponent("manifest.json"))
+        return ScannedExtension(
+            id: directory.lastPathComponent,
+            directoryURL: directory,
+            displayName: manifest.name,
+            displayDescription: manifest.description,
+            displayVersion: manifest.version,
+            geckoID: manifest.geckoID,
+            loadError: shimError ?? Self.compatibilityNote(at: directory)
+        )
     }
 
     // MARK: - Toolbar actions
@@ -147,19 +322,19 @@ final class ExtensionManager {
     func performAction(extensionID: String, anchor: NSView) {
         guard #available(macOS 15.4, *) else { return }
         actionAnchors[extensionID] = WeakAnchor(anchor)
-        engine.context(for: extensionID)?.performAction(for: currentTabAdapter())
+        engine.context(for: extensionID)?.performAction(for: currentTabAdapter(for: extensionID))
     }
 
     /// The action's current icon, which follows `browser.action.setIcon` and
     /// falls back to the manifest icon. Nil until the extension has loaded.
     func actionIcon(for extensionID: String, size: CGSize) -> NSImage? {
         guard #available(macOS 15.4, *), let context = loadedEngine?.context(for: extensionID) else { return nil }
-        return context.action(for: currentTabAdapter())?.icon(for: size)
+        return context.action(for: currentTabAdapter(for: extensionID))?.icon(for: size)
     }
 
     func actionBadgeText(for extensionID: String) -> String? {
         guard #available(macOS 15.4, *), let context = loadedEngine?.context(for: extensionID) else { return nil }
-        let text = context.action(for: currentTabAdapter())?.badgeText
+        let text = context.action(for: currentTabAdapter(for: extensionID))?.badgeText
         return (text?.isEmpty ?? true) ? nil : text
     }
 
@@ -175,41 +350,68 @@ final class ExtensionManager {
         return NSApp.keyWindow?.contentView
     }
 
+    /// The tab an action applies to, from this extension's point of view. An extension
+    /// with no private-window grant gets no tab at all in a private window rather than
+    /// the wrong one: its popup still opens, it just has nothing to read.
     @available(macOS 15.4, *)
-    private func currentTabAdapter() -> ExtensionTabAdapter? {
-        guard let tab = ExtensionWindowAdapter.focusedAdapter()?.tabManager?.activeTab, !tab.isPrivate else {
-            return nil
-        }
+    private func currentTabAdapter(for extensionID: String) -> ExtensionTabAdapter? {
+        guard let window = ExtensionWindowAdapter.focusedAdapter(),
+              let tab = window.tabManager?.activeTab,
+              ExtensionWindowAdapter.showsTabs(
+                  inPrivateWindow: window.isPrivateWindow,
+                  contextHasPrivateAccess: runsInPrivateWindows(extensionID)
+              )
+        else { return nil }
         return ExtensionTabAdapter.adapter(for: tab)
     }
 
     // MARK: - Window and tab lifecycle
 
-    /// Called once per non-private browser window as it appears.
-    func windowDidOpen(_ window: NSWindow, tabManager: TabManager) {
+    /// Called once per browser window as it appears, private ones included: an extension
+    /// with a private-window grant has to be told they exist, and WebKit hides them from
+    /// everything else.
+    func windowDidOpen(_ window: NSWindow, tabManager: TabManager, isPrivate: Bool = false) {
         guard #available(macOS 15.4, *) else { return }
         startWindowObservers()
-        let adapter = ExtensionWindowAdapter.adapter(for: window, tabManager: tabManager)
+        let adapter = ExtensionWindowAdapter.adapter(for: window, tabManager: tabManager, isPrivate: isPrivate)
         loadedEngine?.controller.didOpenWindow(adapter)
         if window.isKeyWindow {
             loadedEngine?.controller.didFocusWindow(adapter)
         }
     }
 
+    /// True when some extension has been let into private browsing.
+    ///
+    /// Nothing about a private tab is reported while this is false. WebKit works out a
+    /// tab's privacy from its web view's data store, and a private tab that has no web
+    /// view yet (hibernated, or sitting on an aura:// page) would look like an ordinary
+    /// one to every extension. The window it belongs to reports itself as private
+    /// either way, so a granted extension still finds it.
+    private var anyExtensionSeesPrivateTabs: Bool {
+        !SettingsStore.shared.extensionPrivateWindowGrants.isEmpty
+    }
+
+    private func reportsTab(_ tab: Tab) -> Bool {
+        !tab.isPrivate || anyExtensionSeesPrivateTabs
+    }
+
     func tabDidOpen(_ tab: Tab) {
-        guard #available(macOS 15.4, *), !tab.isPrivate, let engine = loadedEngine else { return }
+        guard #available(macOS 15.4, *), reportsTab(tab), let engine = loadedEngine else { return }
         engine.controller.didOpenTab(ExtensionTabAdapter.adapter(for: tab))
     }
 
+    /// Not gated on the private rule above: reporting a close only ever takes knowledge
+    /// away, and a tab that was reported while a grant existed has to be closed even if
+    /// the grant went away since.
     func tabDidClose(_ tab: Tab) {
-        guard #available(macOS 15.4, *), !tab.isPrivate,
+        guard #available(macOS 15.4, *),
               let adapter = ExtensionTabAdapter.discardAdapter(for: tab)
         else { return }
         loadedEngine?.controller.didCloseTab(adapter, windowIsClosing: false)
     }
 
     func tabDidActivate(_ tab: Tab, previous: Tab?) {
-        guard #available(macOS 15.4, *), !tab.isPrivate, let engine = loadedEngine else { return }
+        guard #available(macOS 15.4, *), reportsTab(tab), let engine = loadedEngine else { return }
         let adapter = ExtensionTabAdapter.adapter(for: tab)
         let previousAdapter = previous.flatMap { $0.id == tab.id ? nil : ExtensionTabAdapter.adapter(for: $0) }
         engine.controller.didActivateTab(adapter, previousActiveTab: previousAdapter)
@@ -219,7 +421,7 @@ final class ExtensionManager {
     /// One hook for url/title/loading, called from the single place navigation
     /// updates land (`TabBrowserPageDelegate`).
     func tabNavigationDidChange(_ tab: Tab) {
-        guard #available(macOS 15.4, *), !tab.isPrivate, let engine = loadedEngine else { return }
+        guard #available(macOS 15.4, *), reportsTab(tab), let engine = loadedEngine else { return }
         engine.controller.didChangeTabProperties(
             [.loading, .title, .URL],
             for: ExtensionTabAdapter.adapter(for: tab)
@@ -256,7 +458,11 @@ final class ExtensionManager {
     // MARK: - Install / remove / toggle
 
     /// Copies an unpacked extension folder into the extensions directory and loads it.
-    func installExtension(from sourceURL: URL) throws {
+    /// `source` is only what the consent sheet names as the origin of the files.
+    func installExtension(from sourceURL: URL, source: ExtensionInstallSource? = nil) throws {
+        start()
+        finishScanNow()
+
         let manifestURL = sourceURL.appendingPathComponent("manifest.json")
         guard FileManager.default.fileExists(atPath: manifestURL.path) else {
             throw ExtensionInstallError.missingManifest
@@ -276,12 +482,11 @@ final class ExtensionManager {
             throw ExtensionInstallError.alreadyInstalled(name)
         }
 
-        start()
         let id = Self.sanitizedID(from: name)
         let destination = extensionsDirectory.appendingPathComponent(id, isDirectory: true)
         try? FileManager.default.createDirectory(at: extensionsDirectory, withIntermediateDirectories: true)
         try FileManager.default.copyItem(at: sourceURL, to: destination)
-        registerExtension(at: destination)
+        registerExtension(at: destination, source: source ?? .folder(sourceURL.lastPathComponent))
     }
 
     /// Downloads a Firefox add-on's .xpi from addons.mozilla.org, unpacks it,
@@ -291,31 +496,41 @@ final class ExtensionManager {
             throw FirefoxAddonStoreError.missingDownload
         }
         start()
+        finishScanNow()
 
         let archive = try await FirefoxAddonStore.shared.downloadXPI(from: downloadURL)
         defer { try? FileManager.default.removeItem(at: archive) }
-        try installArchive(at: archive)
+        try installArchive(at: archive, source: Self.installSource(for: addon))
+    }
+
+    /// What the consent sheet calls an AMO install. The guid is the id the add-on runs
+    /// under, so it is what identifies the listing; the slug is the fallback for
+    /// payloads that predate the field.
+    static func installSource(for addon: FirefoxAddon) -> ExtensionInstallSource {
+        .addonStore(addon.guid ?? addon.slug)
     }
 
     /// A folder holding manifest.json, or a packaged extension (.xpi, .zip, .crx).
     func installExtension(fromFile url: URL) throws {
         if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
-            try installExtension(from: url)
+            try installExtension(from: url, source: .folder(url.lastPathComponent))
             return
         }
         start()
+        finishScanNow()
+        let source = ExtensionInstallSource.archive(url.lastPathComponent)
         guard url.pathExtension.lowercased() == "crx" else {
-            try installArchive(at: url)
+            try installArchive(at: url, source: source)
             return
         }
         // Chrome packs the same zip behind a signature header; drop the header.
         let zipURL = try XPIUnpacker.zipFromCRX(url)
         defer { try? FileManager.default.removeItem(at: zipURL) }
-        try installArchive(at: zipURL)
+        try installArchive(at: zipURL, source: source)
     }
 
     /// Unpacks a zip-shaped archive into a temporary folder and installs what it holds.
-    private func installArchive(at archive: URL) throws {
+    private func installArchive(at archive: URL, source: ExtensionInstallSource) throws {
         let staging = FileManager.default.temporaryDirectory
             .appendingPathComponent("ora-addon-unpack-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: staging) }
@@ -323,7 +538,7 @@ final class ExtensionManager {
         guard let root = XPIUnpacker.manifestRoot(in: staging) else {
             throw ExtensionInstallError.missingManifest
         }
-        try installExtension(from: root)
+        try installExtension(from: root, source: source)
     }
 
     /// The installed entry an AMO listing produced.
@@ -348,15 +563,61 @@ final class ExtensionManager {
         return loadedEngine?.context(for: id)?.optionsPageURL
     }
 
+    /// Removes every trace of an extension: its stored data, its files, and the records
+    /// Aura keeps about it.
+    ///
+    /// The data lives in WebKit's own directory keyed by `uniqueIdentifier`, which is
+    /// this folder id, so deleting the folder never touched it: a reinstall of the same
+    /// add-on picked up the storage of the copy the user had just thrown away. Aura's
+    /// own records (consent, the private-window grant, command bindings, the update
+    /// offer) go for the same reason.
     func removeExtension(_ id: String) {
+        stopObservingErrors(of: id)
+        let index = installedExtensions.firstIndex { $0.id == id }
         if #available(macOS 15.4, *) {
-            engine.unload(id: id)
+            // Not `engine`: that accessor builds a WKWebExtensionController on
+            // demand, and removing an extension that never loaded would spin
+            // one up only to unload nothing from it.
+            loadedEngine?.unload(id: id)
+            // Something that was never installed has no data to purge either, which is
+            // what keeps that same accessor out of this path.
+            if index != nil { purgeStoredData(for: id) }
         }
-        if let index = installedExtensions.firstIndex(where: { $0.id == id }) {
+        if let index {
             try? FileManager.default.removeItem(at: installedExtensions[index].directoryURL)
             installedExtensions.remove(at: index)
         }
         disabledIDs.remove(id)
+        pendingConsent.removeAll { $0.id == id }
+        // Removing is the one way to forget a grant: a reinstall of the same id later is
+        // a fresh decision, and the sheet has to come back for it.
+        SettingsStore.shared.extensionConsent[id] = nil
+        setRunsInPrivateWindows(false, for: id)
+        SettingsStore.shared.extensionAvailableUpdates[id] = nil
+        CustomKeyboardShortcutManager.shared.removeShortcuts(
+            withPrefix: ExtensionCommandShortcut.idPrefix(forExtension: id)
+        )
+        // Uninstalling full uBlock Origin answers the switch that installed it too,
+        // or the blocker plan would unpack it again on the next launch.
+        if id == BundledExtensions.FullUBlockOrigin.folderName, SettingsStore.shared.extensionFullAdBlocking {
+            BundledExtensions.setFullBlocking(false)
+        }
+    }
+
+    /// Drops `browser.storage` (local, session and sync) for one extension.
+    ///
+    /// By id rather than by context: an extension that is disabled has no context to
+    /// ask, and its data outlives the session all the same.
+    @available(macOS 15.4, *)
+    private func purgeStoredData(for id: String) {
+        let controller = engine.controller
+        Task { @MainActor in
+            let types = WKWebExtensionController.allExtensionDataTypes
+            let records = await controller.dataRecords(ofTypes: types)
+                .filter { $0.uniqueIdentifier == id }
+            guard !records.isEmpty else { return }
+            await controller.removeData(ofTypes: types, from: records)
+        }
     }
 
     func setEnabled(_ enabled: Bool, for id: String) {
@@ -368,104 +629,79 @@ final class ExtensionManager {
             loadIntoEngine(installedExtensions[index])
         } else {
             disabledIDs.insert(id)
+            stopObservingErrors(of: id)
             if #available(macOS 15.4, *) {
-                engine.unload(id: id)
+                loadedEngine?.unload(id: id)
             }
         }
-    }
-
-    // MARK: - Loading
-
-    private func registerExtension(at directory: URL) {
-        let id = directory.lastPathComponent
-        guard !installedExtensions.contains(where: { $0.id == id }) else { return }
-
-        // Before the manifest is read: patching rewrites it, and a shim version
-        // bump has to take effect on the next launch rather than the next
-        // install.
-        let shimError = ExtensionShim.patch(at: directory)
-
-        let manifest = Self.parseManifest(at: directory.appendingPathComponent("manifest.json"))
-        let entry = InstalledExtension(
-            id: id,
-            directoryURL: directory,
-            displayName: manifest.name ?? id,
-            displayVersion: manifest.version,
-            geckoID: manifest.geckoID,
-            isEnabled: !disabledIDs.contains(id),
-            icon: nil,
-            loadError: shimError ?? Self.compatibilityNote(at: directory)
-        )
-        installedExtensions.append(entry)
-
-        if entry.isEnabled {
-            loadIntoEngine(entry)
-        }
-    }
-
-    private func loadIntoEngine(_ entry: InstalledExtension) {
-        guard #available(macOS 15.4, *) else { return }
-        Task { @MainActor in
-            do {
-                let loaded = try await engine.load(directory: entry.directoryURL, id: entry.id)
-                update(id: entry.id) { item in
-                    item.displayName = loaded.displayName ?? item.displayName
-                    item.displayVersion = loaded.displayVersion ?? item.displayVersion
-                    item.icon = loaded.icon(for: CGSize(width: 32, height: 32))
-                    item.loadError = Self.compatibilityNote(at: entry.directoryURL)
-                }
-                // Background scripts fail asynchronously; surface what WebKit collected.
-                try? await Task.sleep(for: .seconds(3))
-                if let errors = engine.context(for: entry.id)?.errors, !errors.isEmpty {
-                    let note = Self.compatibilityNote(at: entry.directoryURL).map { $0 + " " } ?? ""
-                    update(id: entry.id) { $0.loadError = note + "Runtime: " + errors[0].localizedDescription }
-                }
-            } catch {
-                update(id: entry.id) { item in
-                    item.loadError = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func update(id: String, _ mutate: (inout InstalledExtension) -> Void) {
-        guard let index = installedExtensions.firstIndex(where: { $0.id == id }) else { return }
-        mutate(&installedExtensions[index])
     }
 
     // MARK: - Manifest helpers
 
-    private static func parseManifest(at url: URL) -> (name: String?, version: String?, geckoID: String?) {
+    /// What the UI shows for one extension, read straight off its manifest.
+    ///
+    /// A translated add-on writes `__MSG_extName__` where its name goes and keeps the
+    /// real string in `_locales`. Resolving it here means the name is right everywhere
+    /// downstream (rows, the consent sheet, duplicate detection) rather than in each
+    /// of those places.
+    nonisolated private static func parseManifest(at url: URL) -> ParsedManifest {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
-            return (nil, nil, nil)
+            return ParsedManifest()
         }
-        // "__MSG_*__" names live in locale files; fall back to the folder name.
-        let rawName = json["name"] as? String
-        let name = rawName?.hasPrefix("__MSG_") == true ? nil : rawName
+        let directory = url.deletingLastPathComponent()
+        let defaultLocale = json["default_locale"] as? String
+        let localized: (String?) -> String? = {
+            ExtensionLocalization.localized($0, in: directory, defaultLocale: defaultLocale)
+        }
+        // `short_name` is the fallback an add-on with an unresolvable name still has;
+        // past that the caller shows the folder id.
+        let name = localized(json["name"] as? String) ?? localized(json["short_name"] as? String)
         // "applications" is the pre-MV3 spelling of browser_specific_settings and
         // plenty of shipped add-ons still use it.
         let settings = json["browser_specific_settings"] as? [String: Any]
             ?? json["applications"] as? [String: Any]
         let geckoID = (settings?["gecko"] as? [String: Any])?["id"] as? String
-        return (name, json["version"] as? String, geckoID)
+        return ParsedManifest(
+            name: name,
+            description: localized(json["description"] as? String),
+            version: json["version"] as? String,
+            geckoID: geckoID
+        )
     }
 
     /// The same verdict the store shows, read from the installed manifest instead of AMO.
-    static func compatibility(at directory: URL) -> ExtensionCompatibility {
+    nonisolated static func compatibility(at directory: URL) -> ExtensionCompatibility {
+        ExtensionCompatibility.evaluate(permissions: requestedPermissions(at: directory))
+    }
+
+    /// Everything a manifest asks for, in one list. Content-script match patterns are in
+    /// here too: they are page access the user is agreeing to just as much as
+    /// `host_permissions` is, and an extension that declares only those still reads and
+    /// rewrites every page it matches.
+    nonisolated static func requestedPermissions(at directory: URL) -> [String] {
         let url = directory.appendingPathComponent("manifest.json")
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return .supported }
-        let requested = ((json["permissions"] as? [String]) ?? [])
+        else { return [] }
+        let contentMatches = ((json["content_scripts"] as? [[String: Any]]) ?? [])
+            .flatMap { ($0["matches"] as? [String]) ?? [] }
+        return ((json["permissions"] as? [String]) ?? [])
             + ((json["optional_permissions"] as? [String]) ?? [])
             + ((json["host_permissions"] as? [String]) ?? [])
-        return ExtensionCompatibility.evaluate(permissions: requested)
+            + contentMatches
     }
 
-    static func compatibilityNote(at directory: URL) -> String? {
-        compatibility(at: directory).detail
+    /// The line the installed row shows under an extension's name: what WebKit is
+    /// missing, plus the blocking-webRequest ceiling when the extension asked for it.
+    nonisolated static func compatibilityNote(at directory: URL) -> String? {
+        let permissions = requestedPermissions(at: directory)
+        let notes = [
+            ExtensionCompatibility.evaluate(permissions: permissions).detail,
+            ExtensionCompatibility.webRequestNote(permissions: permissions)
+        ].compactMap { $0 }
+        return notes.isEmpty ? nil : notes.joined(separator: " ")
     }
 
     private static func sanitizedID(from name: String) -> String {

@@ -95,6 +95,30 @@ targets:
             LSHandlerRank: Default
             LSItemContentTypes:
               - public.xhtml
+          # Local files Aura can draw in a tab. Alternate rank on purpose: opening a PDF
+          # or a PNG should stay with Preview until the user says otherwise, and Aura only
+          # has to appear in "Open With". `public.html` is declared above and covers .htm
+          # as well, so it is not repeated here.
+          - CFBundleTypeName: PDF document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.pdf
+          - CFBundleTypeName: Text document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.plain-text
+              - net.daringfireball.markdown
+          - CFBundleTypeName: Image
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.png
+              - public.jpeg
+              - com.compuserve.gif
+              - org.webmproject.webp
+              - public.svg-image
         NSUserActivityTypes:
           - NSUserActivityTypeBrowsingWeb
         LSMinimumSystemVersion: "15.0"

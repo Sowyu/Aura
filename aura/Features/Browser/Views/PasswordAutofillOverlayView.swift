@@ -6,24 +6,18 @@ struct PasswordAutofillOverlayView: View {
     let tab: Tab
 
     private let overlayWidth: CGFloat = 320
-    private let cornerRadius: CGFloat = 18
-    @State private var isManagePasswordsHovered = false
+    @Environment(\.theme) private var theme
 
     var body: some View {
         content
             .frame(width: overlayWidth)
-            .background {
-                ZStack {
-                    BlurEffectView(material: .popover, blendingMode: .withinWindow)
-                    Color(nsColor: .windowBackgroundColor).opacity(0.5)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(theme.popoverBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.7), lineWidth: 1)
+                RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                    .stroke(theme.border, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.12), radius: 20, x: 0, y: 8)
+            .auraFloatingShadow()
             .offset(
                 x: max(12, overlay.focus.rect.cgRect.minX),
                 y: overlay.focus.rect.cgRect.maxY + 10
@@ -35,8 +29,10 @@ struct PasswordAutofillOverlayView: View {
         VStack(alignment: .leading, spacing: 4) {
             if overlay.suggestions.isEmpty {
                 Text("No autofill suggestions available.")
-                    .font(.caption)
-                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
             } else {
                 ForEach(Array(overlay.suggestions.enumerated()), id: \.element.id) { index, suggestion in
                     PasswordSuggestionButton(
@@ -57,23 +53,17 @@ struct PasswordAutofillOverlayView: View {
             VStack {}.frame(height: 2)
             Divider()
 
-            Button("Manage Passwords") {
+            Button {
                 tab.passwordCoordinator?.openPasswordsManager()
+            } label: {
+                Text("Manage Passwords")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.mutedForeground)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
             }
-            .buttonStyle(InteractiveButtonStyle(cornerRadius: 8, hoverOpacity: 0))
-            .font(.caption.weight(.medium))
-            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(nsColor: .labelColor).opacity(isManagePasswordsHovered ? 0.06 : 0))
-            )
-            .onHover { isHovering in
-                isManagePasswordsHovered = isHovering
-            }
-            .animation(AnimationSettings.easeOut(0.1), value: isManagePasswordsHovered)
+            .buttonStyle(.interactive(cornerRadius: AuraRadius.row))
         }
         .padding(8)
     }
@@ -84,30 +74,30 @@ struct PasswordAutofillOverlayView: View {
         case let .generatedPassword(_, password):
             VStack(alignment: .leading, spacing: 3) {
                 Text("Use Strong Password")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color(nsColor: .labelColor))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.foreground)
                 Text(password)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(theme.mutedForeground)
                     .lineLimit(1)
             }
         case let .savedCredential(entry):
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.displayUsername)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color(nsColor: .labelColor))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.foreground)
                 Text(entry.host)
-                    .font(.caption)
-                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
             }
         case let .email(suggestion):
             VStack(alignment: .leading, spacing: 2) {
                 Text(suggestion.email)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color(nsColor: .labelColor))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.foreground)
                 Text("Use email from \(suggestion.host)")
-                    .font(.caption)
-                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
             }
         }
     }
@@ -200,7 +190,7 @@ private struct PasswordSuggestionButton<Content: View>: View {
     let onHoverChanged: (Bool) -> Void
     @ViewBuilder let content: () -> Content
 
-    @State private var isHovering = false
+    @Environment(\.theme) private var theme
 
     var body: some View {
         Button(action: action) {
@@ -208,31 +198,33 @@ private struct PasswordSuggestionButton<Content: View>: View {
                 SiteFaviconView(host: host, size: 18)
                 content()
                 Spacer(minLength: 0)
+                // Laid out either way, only the opacity moves, so the row never reflows.
                 Image(systemName: accessorySymbolName)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-                    .opacity(isHovering || isSelected ? 1 : 0.3)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(theme.mutedForeground)
+                    .opacity(isSelected ? 1 : 0.3)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(isHovering || isSelected ? 1 : 0))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            // Only the keyboard selection paints a fill here; hover is the button style's job.
+            .background(
+                RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                    .fill(isSelected ? theme.mutedBackground : .clear)
+            )
         }
-        .buttonStyle(InteractiveButtonStyle(cornerRadius: 12, hoverOpacity: 0))
-        .onHover { isHovering in
-            self.isHovering = isHovering
-            onHoverChanged(isHovering)
-        }
-        .animation(AnimationSettings.easeOut(0.1), value: isHovering)
+        .buttonStyle(.interactive(cornerRadius: AuraRadius.row))
+        .onHover { onHoverChanged($0) }
+        .animation(AnimationSettings.easeOut(0.1), value: isSelected)
     }
 }
 
 struct SiteFaviconView: View {
     let host: String
     var size: CGFloat = 24
-    var cornerRadius: CGFloat = 6
+    var cornerRadius: CGFloat = AuraRadius.button
 
+    @Environment(\.theme) private var theme
     @State private var image: NSImage?
 
     var body: some View {
@@ -242,20 +234,16 @@ struct SiteFaviconView: View {
                     .resizable()
                     .scaledToFit()
                     .padding(2)
-                    .background(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(Color.white)
-                    )
             } else {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color(nsColor: .clear))
+                    .fill(.clear)
                     .overlay {
                         Image(systemName: "globe")
                             .resizable()
                             .scaledToFit()
                             .padding(2)
                             .frame(width: size, height: size)
-                            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                            .foregroundStyle(theme.mutedForeground)
                     }
             }
         }

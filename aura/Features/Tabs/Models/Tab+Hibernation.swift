@@ -8,6 +8,10 @@ extension Tab {
     /// for it. Reports whether the user has typing in progress (which vetoes the unload)
     /// and stashes the scroll offset to restore on the way back.
     func captureHibernationState(completion: @escaping (Bool) -> Void) {
+        if let unsavedInputProbe {
+            unsavedInputProbe(completion)
+            return
+        }
         guard let page = browserPage else {
             completion(false)
             return
@@ -32,18 +36,56 @@ extension Tab {
                 self.hibernatedScrollOffset = offset
                 self.hibernatedScrollURL = self.url
             }
+            // The web view is about to go, and with it the only live copy of the back
+            // list. Writing it here is also what carries the offset across a relaunch:
+            // the transient pair above dies with the process.
+            MainActor.assumeIsolated {
+                guard let store = self.tabManager?.sessionStore else { return }
+                if store.capture(self, scroll: offset, scrollURL: self.url) { store.save() }
+            }
             completion(fields["dirty"] as? Bool ?? false)
         }
     }
 
     /// Re-applies the offset the tab was unloaded at, once, and only if the page that
-    /// came back is the page that went away.
+    /// came back is the page that went away. After a relaunch there is no transient
+    /// offset left, so the saved one stands in for it.
+    ///
+    /// The test runs in the page rather than here, because WebKit usually gets there
+    /// first: a restored session blob carries the current item's scroll position and puts
+    /// the page back on its own (measured on macOS 27: a view restored from a blob taken
+    /// at scrollY 1234 came back at 1234). It lands whenever WebKit's layout says so, so
+    /// whichever of the two is second must not yank the page away from where the user
+    /// already is.
     func restoreScrollOffsetIfNeeded() {
-        guard let offset = hibernatedScrollOffset, hibernatedScrollURL == url else { return }
-        hibernatedScrollOffset = nil
-        hibernatedScrollURL = nil
-        guard offset != .zero else { return }
-        evaluateJavaScript("window.scrollTo(\(offset.x), \(offset.y));")
+        guard let offset = takePendingScrollOffset(), offset != .zero else { return }
+        evaluateJavaScript(
+            """
+            if ((window.scrollY || 0) < 1 && (window.scrollX || 0) < 1) {
+                window.scrollTo(\(offset.x), \(offset.y));
+            }
+            """
+        )
+    }
+
+    /// The offset waiting for the page now on screen, consumed on read. The one stashed
+    /// on the way into hibernation wins: it is newer than anything on disk.
+    private func takePendingScrollOffset() -> CGPoint? {
+        if let offset = hibernatedScrollOffset, hibernatedScrollURL == url {
+            hibernatedScrollOffset = nil
+            hibernatedScrollURL = nil
+            return offset
+        }
+        guard !didOfferSavedScroll else { return nil }
+        didOfferSavedScroll = true
+        return MainActor.assumeIsolated { () -> CGPoint? in
+            guard let session = tabManager?.sessionStore.session(for: id),
+                  session.scrollURLString == url.absoluteString
+            else {
+                return nil
+            }
+            return session.scrollOffset
+        }
     }
 }
 

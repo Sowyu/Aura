@@ -30,6 +30,9 @@ extension LauncherSuggestionType {
         switch self {
         case .openedTab: 0
         case .suggestedLink: 1
+        // Under the rows that go somewhere, above a plain web search: a command row is
+        // only ever offered when the query really looks like its name.
+        case .command: 2
         case .suggestedQuery: 3
         case .aiChat: 4
         }

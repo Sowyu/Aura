@@ -16,9 +16,12 @@ final class FindManager {
         var matched: Bool = true
     }
 
-    /// ponytail: a closed tab leaves its query behind. One short string per tab id;
-    /// clear it from `TabManager.closeTab` if a session ever grows past that.
     private var sessions: [UUID: Session] = [:]
+
+    /// Called when a tab closes, so its query does not outlive it.
+    func endSession(for tabID: UUID) {
+        sessions[tabID] = nil
+    }
 
     func session(for tabID: UUID) -> Session {
         sessions[tabID] ?? Session()

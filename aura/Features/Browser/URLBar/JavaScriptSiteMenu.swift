@@ -59,8 +59,8 @@ struct JavaScriptBlockedBadge: View {
                 anchor?.presentAuraMenu(JavaScriptSiteMenu.items(for: url))
             } label: {
                 Image(systemName: "curlybraces")
-                    .font(.system(size: URLBarButton.iconSize, weight: .medium))
-                    .foregroundColor(foregroundColor.opacity(0.85))
+                    .font(.system(size: URLBarButton.iconSize, weight: URLBarButton.iconWeight))
+                    .foregroundColor(foregroundColor).opacity(URLBarButton.enabledOpacity)
                     .overlay {
                         // `nosign` over the braces: one glance says "scripts are off here".
                         Image(systemName: "line.diagonal")

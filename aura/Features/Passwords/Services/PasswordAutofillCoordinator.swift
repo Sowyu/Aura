@@ -72,6 +72,26 @@ struct PasswordFillRequest: Codable {
     let submitAfterFill: Bool
 }
 
+/// Builds the bridge call. The payload travels as base64 and is parsed on the JS
+/// side, so quotes, backslashes, U+2028 or a literal `</script>` in a password can
+/// never escape the script text.
+enum PasswordBridgeScript {
+    static func base64Payload(_ payload: some Encodable) -> String? {
+        try? JSONEncoder().encode(payload).base64EncodedString()
+    }
+
+    static func script(method: String, base64Payload: String) -> String {
+        """
+        (function () {
+            const bridge = window.__oraPasswordManager;
+            if (!bridge || typeof bridge.\(method) !== 'function') { return; }
+            const bytes = Uint8Array.from(atob('\(base64Payload)'), (c) => c.charCodeAt(0));
+            bridge.\(method)(JSON.parse(new TextDecoder().decode(bytes)));
+        })();
+        """
+    }
+}
+
 enum PasswordAutofillSuggestion: Identifiable, Equatable {
     case generatedPassword(host: String, password: String)
     case savedCredential(SavedPasswordSummary)
@@ -373,9 +393,15 @@ final class PasswordAutofillCoordinator {
             .matchingEntries(for: pageURL, containerID: tab?.container.id)
             .first { $0.username == trimmedUsername }
 
+        // The stored fingerprint answers "did this password change?" without a
+        // keychain read on every submit. An entry saved before fingerprints existed
+        // cannot answer, so it falls through to the prompt rather than revealing the
+        // secret unauthenticated; saving once backfills the fingerprint.
         if let matchingEntry,
-           let storedPassword = try? passwordManager.revealPassword(for: matchingEntry),
-           storedPassword == trimmedPassword
+           SubmitComparison.matchesSavedPassword(
+               typedPassword: trimmedPassword,
+               savedFingerprint: matchingEntry.passwordFingerprint
+           )
         {
             return
         }
@@ -493,18 +519,8 @@ final class PasswordAutofillCoordinator {
     }
 
     private func evaluate(scriptMethod: String, payload: some Encodable) {
-        guard let data = try? JSONEncoder().encode(payload),
-              let payloadString = String(data: data, encoding: .utf8)
-        else {
-            return
-        }
-
-        let script = """
-        if (window.__oraPasswordManager && typeof window.__oraPasswordManager.\(scriptMethod) === 'function') {
-            window.__oraPasswordManager.\(scriptMethod)(\(payloadString));
-        }
-        """
-        tab?.evaluateJavaScript(script)
+        guard let encoded = PasswordBridgeScript.base64Payload(payload) else { return }
+        tab?.evaluateJavaScript(PasswordBridgeScript.script(method: scriptMethod, base64Payload: encoded))
     }
 
     private func setOverlayKeyboardActive(_ isActive: Bool) {

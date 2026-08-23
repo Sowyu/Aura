@@ -80,11 +80,13 @@ struct ContainerSwitcher: View {
                     ? theme.invertedSolidWindowBackgroundColor.opacity(0.15)
                     : .clear
             )
-            .cornerRadius(8)
+            .cornerRadius(AuraRadius.button)
         }
         // Hover is already driven by `hoveredContainer` (it resizes the emoji), so the
         // shared style only contributes the press feedback.
-        .buttonStyle(InteractiveButtonStyle(cornerRadius: 8, hoverOpacity: 0))
+        .buttonStyle(InteractiveButtonStyle(cornerRadius: AuraRadius.button, hoverOpacity: 0))
+        // The button is an icon, sometimes a bare dot, so the space's name is the label.
+        .accessibilityLabel(Text(container.name))
         .animation(AnimationSettings.easeOut(0.12), value: isActive || isHovered)
         .onHover { isHovering in
             withAnimation(AnimationSettings.easeOut(0.12)) {

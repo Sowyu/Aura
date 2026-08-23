@@ -15,6 +15,7 @@ struct SpaceHeaderRow: View {
     @Environment(\.window) private var window
     @Environment(TabManager.self) private var tabManager
     @Environment(DialogManager.self) private var dialogManager
+    @Environment(ContainerManager.self) private var containerManager
 
     @State private var isHovering = false
     @State private var isRenaming = false
@@ -24,7 +25,7 @@ struct SpaceHeaderRow: View {
     @FocusState private var nameFieldFocused: Bool
 
     private static let height: CGFloat = 34
-    private static let radius: CGFloat = 10
+    private static let radius: CGFloat = AuraRadius.row
     /// `TabItem`'s icon column: 8pt of row padding, then a 16pt slot.
     private static let iconSlot: CGFloat = 16
     /// A tab's close button is 20pt wide and ends 8pt from the row edge, so its centre is
@@ -77,6 +78,9 @@ struct SpaceHeaderRow: View {
         }
         .background(AuraMenuAnchorView { labelAnchor = $0 })
         .help("Switch Space")
+        .accessibilityLabel(Text("Switch Space"))
+        .accessibilityValue(Text(container.name))
+        .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder
@@ -111,17 +115,17 @@ struct SpaceHeaderRow: View {
                 .foregroundColor(theme.foreground.opacity(0.7))
                 .frame(width: 24, height: 24)
         }
-        .buttonStyle(.interactive(cornerRadius: 6, tint: theme.foreground))
+        .buttonStyle(.interactive(cornerRadius: AuraRadius.button, tint: theme.foreground))
         .background(AuraMenuAnchorView { menuAnchor = $0 })
         .opacity(isHovering ? 1 : 0)
         .allowsHitTesting(isHovering)
         .help("Space Actions")
+        .accessibilityLabel(Text("Space Actions"))
     }
 
-    /// One step above a resting tab row and level with a hovered one, so the pill reads
-    /// as part of the list rather than a slab of chrome.
+    /// Clear at rest like a tab row; a resting fill read as a permanent hover.
     private var background: Color {
-        theme.foreground.opacity(isHovering || isRenaming ? 0.10 : 0.06)
+        isHovering || isRenaming ? theme.foreground.opacity(0.06) : .clear
     }
 
     // MARK: - Menus
@@ -148,6 +152,15 @@ struct SpaceHeaderRow: View {
         return Array {
             AuraMenuItem.item("Rename Space…", icon: "pencil") { isRenaming = true }
             AuraMenuItem.item("Change Icon…", icon: "paintpalette") { showEditDialog(container) }
+            // The only other place a space picks its container is Settings › Spaces.
+            AuraMenuItem.submenu(
+                "Default Container",
+                icon: "square.stack.3d.up",
+                items: ContainerMenuItems.choices(
+                    current: container.defaultBrowsingContainer,
+                    containers: containerManager.containers
+                ) { containerManager.setDefault($0, for: container) }
+            )
             AuraMenuItem.item("New Tab", icon: "plus", shortcut: KeyboardShortcuts.Tabs.new) {
                 NotificationCenter.default.post(name: .showLauncher, object: window ?? NSApp.keyWindow)
             }

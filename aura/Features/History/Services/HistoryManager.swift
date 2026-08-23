@@ -66,12 +66,16 @@ final class HistoryManager {
         self.modelContext = modelContext
     }
 
+    /// `countsAsVisit` is false when only the page title changed. The page script fires on
+    /// every `<title>` mutation, so counting those as visits inflated `visitCount` and
+    /// kept re-sorting the history panel while a single page sat there updating its title.
     func record(
         title: String,
         url: URL,
         faviconURL: URL? = nil,
         faviconLocalFile: URL? = nil,
-        container: TabContainer
+        container: TabContainer,
+        countsAsVisit: Bool = true
     ) {
         // aura:// pages are chrome, not visits. Guarded here rather than at each caller
         // so nothing can slip the new-tab page into the history list.
@@ -89,17 +93,32 @@ final class HistoryManager {
             sortBy: [.init(\.lastAccessedAt, order: .reverse)]
         )
 
+        var changed = true
         if let existing = try? modelContext.fetch(descriptor).first {
-            existing.visitCount += 1
-            existing.lastAccessedAt = Date() // update last visited time
+            changed = countsAsVisit
+            if countsAsVisit {
+                existing.visitCount += 1
+                existing.lastAccessedAt = Date() // update last visited time
+            }
+            // A page that renamed itself, or whose icon only just resolved, would
+            // otherwise keep the row's first-ever title and favicon forever. Assigning
+            // an equal value still dirties the row, hence the comparisons.
+            if !title.isEmpty, existing.title != title {
+                existing.title = title
+                changed = true
+            }
+            if let faviconURL, existing.faviconURL != faviconURL {
+                existing.faviconURL = faviconURL
+                changed = true
+            }
         } else {
             let now = Date()
-            let defaultFaviconURL = FaviconService.shared.faviconURL(for: url.host ?? "")
-            let resolvedFaviconURL = faviconURL ?? defaultFaviconURL ?? url
             modelContext.insert(History(
                 url: url,
                 title: title,
-                faviconURL: resolvedFaviconURL,
+                // Nil rather than the page URL: an unresolved favicon is not an icon, and
+                // storing the page itself made every reader fetch the HTML as an image.
+                faviconURL: faviconURL,
                 faviconLocalFile: faviconLocalFile,
                 createdAt: now,
                 lastAccessedAt: now,
@@ -108,6 +127,7 @@ final class HistoryManager {
             ))
         }
 
+        guard changed else { return }
         try? modelContext.save()
     }
 

@@ -31,7 +31,6 @@ struct FavTabsGrid: View {
                 // Only a live tab drag reveals the drop zone; otherwise it is sidebar clutter.
                 if dragSession.isDragging {
                     EmptyFavTabItem()
-                        .transition(.opacity)
                 }
             } else {
                 ForEach(tabs) { tab in
@@ -50,17 +49,22 @@ struct FavTabsGrid: View {
                         // The grid runs left to right, so the line stands on a side edge.
                         if dragSession.indicator(for: tab.id, in: zone) != nil {
                             Capsule()
-                                .fill(Color.accentColor)
+                                .fill(theme.accent)
                                 .frame(width: 2)
                                 .padding(.vertical, 4)
                         }
                     }
-                    .tabDragSource(id: tab.id, in: zone)
+                    .tabDragSource(
+                        id: tab.id,
+                        in: zone,
+                        url: tab.url,
+                        title: tab.title,
+                        onMiddleClick: { onClose(tab) }
+                    )
                 }
             }
         }
         .animation(AnimationSettings.easeOut(0.1), value: adaptiveColumns.count)
-        .animation(AnimationSettings.easeOut(0.12), value: dragSession.isDragging)
         .tabDropZone(zone)
     }
 

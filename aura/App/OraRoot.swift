@@ -1,5 +1,6 @@
 import Foundation
 import Inject
+import os.log
 import SwiftData
 import SwiftUI
 
@@ -11,13 +12,31 @@ final class PrivacyMode: ObservableObject {
     }
 }
 
+/// What to do when the store refuses to open. Deleting it was the old answer, and it
+/// cost the user every tab, space and history row; nothing here ever removes the file.
+enum StoreOpenFailure {
+    enum Action: Equatable {
+        case retry
+        case giveUp
+    }
+
+    /// One retry, because the failure that is worth retrying is a transient one (a lock
+    /// held by a window still closing). A second failure is the file itself, and losing
+    /// the data is worse than not launching.
+    static func action(for attempt: Int) -> Action {
+        attempt == 0 ? .retry : .giveUp
+    }
+}
+
 struct OraRoot: View {
     @State private var appState = AppState()
     @StateObject private var keyModifierListener = KeyModifierListener()
     @StateObject private var updateService = UpdateService.shared
     @State private var mediaController: MediaController
     @State private var tabManager: TabManager
+    @State private var containerManager: ContainerManager
     @State private var historyManager: HistoryManager
+    @State private var bookmarkStore: BookmarkStore
     @State private var downloadManager: DownloadManager
     @StateObject private var privacyMode: PrivacyMode
     @State private var sidebarManager = SidebarManager()
@@ -45,17 +64,8 @@ struct OraRoot: View {
         self.initialURL = initialURL
         _privacyMode = StateObject(wrappedValue: PrivacyMode(isPrivate: isPrivate))
 
-        let container: ModelContainer
-        let modelContext: ModelContext
-        do {
-            container = try StartupProfiler.measure("modelContainer") {
-                try ModelConfiguration.createOraContainer(isPrivate: isPrivate)
-            }
-            modelContext = ModelContext(container)
-        } catch {
-            deleteSwiftDataStore("OraData.sqlite")
-            fatalError("Failed to initialize ModelContainer: \(error)")
-        }
+        let container = Self.openStore(isPrivate: isPrivate)
+        let modelContext = ModelContext(container)
 
         self.tabContext = modelContext
         self.downloadContext = modelContext
@@ -67,8 +77,26 @@ struct OraRoot: View {
             )
         )
 
+        // Bookmarks are not browsing data. A page saved from a private window is saved
+        // on purpose, so this store is always the on-disk one, never the in-memory
+        // container the rest of a private window runs on. The shared container is cached,
+        // so a normal window gets the one it already opened.
+        _bookmarkStore = State(
+            wrappedValue: BookmarkStore(modelContext: ModelContext(Self.openStore(isPrivate: false)))
+        )
+
         let media = MediaController()
         _mediaController = State(wrappedValue: media)
+
+        // Before any tab builds a web view: spaces used to be the cookie jars, and this
+        // hands each one a container carrying the store identifier it already had.
+        // A private window has an empty in-memory store, so there is nothing to migrate.
+        if !isPrivate {
+            StartupProfiler.measure("browsingContainerMigration") {
+                ContainerManager.migrateSpaceStoresIfNeeded(context: modelContext)
+            }
+        }
+        _containerManager = State(wrappedValue: ContainerManager(modelContext: modelContext))
 
         _tabManager = State(
             wrappedValue: StartupProfiler.measure("tabManager") {
@@ -89,6 +117,42 @@ struct OraRoot: View {
         StartupProfiler.mark("rootInit")
     }
 
+    /// The private window asks for an in-memory store, so this path never touches the
+    /// file on disk in that case either.
+    private static func openStore(isPrivate: Bool) -> ModelContainer {
+        var attempt = 0
+        while true {
+            do {
+                return try StartupProfiler.measure("modelContainer") {
+                    try ModelConfiguration.createOraContainer(isPrivate: isPrivate)
+                }
+            } catch {
+                let reason = error.localizedDescription
+                AuraLog.category("Store").error(
+                    "Model container failed to open on attempt \(attempt, privacy: .public): \(reason, privacy: .public)"
+                )
+                recordStoreFailure(error, attempt: attempt)
+                guard StoreOpenFailure.action(for: attempt) == .retry else {
+                    fatalError("Failed to initialize ModelContainer: \(error)")
+                }
+                attempt += 1
+            }
+        }
+    }
+
+    /// The error behind a refused store, written next to the store itself. The crash
+    /// report from the `fatalError` below says nothing a user could paste into an issue,
+    /// and the log is gone by the time they think to look.
+    private static func recordStoreFailure(_ error: Error, attempt: Int) {
+        let path = URL.applicationSupportDirectory.appending(path: "Aura/last-store-error.txt")
+        let text = "\(Date().ISO8601Format()) attempt \(attempt)\n\(error)\n"
+        try? FileManager.default.createDirectory(
+            at: path.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? Data(text.utf8).write(to: path)
+    }
+
     var body: some View {
         BrowserView()
             .background(WindowReader(window: $window))
@@ -103,7 +167,9 @@ struct OraRoot: View {
             .environment(\.window, window)
             .environment(appState)
             .environment(tabManager)
+            .environment(containerManager)
             .environment(historyManager)
+            .environment(bookmarkStore)
             .environment(mediaController)
             .environmentObject(keyModifierListener)
             .environmentObject(CustomKeyboardShortcutManager.shared)
@@ -125,9 +191,13 @@ struct OraRoot: View {
             .onDisappear(perform: stop)
             .onChange(of: window) { _, newWindow in
                 keyModifierListener.window = newWindow
-                if let newWindow, !privacyMode.isPrivate {
+                if let newWindow {
                     StartupProfiler.measure("extensionsWindowDidOpen") {
-                        ExtensionManager.shared.windowDidOpen(newWindow, tabManager: tabManager)
+                        ExtensionManager.shared.windowDidOpen(
+                            newWindow,
+                            tabManager: tabManager,
+                            isPrivate: privacyMode.isPrivate
+                        )
                     }
                 }
             }
@@ -140,6 +210,8 @@ struct OraRoot: View {
         guard notificationObservers.isEmpty else { return }
 
         downloadManager.toastManager = toastManager
+        // The name-collision prompt goes on this window's dialog stack.
+        downloadManager.dialogManager = dialogManager
         registerKeyDownHandlers()
         // Collected locally and stored once: appending to the @State array directly
         // re-invalidates the whole view on each of the two dozen registrations.
@@ -390,6 +462,17 @@ extension OraRoot {
                     tab.reload()
                 }
             },
+            // Per-site zoom. The level is stored against the site, so each window steps
+            // whatever tab it has in front rather than a tab the menu picked.
+            WindowEvent(.zoomIn) { _ in
+                Task { @MainActor in SiteZoomController.step(1, for: tabManager.activeTab) }
+            },
+            WindowEvent(.zoomOut) { _ in
+                Task { @MainActor in SiteZoomController.step(-1, for: tabManager.activeTab) }
+            },
+            WindowEvent(.zoomReset) { _ in
+                Task { @MainActor in SiteZoomController.reset(tabManager.activeTab) }
+            },
             WindowEvent(.toggleSiteJavaScript) { _ in
                 Task { @MainActor in
                     guard let url = tabManager.activeTab?.url,
@@ -410,6 +493,35 @@ extension OraRoot {
             },
             WindowEvent(.clearCookiesAndReload) { _ in
                 Task { @MainActor in clearSiteData(cookies: true) }
+            },
+            // Bookmarks, kept together so a merge with other menu work is one hunk.
+            WindowEvent(.addBookmark) { _ in
+                Task { @MainActor in saveActiveTab(toReadingList: false) }
+            },
+            WindowEvent(.addToReadingList) { _ in
+                Task { @MainActor in saveActiveTab(toReadingList: true) }
+            },
+            // The flag is global; one window flips it so two open windows do not toggle
+            // it twice and land back where they started.
+            WindowEvent(.toggleBookmarksBar) { _ in
+                SettingsStore.shared.showBookmarksBar.toggle()
+            },
+            // Page tools (workstream 6). Every row acts on this window's active tab.
+            WindowEvent(.savePageAs) { _ in
+                Task { @MainActor in PageTools.savePageAs(tabManager.activeTab) }
+            },
+            WindowEvent(.savePageScreenshot) { _ in
+                Task { @MainActor in PageTools.saveScreenshot(tabManager.activeTab) }
+            },
+            WindowEvent(.viewPageSource) { _ in
+                Task { @MainActor in PageTools.viewSource(for: tabManager.activeTab) }
+            },
+            WindowEvent(.showReaderMode) { _ in
+                Task { @MainActor in PageTools.reader(for: tabManager.activeTab) }
+            },
+            // Keyboard and navigation polish (workstream 8).
+            WindowEvent(.hardReloadPage) { _ in
+                Task { @MainActor in tabManager.activeTab?.browserPage?.hardReload() }
             }
         ]
     }
@@ -446,6 +558,22 @@ extension OraRoot {
             historyManager: historyManager,
             downloadManager: downloadManager,
             isPrivate: privacyMode.isPrivate
+        )
+    }
+
+    /// ⌘D and "Add to Reading List" both read the page in front rather than being
+    /// handed a URL: the menu item has no idea which window is key, and the window that
+    /// claims the post does.
+    @MainActor
+    private func saveActiveTab(toReadingList: Bool) {
+        guard let tab = tabManager.activeTab, !tab.url.isOraInternal else { return }
+        let saved = toReadingList
+            ? bookmarkStore.addToReadingList(title: tab.title, url: tab.url, faviconURL: tab.favicon)
+            : bookmarkStore.add(title: tab.title, url: tab.url, faviconURL: tab.favicon)
+        guard saved != nil else { return }
+        toastManager.show(
+            toReadingList ? "Added to reading list" : "Bookmark saved",
+            icon: .system(toReadingList ? "eyeglasses" : "bookmark")
         )
     }
 

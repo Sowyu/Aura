@@ -30,7 +30,7 @@ struct ExtensionStoreView: View {
                 } else {
                     SettingsCard {
                         Label("Extensions require macOS 15.4 or later.", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.mutedForeground)
                     }
                 }
             }
@@ -39,6 +39,7 @@ struct ExtensionStoreView: View {
             .frame(maxWidth: .infinity)
         }
         .background(theme.background.opacity(0.85))
+        .extensionConsentPrompt()
         .onAppear {
             guard ExtensionManager.isSupported else { return }
             extensionManager.start()
@@ -56,8 +57,8 @@ struct ExtensionStoreView: View {
                         .font(.system(size: 22, weight: .semibold))
                     Text("Firefox add-ons install straight from addons.mozilla.org, "
                         + "because they are standard web extensions.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.mutedForeground)
                 }
                 Spacer(minLength: 12)
                 Button("Install from file…", action: promptForFile)
@@ -67,8 +68,8 @@ struct ExtensionStoreView: View {
 
             if let fileError {
                 Text(fileError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.destructive)
             }
 
             searchField
@@ -79,7 +80,7 @@ struct ExtensionStoreView: View {
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.mutedForeground)
             TextField("Search add-ons, or paste an addons.mozilla.org link", text: $query)
                 .textFieldStyle(.plain)
                 .onSubmit { model.search(query) }
@@ -90,7 +91,7 @@ struct ExtensionStoreView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color.primary.opacity(0.06), in: Capsule())
+        .background(theme.mutedBackground, in: .rect(cornerRadius: AuraRadius.row, style: .continuous))
         .onChange(of: query) { _, newValue in
             model.scheduleSearch(newValue)
         }
@@ -110,8 +111,8 @@ struct ExtensionStoreView: View {
             }
             HStack(spacing: 6) {
                 Text("Sort")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
                 ForEach(FirefoxAddonSort.allCases) { sort in
                     ExtensionStoreChip(title: sort.title, isSelected: model.sort == sort) {
                         model.select(sort: sort)
@@ -147,8 +148,8 @@ struct ExtensionStoreView: View {
         VStack(alignment: .leading, spacing: 12) {
             if let message = model.message {
                 Text(message)
-                    .font(.caption)
-                    .foregroundStyle(model.messageIsError ? Color.red : Color.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(model.messageIsError ? theme.destructive : theme.mutedForeground)
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: 12)], spacing: 12) {

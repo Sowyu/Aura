@@ -17,7 +17,7 @@ extension TabManager {
         for (position, space) in ordered.enumerated() {
             space.order = position
         }
-        try? modelContext.save()
+        saveOrLog(modelContext)
         return true
     }
 
@@ -48,7 +48,7 @@ extension TabManager {
             if focusAfterOpening {
                 activateTab(existing)
             }
-            try? modelContext.save()
+            saveOrLog(modelContext)
             return existing
         }
 

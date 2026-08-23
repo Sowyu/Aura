@@ -49,6 +49,13 @@ struct TabHibernationTests {
         return tab
     }
 
+    /// Lets one turn of the main queue run, for the paths that finish on a hop.
+    private func settle() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+    }
+
     /// No web views are built here. A tab whose `browserPage` is nil answers the
     /// unsaved-input probe immediately, so the whole eviction pass runs synchronously
     /// and the selection rules can be checked without spawning 20 content processes.
@@ -194,6 +201,49 @@ struct TabHibernationTests {
         store.unloadMediaTabs = true
         manager.enforceLiveTabLimit()
         #expect(!playing.isWebViewReady, "unless the user opted in")
+    }
+
+    /// The unsaved-input probe is a round trip and can veto an unload. One veto used to
+    /// end the pass, leaving the cap violated until the next minute tick.
+    @Test func aVetoedUnloadIsFollowedByAnotherCandidate() throws {
+        let (manager, space) = try makeManager()
+        let store = SettingsStore.shared
+        let previousLimit = store.maxLiveTabs
+        defer { store.maxLiveTabs = previousLimit }
+        store.maxLiveTabs = 2
+
+        var tabs: [Tab] = []
+        for index in 0 ..< 4 {
+            let tab = try makeTab(manager, space, index: index)
+            tab.isWebViewReady = true
+            tabs.append(tab)
+        }
+        manager.activateTab(tabs[3])
+        for tab in tabs { tab.isWebViewReady = true }
+        // Typing in progress on the oldest tab: the probe answers "dirty".
+        tabs[0].unsavedInputProbe = { $0(true) }
+
+        manager.enforceLiveTabLimit()
+
+        #expect(tabs[0].isWebViewReady, "a tab with unsaved typing is left alone")
+        #expect(manager.liveWebViewCount() == 2, "the cap still holds after the veto")
+    }
+
+    /// Expiry is not a close the user made, so it must not fill the reopen stack.
+    @Test func autoClearedTabsAreNotTrackedForReopening() throws {
+        let (manager, space) = try makeManager()
+        let store = SettingsStore.shared
+        let previous = store.autoClearTabsAfter(for: space.id)
+        defer { store.setAutoClearTabsAfter(previous, for: space.id) }
+        store.setAutoClearTabsAfter(.oneHour, for: space.id)
+
+        let stale = try makeTab(manager, space, index: 0)
+        stale.lastAccessedAt = Date().addingTimeInterval(-7200)
+
+        manager.autoClearContainerTabs()
+
+        #expect(!space.tabs.contains { $0.id == stale.id }, "the expired tab goes")
+        #expect(manager.recentlyClosedTabs.isEmpty, "and it is not offered back as a recent close")
     }
 
     /// The offset is re-applied once, and only to the page it was taken from.
@@ -345,6 +395,41 @@ struct TabHibernationTests {
 
         #expect(liveBefore == 20, "all 20 tabs should start live")
         #expect(liveAfter <= 4, "the cap should hold after eviction")
+    }
+
+    /// The memory-pressure source was armed by the first maintenance tick, up to a
+    /// minute after launch. A new manager has to be armed straight away.
+    @Test func memoryPressureIsArmedFromInit() throws {
+        let (manager, _) = try makeManager()
+        #expect(manager.hibernationPolicy.isArmed)
+    }
+
+    /// `isActiveInAnyWindow` reads every window's `activeTab`, so a window still holding
+    /// a tab another window deleted kept the ghost exempt from every eviction pass.
+    @Test func aTabDeletedInAnotherWindowStopsBlockingEviction() async throws {
+        let (windowA, space) = try makeManager()
+        let doomed = try makeTab(windowA, space, index: 1)
+        let survivor = try makeTab(windowA, space, index: 2)
+
+        let windowB = TabManager(
+            modelContainer: windowA.modelContainer,
+            modelContext: ModelContext(windowA.modelContainer),
+            mediaController: MediaController()
+        )
+        let spaceInB = try #require(windowB.fetchContainers().first { $0.id == space.id })
+        let doomedInB = try #require(spaceInB.tabs.first { $0.id == doomed.id })
+        windowB.activateTab(doomedInB)
+        windowB.hibernating.insert(doomed.id)
+        windowB.hibernationPolicy.tabsWithUnsavedInput.insert(doomed.id)
+        #expect(TabManager.activeTabIDsAcrossWindows.contains(doomed.id))
+
+        windowA.closeTab(tab: doomed)
+        await settle()
+
+        #expect(!TabManager.activeTabIDsAcrossWindows.contains(doomed.id))
+        #expect(windowB.activeTab?.id == survivor.id)
+        #expect(!windowB.hibernating.contains(doomed.id))
+        #expect(!windowB.hibernationPolicy.tabsWithUnsavedInput.contains(doomed.id))
     }
 }
 

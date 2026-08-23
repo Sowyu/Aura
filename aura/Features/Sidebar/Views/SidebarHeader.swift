@@ -29,7 +29,8 @@ struct SidebarHeader: View {
                     URLBarButton(
                         systemName: sidebarIcon,
                         isEnabled: true,
-                        foregroundColor: theme.foreground.opacity(0.7),
+                        foregroundColor: theme.foreground,
+                        size: TopToolbar.buttonSize,
                         action: { sidebarManager.toggleSidebar() }
                     )
                     .oraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)
@@ -37,9 +38,10 @@ struct SidebarHeader: View {
                 }
 
                 URLBarButton(
-                    systemName: "chevron.left",
+                    icon: .back,
                     isEnabled: tabManager.activeTab?.canGoBack ?? false,
-                    foregroundColor: theme.foreground.opacity(0.7),
+                    foregroundColor: theme.foreground,
+                    size: TopToolbar.buttonSize,
                     action: {
                         if let activeTab = tabManager.activeTab {
                             activeTab.goBack()
@@ -49,9 +51,10 @@ struct SidebarHeader: View {
                 .oraShortcutHelp("Go Back", for: KeyboardShortcuts.Navigation.back)
 
                 URLBarButton(
-                    systemName: "chevron.right",
+                    icon: .forward,
                     isEnabled: tabManager.activeTab?.canGoForward ?? false,
-                    foregroundColor: theme.foreground.opacity(0.7),
+                    foregroundColor: theme.foreground,
+                    size: TopToolbar.buttonSize,
                     action: {
                         if let activeTab = tabManager.activeTab {
                             activeTab.goForward()
@@ -61,9 +64,10 @@ struct SidebarHeader: View {
                 .oraShortcutHelp("Go Forward", for: KeyboardShortcuts.Navigation.forward)
 
                 URLBarButton(
-                    systemName: "arrow.clockwise",
+                    icon: .reload,
                     isEnabled: tabManager.activeTab != nil,
-                    foregroundColor: theme.foreground.opacity(0.7),
+                    foregroundColor: theme.foreground,
+                    size: TopToolbar.buttonSize,
                     action: {
                         if let activeTab = tabManager.activeTab {
                             activeTab.reload()
@@ -77,7 +81,8 @@ struct SidebarHeader: View {
                     URLBarButton(
                         systemName: sidebarIcon,
                         isEnabled: true,
-                        foregroundColor: theme.foreground.opacity(0.7),
+                        foregroundColor: theme.foreground,
+                        size: TopToolbar.buttonSize,
                         action: { sidebarManager.toggleSidebar() }
                     )
                     .oraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)

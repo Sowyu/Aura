@@ -101,3 +101,7 @@ Vendor/CEF
 # Claude Code
 CLAUDE.md
 .claude/
+
+# Python
+__pycache__/
+*.pyc

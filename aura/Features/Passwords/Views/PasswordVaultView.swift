@@ -7,6 +7,7 @@ import SwiftUI
 /// Touch ID badge on the lock screen and the other did not, and the two unlock prompts
 /// read differently. One view now, two hosts.
 struct PasswordVaultView: View {
+    @Environment(\.theme) private var theme
     let title: String
     /// Spaces to pick between. Passed in so each host keeps its own `@Query` order.
     let containers: [TabContainer]
@@ -22,7 +23,15 @@ struct PasswordVaultView: View {
     @State private var isAuthenticating = false
     @State private var selectedContainerId: UUID?
     @State private var revealedPasswordIDs: [String: String] = [:]
+    /// One auto-hide task per revealed row, cancelled when the row is hidden by hand.
+    @State private var revealTimers: [String: Task<Void, Never>] = [:]
     @State private var pendingDelete: SavedPasswordSummary?
+
+    enum RevealPolicy {
+        /// A plaintext password left on screen hides itself again after this long, which
+        /// is sooner than a copied one leaves the pasteboard.
+        static let hideAfter: TimeInterval = 60
+    }
 
     private static let siteColumnWidth: CGFloat = 260
     private static let usernameColumnWidth: CGFloat = 220
@@ -52,6 +61,12 @@ struct PasswordVaultView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+
+            if let lastErrorMessage = passwordManager.lastErrorMessage {
+                Text(lastErrorMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.destructive)
+            }
 
             if containers.isEmpty {
                 emptyState(message: "Create a space to start storing passwords.")
@@ -96,6 +111,8 @@ struct PasswordVaultView: View {
         )) {
             Button("Delete", role: .destructive) {
                 if let pendingDelete {
+                    // A throw leaves the entry in place and puts the keychain's reason on
+                    // the banner, rather than closing the sheet as if it had worked.
                     try? passwordManager.delete(pendingDelete)
                 }
                 pendingDelete = nil
@@ -116,11 +133,11 @@ struct PasswordVaultView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.headline)
+                    .font(.system(size: 13, weight: .semibold))
                 if isUnlocked {
                     Text("\(visibleEntries.count) item\(visibleEntries.count == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.mutedForeground)
                 }
             }
 
@@ -155,25 +172,25 @@ struct PasswordVaultView: View {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 56, weight: .regular))
-                    .foregroundStyle(Color.secondary.opacity(0.75))
+                    .foregroundStyle(theme.mutedForeground)
 
                 if passwordManager.canUseBiometricAuthentication() {
                     Image(systemName: "touchid")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(theme.accent)
                         .frame(width: 36, height: 36)
-                        .background(Color(.windowBackgroundColor).opacity(0.92))
+                        .background(theme.background)
                         .clipShape(Circle())
                 }
             }
 
             VStack(spacing: 8) {
-                Text("Passwords Are Locked")
-                    .font(.title3.weight(.semibold))
+                Text("Passwords are locked")
+                    .font(.system(size: 15, weight: .semibold))
 
                 Text("Use Touch ID or your Mac password to see your saved passwords.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.mutedForeground)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
             }
@@ -191,16 +208,9 @@ struct PasswordVaultView: View {
     }
 
     private func emptyState(message: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(message)
-                .foregroundStyle(.secondary)
-            if let lastErrorMessage = passwordManager.lastErrorMessage {
-                Text(lastErrorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 200, alignment: .center)
+        Text(message)
+            .foregroundStyle(theme.mutedForeground)
+            .frame(maxWidth: .infinity, minHeight: 200, alignment: .center)
     }
 
     // MARK: - Table
@@ -215,7 +225,7 @@ struct PasswordVaultView: View {
                     tableHeader(actionsColumnWidth: actionsColumnWidth)
 
                     Divider()
-                        .overlay(Color(.separatorColor).opacity(0.7))
+                        .overlay(theme.border)
 
                     ScrollView(.vertical) {
                         LazyVStack(spacing: 0) {
@@ -224,7 +234,7 @@ struct PasswordVaultView: View {
 
                                 if entry.id != filteredEntries.last?.id {
                                     Divider()
-                                        .overlay(Color(.separatorColor).opacity(0.45))
+                                        .overlay(theme.border)
                                         .padding(.leading, 12)
                                 }
                             }
@@ -233,11 +243,11 @@ struct PasswordVaultView: View {
                 }
                 .frame(width: contentWidth, alignment: .leading)
             }
-            .background(Color(.controlBackgroundColor).opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(theme.popoverBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color(.separatorColor).opacity(0.55), lineWidth: 1)
+                RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                    .stroke(theme.border, lineWidth: 1)
             }
         }
         .frame(maxWidth: .infinity, minHeight: tableHeight ?? 0, maxHeight: tableHeight ?? .infinity)
@@ -253,22 +263,22 @@ struct PasswordVaultView: View {
         .padding(.leading, Self.tableLeadingInset)
         .padding(.trailing, Self.tableTrailingInset)
         .padding(.vertical, 12)
-        .background(Color(.controlBackgroundColor).opacity(0.3))
+        .background(theme.mutedBackground)
     }
 
     private func tableRow(_ entry: SavedPasswordSummary, actionsColumnWidth: CGFloat) -> some View {
         HStack(spacing: 12) {
             HStack(spacing: 10) {
-                SiteFaviconView(host: entry.host, size: 20, cornerRadius: 5)
+                SiteFaviconView(host: entry.host, size: 20, cornerRadius: AuraRadius.button)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(entry.host)
-                        .font(.subheadline.weight(.medium))
+                        .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
                     if let origin = entry.origin {
                         Text(origin)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.mutedForeground)
                             .lineLimit(1)
                     }
                 }
@@ -277,8 +287,8 @@ struct PasswordVaultView: View {
 
             HStack(spacing: 6) {
                 Text(entry.displayUsername)
-                    .font(.subheadline)
-                    .foregroundStyle(entry.username.isEmpty ? .secondary : .primary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(entry.username.isEmpty ? theme.mutedForeground : theme.foreground)
                     .lineLimit(1)
 
                 copyButton(help: "Copy username") {
@@ -289,7 +299,7 @@ struct PasswordVaultView: View {
 
             HStack(spacing: 6) {
                 Text(revealedPasswordIDs[entry.id] ?? "••••••••••••")
-                    .font(.system(.subheadline, design: .monospaced))
+                    .font(.system(size: 13, design: .monospaced))
                     .lineLimit(1)
 
                 Button {
@@ -298,9 +308,9 @@ struct PasswordVaultView: View {
                     Image(systemName: revealedPasswordIDs[entry.id] == nil ? "eye" : "eye.slash")
                         .frame(width: 22, height: 22)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.secondary)
+                        .foregroundStyle(theme.mutedForeground)
                 }
-                .buttonStyle(.interactive(cornerRadius: 5))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .help(revealedPasswordIDs[entry.id] == nil ? "Reveal password" : "Hide password")
 
                 copyButton(help: "Copy password") {
@@ -317,7 +327,7 @@ struct PasswordVaultView: View {
                         .frame(width: 22, height: 22)
                         .font(.system(size: 13, weight: .medium))
                 }
-                .buttonStyle(.interactive(cornerRadius: 5))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .help("Delete saved password")
             }
             .frame(width: actionsColumnWidth, alignment: .leading)
@@ -329,8 +339,8 @@ struct PasswordVaultView: View {
 
     private func headerCell(_ title: String, width: CGFloat) -> some View {
         Text(title)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(theme.mutedForeground)
             .frame(width: width, alignment: .leading)
     }
 
@@ -338,7 +348,7 @@ struct PasswordVaultView: View {
         Button(action: action) {
             OraIcons(icon: .copy, size: .custom(14), color: .secondary)
         }
-        .buttonStyle(.interactive(cornerRadius: 5))
+        .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
         .help(help)
     }
 
@@ -363,22 +373,39 @@ struct PasswordVaultView: View {
         isAuthenticating = false
         searchText = ""
         revealedPasswordIDs.removeAll()
+        revealTimers.values.forEach { $0.cancel() }
+        revealTimers.removeAll()
     }
 
     private func toggleReveal(_ entry: SavedPasswordSummary) {
         if revealedPasswordIDs[entry.id] != nil {
-            revealedPasswordIDs[entry.id] = nil
+            hideReveal(entry.id)
             return
         }
 
-        if let password = try? passwordManager.revealPassword(for: entry) {
-            revealedPasswordIDs[entry.id] = password
+        do {
+            revealedPasswordIDs[entry.id] = try passwordManager.revealPassword(for: entry)
+            revealTimers[entry.id]?.cancel()
+            revealTimers[entry.id] = Task {
+                try? await Task.sleep(for: .seconds(RevealPolicy.hideAfter))
+                guard !Task.isCancelled else { return }
+                hideReveal(entry.id)
+            }
+        } catch {
+            passwordManager.report(error)
         }
     }
 
+    private func hideReveal(_ id: String) {
+        revealedPasswordIDs[id] = nil
+        revealTimers.removeValue(forKey: id)?.cancel()
+    }
+
     private func copyPassword(_ entry: SavedPasswordSummary) {
-        if let password = try? passwordManager.revealPassword(for: entry) {
-            passwordManager.copySensitiveToPasteboard(password)
+        do {
+            passwordManager.copySensitiveToPasteboard(try passwordManager.revealPassword(for: entry))
+        } catch {
+            passwordManager.report(error)
         }
     }
 }

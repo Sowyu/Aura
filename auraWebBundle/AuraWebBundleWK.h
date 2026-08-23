@@ -126,6 +126,10 @@ extern CFStringRef WKURLRequestCopyHTTPMethod(WKURLRequestRef request) CF_RETURN
 /// and it is the only way to read the `Accept` header the resource type is
 /// inferred from.
 extern CFTypeRef WKURLRequestCopyNSURLRequest(WKURLRequestRef request) CF_RETURNS_RETAINED;
+/// The other half of the same file. Takes an NSURLRequest (CFTypeRef here for the
+/// same reason) and is what makes a header change possible at all: the C request has
+/// no header setter, so a modified request has to be rebuilt from the bridged one.
+extern WKURLRequestRef WKURLRequestCreateWithNSURLRequest(CFTypeRef urlRequest);
 extern WKURLRequestRef WKURLRequestCreateWithWKURL(WKURLRef url);
 extern CFURLRef WKURLCopyCFURL(CFAllocatorRef allocator, WKURLRef url) CF_RETURNS_RETAINED;
 extern WKURLRef WKURLCreateWithCFURL(CFURLRef url);

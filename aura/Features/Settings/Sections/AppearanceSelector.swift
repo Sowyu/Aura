@@ -3,6 +3,8 @@ import SwiftUI
 struct AppearanceSelector: View {
     @Binding var selection: AppAppearance
 
+    @Environment(\.theme) private var theme
+
     private struct Option: Identifiable {
         let id = UUID()
         let appearance: AppAppearance
@@ -32,17 +34,17 @@ struct AppearanceSelector: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 105, height: 68)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: AuraRadius.button, style: .continuous))
                         Text(opt.title)
                             .fontWeight(isSelected ? .semibold : .regular)
                     }
                     .padding(6)
                     .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(isSelected ? Color(.controlColor) : Color.clear)
+                        RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
+                            .fill(isSelected ? theme.accent.opacity(0.18) : Color.clear)
                     )
                 }
-                .buttonStyle(.interactive(cornerRadius: 10))
+                .buttonStyle(.interactive(cornerRadius: AuraRadius.row))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

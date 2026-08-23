@@ -3,7 +3,7 @@ import SwiftUI
 struct EmptyFavTabItem: View {
     @Environment(\.theme) var theme
 
-    let cornerRadius: CGFloat = 8
+    let cornerRadius: CGFloat = AuraRadius.row
 
     var body: some View {
         VStack(spacing: 8) {

@@ -6,8 +6,9 @@ import Foundation
 /// its tabs) to WebKit's extension machinery.
 ///
 /// Every `OraRoot` builds its own `TabManager`, so the pairing is one adapter per
-/// window. Private windows are never registered: they don't get the extension
-/// controller at all, which is why `isPrivate(for:)` is a flat `false`.
+/// window. Private windows are registered too, and report themselves as private:
+/// WebKit hides them from every extension that was not granted private access, and
+/// `tabs(for:)` refuses to list their tabs as a second line of defence.
 ///
 /// Skipped protocol members: `setWindowState` and `setFrame` (extensions moving
 /// or resizing the browser window is not something Aura supports yet).
@@ -18,24 +19,40 @@ final class ExtensionWindowAdapter: NSObject, WKWebExtensionWindow {
 
     private(set) weak var window: NSWindow?
     private(set) weak var tabManager: TabManager?
+    let isPrivateWindow: Bool
 
-    private init(window: NSWindow, tabManager: TabManager) {
+    private init(window: NSWindow, tabManager: TabManager, isPrivate: Bool) {
         self.window = window
         self.tabManager = tabManager
+        self.isPrivateWindow = isPrivate
         super.init()
     }
 
     // MARK: - Registry
 
-    static func adapter(for window: NSWindow, tabManager: TabManager) -> ExtensionWindowAdapter {
+    static func adapter(
+        for window: NSWindow,
+        tabManager: TabManager,
+        isPrivate: Bool = false
+    ) -> ExtensionWindowAdapter {
         let key = ObjectIdentifier(window)
         if let existing = cache[key], existing.window === window {
             existing.tabManager = tabManager
             return existing
         }
-        let adapter = ExtensionWindowAdapter(window: window, tabManager: tabManager)
+        let adapter = ExtensionWindowAdapter(window: window, tabManager: tabManager, isPrivate: isPrivate)
         cache[key] = adapter
         return adapter
+    }
+
+    /// Whether an extension may be told about the tabs in this kind of window.
+    ///
+    /// A private window is invisible to an extension that was not granted private
+    /// access. WebKit filters on the same rule once `hasAccessToPrivateData` is set, so
+    /// this is belt and braces: adapters are shared by every loaded extension, and a
+    /// missed filter would hand one extension's grant to all of them.
+    static func showsTabs(inPrivateWindow: Bool, contextHasPrivateAccess: Bool) -> Bool {
+        !inPrivateWindow || contextHasPrivateAccess
     }
 
     static func adapter(for window: NSWindow) -> ExtensionWindowAdapter? {
@@ -86,13 +103,18 @@ final class ExtensionWindowAdapter: NSObject, WKWebExtensionWindow {
     // MARK: - WKWebExtensionWindow
 
     func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] {
-        guard let tabManager else { return [] }
+        guard let tabManager, isVisible(to: context) else { return [] }
         return Self.orderedTabs(in: tabManager).map { ExtensionTabAdapter.adapter(for: $0) }
     }
 
     func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? {
-        guard let tab = tabManager?.activeTab else { return nil }
+        guard let tab = tabManager?.activeTab, isVisible(to: context) else { return nil }
         return ExtensionTabAdapter.adapter(for: tab)
+    }
+
+    /// True when `context` is allowed to know this window's tabs.
+    func isVisible(to context: WKWebExtensionContext) -> Bool {
+        Self.showsTabs(inPrivateWindow: isPrivateWindow, contextHasPrivateAccess: context.hasAccessToPrivateData)
     }
 
     func windowType(for context: WKWebExtensionContext) -> WKWebExtension.WindowType {
@@ -108,7 +130,7 @@ final class ExtensionWindowAdapter: NSObject, WKWebExtensionWindow {
     }
 
     func isPrivate(for context: WKWebExtensionContext) -> Bool {
-        false
+        isPrivateWindow
     }
 
     func frame(for context: WKWebExtensionContext) -> CGRect {

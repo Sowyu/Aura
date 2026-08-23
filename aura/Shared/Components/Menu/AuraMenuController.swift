@@ -20,8 +20,9 @@ enum AuraMenuMetrics {
     static let headerHeight: CGFloat = 22
     static let separatorHeight: CGFloat = 9
     static let verticalPadding: CGFloat = 6
-    static let panelRadius: CGFloat = 10
-    static let itemRadius: CGFloat = 6
+    /// Panels are a card, rows are a button. Both radii come from the shared scale.
+    static let panelRadius = AuraRadius.row
+    static let itemRadius = AuraRadius.button
     static let iconSize: CGFloat = 16
     static let leadingInset: CGFloat = 10
     /// Gap kept between a panel and the window edge, and between a submenu and its parent.
@@ -38,6 +39,13 @@ enum AuraMenuMetrics {
 
     static func height(of items: [AuraMenuItem]) -> CGFloat {
         items.reduce(verticalPadding * 2) { $0 + height(of: $1) }
+    }
+
+    /// Panel height for a list of `contentHeight` inside a container `available` points
+    /// tall. A menu longer than the window keeps `windowInset` clear at both edges and
+    /// scrolls the rest; without this a 60-row menu simply ran off the bottom.
+    static func fittedHeight(contentHeight: CGFloat, available: CGFloat) -> CGFloat {
+        min(contentHeight, max(0, available - windowInset * 2))
     }
 
     private static let titleFont = NSFont.systemFont(ofSize: 13)
@@ -78,6 +86,50 @@ enum AuraMenuMetrics {
     }
 }
 
+/// Decides whether a pointer that has just left a submenu's parent row is still on its
+/// way into the open child panel.
+///
+/// Without this, sweeping diagonally from "JavaScript" down into its submenu crosses the
+/// rows underneath, and each one would slam the panel shut before the pointer arrives.
+/// The zone is the triangle from the point where the pointer left the parent row out to
+/// the child's far edge, so it is tight at the parent row and only ever as wide as the
+/// panel being aimed at. A time limit closes it anyway when the pointer wanders inside
+/// the triangle and stops, which produces no further mouse-moved events.
+enum AuraMenuSafeZone {
+    /// Longest a pointer may travel inside the triangle without reaching the child.
+    static let grace: TimeInterval = 0.3
+
+    /// `origin` is where the pointer last sat on the parent row, `child` the open panel,
+    /// both in SwiftUI window coordinates.
+    static func allowsTravel(
+        to pointer: CGPoint,
+        from origin: CGPoint,
+        toward child: CGRect,
+        elapsed: TimeInterval
+    ) -> Bool {
+        guard elapsed >= 0, elapsed < grace, child.width > 0, child.height > 0 else { return false }
+        // The far edge, not the near one: it cannot coincide with the origin's x the way
+        // the near edge can when the pointer sits in the panels' 4pt overlap.
+        let edge = child.midX >= origin.x ? child.maxX : child.minX
+        return triangleContains(
+            pointer,
+            origin,
+            CGPoint(x: edge, y: child.minY),
+            CGPoint(x: edge, y: child.maxY)
+        )
+    }
+
+    private static func triangleContains(_ point: CGPoint, _ apex: CGPoint, _ top: CGPoint, _ bottom: CGPoint) -> Bool {
+        let sides = [side(point, apex, top), side(point, top, bottom), side(point, bottom, apex)]
+        // On the same side of all three edges, counting an exact zero as inside.
+        return !(sides.contains { $0 < 0 } && sides.contains { $0 > 0 })
+    }
+
+    private static func side(_ point: CGPoint, _ start: CGPoint, _ end: CGPoint) -> CGFloat {
+        (point.x - end.x) * (start.y - end.y) - (start.x - end.x) * (point.y - end.y)
+    }
+}
+
 /// Presents and drives every in-app menu. One instance backs all windows; `window`
 /// records which one owns the open menu so the other hosts stay empty.
 @MainActor
@@ -91,6 +143,9 @@ final class AuraMenuController: ObservableObject {
         /// Top-left corner in SwiftUI (top-down) window coordinates.
         var origin: CGPoint
         var size: CGSize
+        /// How far the panel's scroll view has travelled. Zero unless the list is taller
+        /// than `size.height`; hit testing and submenu placement both read it.
+        var scrollOffset: CGFloat = 0
         var highlighted: Int?
         var pressed: Int?
         /// Row of the parent level that opened this one.
@@ -103,6 +158,7 @@ final class AuraMenuController: ObservableObject {
 
     @Published private(set) var levels: [Level] = []
     private(set) weak var window: NSWindow?
+    private var acceptedMouseMovedBefore = false
 
     var isOpen: Bool { !levels.isEmpty }
 
@@ -125,11 +181,12 @@ final class AuraMenuController: ObservableObject {
         }
 
         let bounds = content.bounds
-        // ponytail: a menu taller than the window is clipped rather than scrolled. Give the
-        // panel a ScrollView if any real menu ever outgrows a window.
         let size = CGSize(
             width: AuraMenuMetrics.width(of: tidyItems),
-            height: min(AuraMenuMetrics.height(of: tidyItems), bounds.height - AuraMenuMetrics.windowInset * 2)
+            height: AuraMenuMetrics.fittedHeight(
+                contentHeight: AuraMenuMetrics.height(of: tidyItems),
+                available: bounds.height
+            )
         )
 
         let desired: CGPoint
@@ -151,7 +208,9 @@ final class AuraMenuController: ObservableObject {
         }
 
         self.window = target
-        // Mouse-moved events drive the highlight, and windows do not deliver them by default.
+        // Mouse-moved events drive the highlight, and windows do not deliver them by
+        // default. Put back on dismiss, or the window pays for them for the rest of its life.
+        acceptedMouseMovedBefore = target.acceptsMouseMovedEvents
         target.acceptsMouseMovedEvents = true
         levels = [
             Level(
@@ -165,6 +224,7 @@ final class AuraMenuController: ObservableObject {
     func dismiss() {
         guard isOpen else { return }
         levels = []
+        window?.acceptsMouseMovedEvents = acceptedMouseMovedBefore
         window = nil
     }
 
@@ -207,6 +267,13 @@ extension AuraMenuController {
         levels[level].highlighted = row
     }
 
+    /// The panel reports its scroll view's offset back here, so a menu that scrolled to
+    /// keep the keyboard highlight visible still hit-tests the row under the pointer.
+    func scrolled(to offset: CGFloat, atLevel level: Int) {
+        guard levels.indices.contains(level), levels[level].scrollOffset != offset else { return }
+        levels[level].scrollOffset = offset
+    }
+
     func press(row: Int?, atLevel level: Int) {
         guard levels.indices.contains(level) else { return }
         levels[level].pressed = row
@@ -234,10 +301,15 @@ extension AuraMenuController {
         let items = parent.items
         let size = CGSize(
             width: AuraMenuMetrics.width(of: items),
-            height: min(AuraMenuMetrics.height(of: items), bounds.height - AuraMenuMetrics.windowInset * 2)
+            height: AuraMenuMetrics.fittedHeight(
+                contentHeight: AuraMenuMetrics.height(of: items),
+                available: bounds.height
+            )
         )
         let panel = levels[level].frame
-        let rowTop = panel.minY + AuraMenuMetrics.offset(ofRow: row, in: levels[level].items)
+        let rowTop = panel.minY
+            + AuraMenuMetrics.offset(ofRow: row, in: levels[level].items)
+            - levels[level].scrollOffset
         let overlap = AuraMenuMetrics.submenuOverlap
         // The child's first row lines up with the parent row; near an edge it flips to the
         // left of the parent panel, and upwards so its bottom sits level with the parent's.
@@ -305,7 +377,7 @@ extension AuraMenuController {
     /// Deepest panel and row under a point in SwiftUI window coordinates, if any.
     func hit(_ point: CGPoint) -> (level: Int, row: Int?)? {
         for level in levels.indices.reversed() where levels[level].frame.contains(point) {
-            let offset = point.y - levels[level].origin.y
+            let offset = point.y - levels[level].origin.y + levels[level].scrollOffset
             return (level, AuraMenuMetrics.row(atOffset: offset, in: levels[level].items))
         }
         return nil

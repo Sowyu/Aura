@@ -1,6 +1,6 @@
 import Foundation
 
-/// A space's privacy defaults. Ad and tracker blocking is uBlock Origin's job,
+/// A space's privacy defaults. Ad and tracker blocking is uBlock Origin Lite's job,
 /// so nothing here describes filter lists; the fields that survive are the ones
 /// no extension can do from inside a page.
 struct SpacePrivacySettings: Codable, Equatable, Hashable {

@@ -74,6 +74,9 @@ final class TabHibernationPolicy {
     /// True once the window that owned this policy has gone.
     var isOrphaned: Bool { manager == nil }
 
+    /// True once `arm()` has installed the memory-pressure source.
+    var isArmed: Bool { pressureSource != nil }
+
     init(manager: TabManager) {
         self.manager = manager
     }
@@ -153,9 +156,21 @@ final class TabHibernationPolicy {
 
         let fraction = SettingsStore.shared.hibernationPreset.pressureUnloadFraction
         let count = min(candidates.count, Int((Double(candidates.count) * fraction).rounded(.up)))
-        let doomed = Array(evictionOrder(candidates, now: now).prefix(count))
-        for tab in doomed { manager.hibernate(tab) }
-        return doomed
+        // How many of the candidates may still be live when the pass is done. A veto from
+        // the unsaved-input probe used to leave the pass a tab short; now the next
+        // candidate takes the vetoing tab's place.
+        let floor = candidates.count - count
+        var firstRound: [Tab] = []
+        manager.hibernateInRounds { [weak self] tried in
+            guard let self else { return [] }
+            let live = candidates.filter(\.isWebViewReady)
+            guard live.count > floor else { return [] }
+            let pool = live.filter { !tried.contains($0.id) && self.isEligible($0, now: now) }
+            let round = Array(self.evictionOrder(pool, now: now).prefix(live.count - floor))
+            if tried.isEmpty { firstRound = round }
+            return round
+        }
+        return firstRound
     }
 
     /// Aura going to the background is the cheapest moment to give memory back, but only
@@ -205,13 +220,26 @@ extension TabManager {
     /// Drops a tab's web view and keeps the row: URL, title, header colour, and the
     /// scroll offset all survive. Typing the user has not submitted vetoes the unload,
     /// so nothing typed is lost, and so does playback unless `unloadMediaTabs` is on.
-    fileprivate func hibernate(_ tab: Tab) {
-        guard tab.isWebViewReady, !isActiveInAnyWindow(tab), mayHibernate(tab) else { return }
-        guard hibernating.insert(tab.id).inserted else { return }
+    ///
+    /// `completed` fires once the probe has answered, whether or not the tab went, so a
+    /// caller enforcing a cap can recount and pick another candidate.
+    fileprivate func hibernate(_ tab: Tab, completed: @escaping () -> Void = {}) {
+        guard tab.isWebViewReady, !isActiveInAnyWindow(tab), mayHibernate(tab) else {
+            completed()
+            return
+        }
+        guard hibernating.insert(tab.id).inserted else {
+            completed()
+            return
+        }
         let id = tab.id
         tab.captureHibernationState { [weak self, weak tab] hasUnsavedInput in
             MainActor.assumeIsolated {
-                guard let self else { return }
+                guard let self else {
+                    completed()
+                    return
+                }
+                defer { completed() }
                 self.hibernating.remove(id)
                 // The probe is the only place unsaved input is ever observed, so the
                 // score's memory of it is refreshed here.
@@ -257,19 +285,46 @@ extension TabManager {
         guard limit > 0 else { return }
 
         let allContainers = containers ?? fetchContainers()
-        let live = allContainers.flatMap(\.tabs).filter(\.isWebViewReady)
-        let excess = live.count - limit
-        guard excess > 0 else { return }
-
-        // ponytail: plain sort over the live set, not a maintained LRU list. Switch to
-        // an ordered structure if the live cap is ever raised past a few hundred.
-        let evictable = live
-            .filter { !isActiveInAnyWindow($0) && mayHibernate($0) && $0.type == .normal }
-            .sorted { ($0.lastAccessedAt ?? .distantPast) < ($1.lastAccessedAt ?? .distantPast) }
-
-        for tab in evictable.prefix(excess) {
-            hibernate(tab)
+        hibernateInRounds { [weak self] tried in
+            guard let self else { return [] }
+            let live = allContainers.flatMap(\.tabs).filter(\.isWebViewReady)
+            let excess = live.count - limit
+            guard excess > 0 else { return [] }
+            return Array(self.evictionCandidates(from: live, excluding: tried).prefix(excess))
         }
+    }
+
+    /// The live tabs a cap pass may unload, least recently used first.
+    ///
+    /// ponytail: plain sort over the live set, not a maintained LRU list. Switch to an
+    /// ordered structure if the live cap is ever raised past a few hundred.
+    func evictionCandidates(from live: [Tab], excluding tried: Set<UUID> = []) -> [Tab] {
+        live
+            .filter { !tried.contains($0.id) && !isActiveInAnyWindow($0) && mayHibernate($0) && $0.type == .normal }
+            .sorted { ($0.lastAccessedAt ?? .distantPast) < ($1.lastAccessedAt ?? .distantPast) }
+    }
+
+    /// Unloads whatever `nextRound` names, then asks it again once every probe in that
+    /// round has answered, until it names nothing. The unsaved-input probe is a round
+    /// trip and can veto an unload, so a single pass left the cap violated until the
+    /// next minute tick; `tried` carries the tabs already asked so the recount cannot
+    /// pick the same vetoing tab forever.
+    fileprivate func hibernateInRounds(_ nextRound: @escaping (Set<UUID>) -> [Tab]) {
+        func run(_ tried: Set<UUID>) {
+            let round = nextRound(tried)
+            guard !round.isEmpty else { return }
+            var tried = tried
+            var pending = round.count
+            for tab in round {
+                tried.insert(tab.id)
+                hibernate(tab) {
+                    pending -= 1
+                    guard pending == 0 else { return }
+                    run(tried)
+                }
+            }
+        }
+        run([])
     }
 
     /// Completely remove old normal tabs that haven't been accessed for a long time
@@ -309,7 +364,9 @@ extension TabManager {
                    !tab.isPlayingMedia,
                    tab.type == .normal
                 {
-                    closeTab(tab: tab)
+                    // Not a close the user made, so it does not go on the reopen stack,
+                    // same as `removeOldTabs`.
+                    closeTab(tab: tab, shouldTrackForRestore: false)
                 }
             }
         }
@@ -317,14 +374,23 @@ extension TabManager {
 
     /// Run all three tab-expiry passes off a single container fetch.
     func runTabMaintenance() {
-        // ponytail: the pressure policy is armed from the first maintenance tick, up to
-        // 60 s after launch, because `TabManager.init` is in another file. Move the call
-        // into `init` if pressure inside that first minute ever matters.
-        hibernationPolicy.arm()
         let containers = fetchContainers()
         cleanupOldTabs(in: containers)
         enforceLiveTabLimit(in: containers)
         removeOldTabs(in: containers)
         autoClearContainerTabs(in: containers)
+        captureActiveSession()
+        // Re-fetched: the passes above delete rows, and a container's `tabs` array is a
+        // snapshot from before they ran.
+        sessionStore.prune(liveTabIDs: Set(fetchContainers().flatMap(\.tabs).map(\.id)))
+    }
+
+    /// The tab in front is the one whose saved session goes stale: every other tab wrote
+    /// its own on the way out of focus. A minute's granularity is what stands between a
+    /// crash and losing the reading position on the page that was open.
+    private func captureActiveSession() {
+        guard let tab = activeTab, tab.isWebViewReady else { return }
+        tab.recordScrollOffset()
+        sessionStore.scheduleCapture(tab)
     }
 }

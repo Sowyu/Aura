@@ -29,15 +29,17 @@ struct LauncherField: View {
 
     /// Row height, fill and corner are the whole point of this type: change them here and
     /// both call sites move together.
-    static let height: CGFloat = 52
-    static let cornerRadius: CGFloat = 13
+    static let height: CGFloat = 56
+    static let cornerRadius: CGFloat = 8
     static let hairline: CGFloat = 0.08
     /// Leading padding, icon slot and the gap after it: where the field's text starts.
     /// Suggestion rows are inset to match, so the two columns line up.
-    static let horizontalPadding: CGFloat = 18
-    static let iconWidth: CGFloat = 18
-    static let iconSpacing: CGFloat = 10
+    static let horizontalPadding: CGFloat = 24
+    static let iconWidth: CGFloat = 16
+    static let iconSpacing: CGFloat = 12
     static var textInset: CGFloat { horizontalPadding + iconWidth + iconSpacing }
+    /// One size for the typed text and the placeholder under it.
+    static let fontSize: CGFloat = 15
 
     var body: some View {
         HStack(alignment: .center, spacing: Self.iconSpacing) {
@@ -50,7 +52,7 @@ struct LauncherField: View {
                 )
             } else {
                 Image(systemName: isValidURL(text) ? "globe" : "magnifyingglass")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: Self.iconWidth, weight: .regular))
                     .foregroundStyle(theme.foreground.opacity(0.5))
                     .frame(width: Self.iconWidth, height: Self.iconWidth)
             }
@@ -80,7 +82,7 @@ struct LauncherField: View {
     private var textField: some View {
         LauncherTextField(
             text: $text,
-            font: NSFont.systemFont(ofSize: 16, weight: .regular),
+            font: NSFont.systemFont(ofSize: Self.fontSize, weight: .regular),
             onTab: onTab,
             onSubmit: onSubmit,
             onDelete: onDelete,

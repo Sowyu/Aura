@@ -1,5 +1,6 @@
 import AppKit
 @testable import Aura
+import SwiftUI
 import Testing
 
 /// The two numbers behind Liquid Glass: how far the tint goes, and which AppKit
@@ -11,6 +12,19 @@ struct GlassChromeTests {
         #expect(AuraGlass.clampedOpacity(-1) == AuraGlass.minOpacity)
         #expect(AuraGlass.clampedOpacity(0.42) == 0.42)
         #expect(AuraGlass.clampedOpacity(3) == 1)
+    }
+
+    @Test func anUnsetTintFollowsTheThemeAccent() {
+        // Nothing stored is the whole point: the glass has no colour of its own.
+        #expect(AuraGlass.defaultTintHex.isEmpty)
+
+        let aura = Theme(colorScheme: .light)
+        #expect(AuraGlass.tint(forHex: "", theme: aura) == aura.accent)
+        // A user accent preset reaches the glass as well.
+        let purple = Theme(colorScheme: .light, accentHex: "#9775FA")
+        #expect(AuraGlass.tint(forHex: "", theme: purple) == Color(hex: "#9775FA"))
+        // A tint the user picked by hand still wins over both.
+        #expect(AuraGlass.tint(forHex: "#4DABF7", theme: purple) == Color(hex: "#4DABF7"))
     }
 
     @Test func everyBlurStepPicksItsOwnMaterial() {

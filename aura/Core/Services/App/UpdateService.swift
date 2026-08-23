@@ -4,6 +4,38 @@ import SwiftUI
 
 private let logger = AuraLog.category("UpdateService")
 
+/// Pure reducer for the outcome of an update check, so the terminal states can be
+/// tested without Sparkle. Every outcome clears `isChecking`; the fake 30 second
+/// timeout is only a backstop for outcomes Sparkle never reports.
+enum UpdateCheckState {
+    struct Snapshot: Equatable {
+        var isChecking: Bool
+        var updateAvailable: Bool
+        var resultText: String
+    }
+
+    enum Outcome: Equatable {
+        case found(version: String)
+        case noUpdate(currentVersion: String)
+        case failed(reason: String)
+    }
+
+    static func apply(_ outcome: Outcome) -> Snapshot {
+        switch outcome {
+        case let .found(version):
+            return Snapshot(isChecking: false, updateAvailable: true, resultText: "Update available: \(version)")
+        case let .noUpdate(currentVersion):
+            return Snapshot(
+                isChecking: false,
+                updateAvailable: false,
+                resultText: "No updates available (current: \(currentVersion))"
+            )
+        case let .failed(reason):
+            return Snapshot(isChecking: false, updateAvailable: false, resultText: reason)
+        }
+    }
+}
+
 /// One updater for the app, shared by every window. Sparkle wants a single `SPUUpdater`
 /// per host bundle, and `start()` does bundle validation and installer-service setup
 /// that first paint does not need, so it is deferred: `OraRoot` calls `start()` once the
@@ -93,24 +125,32 @@ extension UpdateService: SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
-        let version = item.displayVersionString
+        finish(.found(version: item.displayVersionString))
+    }
 
-        DispatchQueue.main.async {
-            self.updateAvailable = true
-            self.isCheckingForUpdates = false
-            self.lastCheckResult = "Update available: \(version)"
-            self.lastCheckDate = Date()
-        }
+    /// Sparkle calls this on a clean "you are up to date" result. Without it the
+    /// only reset came from `updaterDidNotFindUpdate:error:`, which Sparkle skips
+    /// when there is no error, so the UI stayed in "checking" for the full 30
+    /// second timeout.
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        finish(.noUpdate(currentVersion: Self.currentVersion))
     }
 
     func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
         logger.error("No update found: \(error.localizedDescription)")
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        finish(.noUpdate(currentVersion: Self.currentVersion))
+    }
 
+    private static var currentVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
+    private func finish(_ outcome: UpdateCheckState.Outcome) {
+        let snapshot = UpdateCheckState.apply(outcome)
         DispatchQueue.main.async {
-            self.updateAvailable = false
-            self.isCheckingForUpdates = false
-            self.lastCheckResult = "No updates available (current: \(currentVersion))"
+            self.updateAvailable = snapshot.updateAvailable
+            self.isCheckingForUpdates = snapshot.isChecking
+            self.lastCheckResult = snapshot.resultText
             self.lastCheckDate = Date()
         }
     }
@@ -133,23 +173,13 @@ extension UpdateService: SPUUpdaterDelegate {
 
     func updater(_ updater: SPUUpdater, failedToLoadAppcastWithError error: Error) {
         logger.error("Update error: \(error.localizedDescription)")
-
-        DispatchQueue.main.async {
-            self.isCheckingForUpdates = false
-            self.lastCheckResult = "Failed to load appcast: \(error.localizedDescription)"
-            self.lastCheckDate = Date()
-        }
+        finish(.failed(reason: "Failed to load appcast: \(error.localizedDescription)"))
     }
 
     func updater(_ updater: SPUUpdater, failedToDownloadUpdate item: SUAppcastItem, error: Error) {
         logger.error("Update error: \(error.localizedDescription)")
         let version = item.displayVersionString
         logger.error("Item version: \(version)")
-
-        DispatchQueue.main.async {
-            self.isCheckingForUpdates = false
-            self.lastCheckResult = "Download failed: \(error.localizedDescription)"
-            self.lastCheckDate = Date()
-        }
+        finish(.failed(reason: "Download failed: \(error.localizedDescription)"))
     }
 }

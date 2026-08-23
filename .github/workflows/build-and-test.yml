@@ -1,4 +1,4 @@
-name: Lint and Formatting
+name: Build and test
 
 on:
   push:
@@ -20,7 +20,9 @@ jobs:
     - name: Setup Xcode
       uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: latest-stable
+        # Pinned, not latest-stable: the project tracks one SDK. Bump together with
+        # the local toolchain in HANDOFF.md.
+        xcode-version: '26.0'
     
     - name: Show Xcode version
       run: xcodebuild -version
@@ -64,3 +66,17 @@ jobs:
     
     - name: Resolve dependencies
       run: xcodebuild -resolvePackageDependencies
+
+    - name: Build for testing
+      run: |
+        set -o pipefail
+        xcodebuild build-for-testing -project Aura.xcodeproj -scheme aura \
+          -destination "platform=macOS" -configuration Debug \
+          -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | xcbeautify
+
+    - name: Unit tests
+      run: |
+        set -o pipefail
+        xcodebuild test-without-building -project Aura.xcodeproj -scheme aura \
+          -destination "platform=macOS" -derivedDataPath DerivedData \
+          -only-testing:auraTests CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | xcbeautify

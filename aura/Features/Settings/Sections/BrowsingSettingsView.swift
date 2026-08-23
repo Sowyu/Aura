@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The launcher, the home page, and what Aura does on launch, on quit, and when
-/// another app hands it a link.
+/// Tab lifetime and placement, the launcher, the home page, and what Aura does on
+/// launch, on quit, and when another app hands it a link. The tab cards come from
+/// `TabManagementSettingsGroup`, which used to be a sibling page.
 struct BrowsingSettingsView: View {
     @Bindable private var settings = SettingsStore.shared
     @StateObject private var defaultBrowserManager = DefaultBrowserManager.shared
@@ -13,7 +14,7 @@ struct BrowsingSettingsView: View {
             if !defaultBrowserManager.isDefault {
                 SettingsCard {
                     HStack {
-                        Text("Born for your Mac. Make Aura your default browser.")
+                        Text("Make Aura the default browser.")
                         Spacer()
                         Button("Set as Default") {
                             DefaultBrowserManager.requestSetAsDefault()
@@ -23,12 +24,7 @@ struct BrowsingSettingsView: View {
                 }
             }
 
-            SettingsCard(
-                header: "Launcher",
-                description: "Cmd+T opens the launcher in the middle of the window."
-            ) {
-                Toggle("Move up when suggestions appear", isOn: $settings.launcherRisesForSuggestions)
-            }
+            TabManagementSettingsGroup()
 
             homePageCard
 
@@ -45,6 +41,8 @@ struct BrowsingSettingsView: View {
                 Toggle("Reopen the tabs I had open", isOn: $settings.restoreTabsOnLaunch)
                 Toggle("Ask before quitting", isOn: $settings.confirmBeforeQuit)
             }
+
+            SettingsBackupCard()
         }
         .onAppear {
             homePageDraft = settings.homePageURLString
