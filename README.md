@@ -112,7 +112,6 @@ and the Sparkle EdDSA key in the login keychain.
 - [ROADMAP.md](ROADMAP.md), what is planned
 - [SECURITY.md](SECURITY.md), secrets, signing keys and reporting
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- [HANDOFF.md](HANDOFF.md), architecture and working notes
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
 ## License
