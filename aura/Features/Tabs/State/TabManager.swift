@@ -30,7 +30,11 @@ private final class WeakTabManager {
 // swiftlint:disable:next type_body_length
 final class TabManager {
     var activeContainer: TabContainer?
-    var activeTab: Tab?
+    var activeTab: Tab? {
+        didSet { activePosition = activeTab.map(TabPosition.init) }
+    }
+    /// Copied on every activation, see `TabPosition`.
+    @ObservationIgnored private(set) var activePosition: TabPosition?
     /// Sidebar folder currently showing its inline rename field, if any.
     var renamingFolderID: UUID?
     let modelContainer: ModelContainer

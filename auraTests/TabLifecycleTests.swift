@@ -492,6 +492,22 @@ struct TabLifecycleTests {
         #expect(windowA.activeTab?.id == survivor.id)
     }
 
+    /// The reconcile reads the active tab's position from this copy, never from the
+    /// model, because the model's row may already be gone when the notification lands.
+    @Test func activationCopiesTheTabPosition() throws {
+        let (manager, space) = try makeManager()
+        let tab = try makeTab(manager, space, order: 3)
+
+        manager.activateTab(tab)
+        let position = try #require(manager.activePosition)
+        #expect(position.id == tab.id)
+        #expect(position.containerID == space.id)
+        #expect(position.order == 3)
+
+        manager.activeTab = nil
+        #expect(manager.activePosition == nil)
+    }
+
     /// WebKit tracks open tabs by adapter object. A space deletion bulk-deletes its tabs
     /// without ever reaching `closeTab`, so the adapters used to outlive the rows.
     @Test func deletingASpaceDiscardsItsExtensionAdapters() async throws {

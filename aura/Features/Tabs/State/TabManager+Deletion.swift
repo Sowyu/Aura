@@ -27,6 +27,26 @@ extension TabManager {
         return true
     }
 
+    /// What the reconcile needs to know about the active tab, copied while its row is
+    /// still live. Once another window has deleted the row, reading any stored property
+    /// off the model traps inside SwiftData, and `isDeleted` does not cover a delete made
+    /// by another context, so nothing below may touch the instance itself.
+    struct TabPosition {
+        let id: UUID
+        let containerID: UUID
+        let folderID: UUID?
+        let type: TabType
+        let order: Int
+
+        init(_ tab: Tab) {
+            id = tab.id
+            containerID = tab.container.id
+            folderID = tab.folder?.id
+            type = tab.type
+            order = tab.order
+        }
+    }
+
     /// Drops every trace of tabs another window deleted and moves the selection off a
     /// row that is no longer in the store.
     func reconcileDeletedTabs(_ ids: Set<UUID>) {
@@ -34,15 +54,13 @@ extension TabManager {
         hibernationPolicy.tabsWithUnsavedInput.subtract(ids)
         recentlyClosedTabs.removeAll { ids.contains($0.id) }
 
-        guard let active = activeTab else {
+        guard let position = activePosition else {
             reselectContainerIfDeleted()
             return
         }
-        // `isDeleted` is checked first and short-circuits: reading a stored property of
-        // a row this context has already dropped is not safe.
-        guard active.isDeleted || ids.contains(active.id) else { return }
+        guard ids.contains(position.id) else { return }
 
-        let replacement = replacementTab(after: active, deleted: ids)
+        let replacement = replacementTab(after: position)
         // No `maybeIsActive = false` on the way out: that would write to a deleted row.
         activeTab = nil
         if let replacement {
@@ -52,21 +70,27 @@ extension TabManager {
         }
     }
 
-    /// Where the selection falls when the active tab is deleted from under this window.
-    /// The usual neighbour rule first, then the space's most recent surviving tab, then
-    /// anything left anywhere.
-    func replacementTab(after tab: Tab, deleted: Set<UUID>) -> Tab? {
-        func survives(_ candidate: Tab) -> Bool {
-            !candidate.isDeleted && !deleted.contains(candidate.id)
-        }
-        if !tab.isDeleted, let neighbour = neighbour(after: tab), survives(neighbour) {
-            return neighbour
-        }
-        let containers = fetchContainers()
-        let activeContainerID = activeContainer.flatMap { $0.isDeleted ? nil : $0.id }
-        let sameSpace = containers.first { $0.id == activeContainerID }?.tabs.filter(survives) ?? []
-        let pool = sameSpace.isEmpty ? containers.flatMap(\.tabs).filter(survives) : sameSpace
+    /// Where the selection falls when the active tab is deleted from under this window:
+    /// the neighbour rule `closeTab` uses, then the space's most recent tab, then anything
+    /// left anywhere. Every candidate comes from a fetch, which only returns rows that
+    /// still exist, never from a cached relationship that may still hold the deleted one.
+    func replacementTab(after position: TabPosition) -> Tab? {
+        let sameSpace = fetchLiveTabs(in: position.containerID)
+        let siblings = sameSpace
+            .filter { $0.type == position.type && $0.folder?.id == position.folderID }
+            .sorted { $0.order > $1.order }
+        if let below = siblings.first(where: { $0.order < position.order }) { return below }
+        if let above = siblings.last(where: { $0.order > position.order }) { return above }
+        let pool = sameSpace.isEmpty ? fetchLiveTabs(in: nil) : sameSpace
         return pool.max { ($0.lastAccessedAt ?? .distantPast) < ($1.lastAccessedAt ?? .distantPast) }
+    }
+
+    private func fetchLiveTabs(in spaceID: UUID?) -> [Tab] {
+        var descriptor = FetchDescriptor<Tab>()
+        if let spaceID {
+            descriptor.predicate = #Predicate { $0.container.id == spaceID }
+        }
+        return (try? modelContext.fetch(descriptor)) ?? []
     }
 
     /// A space deleted in another window leaves this one pointing at a row that is gone.

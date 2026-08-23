@@ -49,21 +49,15 @@ targets:
       - name: "Copy Icon Bundle"
         inputFiles:
           - "$(SRCROOT)/aura/Assets/Icons/AuraIcon.icon"
-          - "$(SRCROOT)/aura/Assets/Icons/AuraIconDev.icon"
         outputFiles:
           - "$(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/AuraIcon.icon"
-          - "$(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/AuraIconDev.icon"
         script: |
-          ICON_SRC_DEV="$SRCROOT/aura/Assets/Icons/AuraIconDev.icon"
-          ICON_SRC_RELEASE="$SRCROOT/aura/Assets/Icons/AuraIcon.icon"
+          # One icon for every configuration. A stale copy is removed first: cp -R
+          # merges into an existing folder and would keep layers that no longer exist.
+          ICON_SRC="$SRCROOT/aura/Assets/Icons/AuraIcon.icon"
           ICON_DST="$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Resources/"
-          if [ "$CONFIGURATION" = "Debug" ]; then
-              echo "Using AuraIconDev.icon for Debug build"
-              cp -R "$ICON_SRC_DEV" "$ICON_DST"
-          else
-              echo "Using AuraIcon.icon for Release build"
-              cp -R "$ICON_SRC_RELEASE" "$ICON_DST"
-          fi
+          rm -rf "$ICON_DST/AuraIcon.icon" "$ICON_DST/AuraIconDev.icon"
+          cp -R "$ICON_SRC" "$ICON_DST"
 
     info:
       path: aura/Info/Info.plist
@@ -164,7 +158,7 @@ targets:
         SUEnableInstallerLauncherService: YES
       configs:
         Debug:
-          ASSETCATALOG_COMPILER_APPICON_NAME: AuraIconDev
+          ASSETCATALOG_COMPILER_APPICON_NAME: AuraIcon
           CODE_SIGN_ENTITLEMENTS: aura/Info/aura.entitlements
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Developer ID Application"
