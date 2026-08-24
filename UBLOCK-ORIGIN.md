@@ -1,7 +1,7 @@
 # How Aura ships uBlock Origin (full)
 
-Status: design, ready to implement. Companion to `DAILY-DRIVER-PLAN.md` workstream 4
-and `AUDIT-DEEP-ISSUES.md` item 7 (the startup probe this plan builds on).
+Status: design, ready to implement. Builds on the extension startup probe from the
+deep-audit workstream.
 
 ## Goal
 
