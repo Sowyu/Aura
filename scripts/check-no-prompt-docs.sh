@@ -1,8 +1,13 @@
 #!/bin/bash
-# Pre-commit guard: blocks agent work-order / prompting markdown from being committed,
-# by name (HANDOFF*, CLAUDE.md, ...) or by content (a doc whose opening lines assign
-# the reader a role, "You are ..."). Files it flags stay local; see .gitignore.
+# Blocks agent work-order / prompting markdown from landing on main, by name
+# (HANDOFF*, CLAUDE.md, ...) or by content (a doc whose opening lines assign the
+# reader a role, "You are ..."). Runs on pre-commit with the staged files and on
+# pre-push with main's tree; the pre-push pass catches fast-forward merges, which
+# never run pre-commit.
 set -euo pipefail
+
+# Handoff docs ride feature branches between machines; only main must stay clean.
+[[ "$(git symbolic-ref --short -q HEAD)" == "main" ]] || exit 0
 fail=0
 for f in "$@"; do
     [[ -f "$f" ]] || continue

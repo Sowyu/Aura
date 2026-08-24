@@ -102,13 +102,6 @@ Vendor/CEF
 CLAUDE.md
 .claude/
 
-# Agent work-order / prompting docs stay local (pre-commit also blocks them,
-# see scripts/check-no-prompt-docs.sh)
-AGENTS.md
-HANDOFF*.md
-PROMPT*.md
-AUDIT-DEEP-ISSUES.md
-DAILY-DRIVER-PLAN.md
 
 # Python
 __pycache__/

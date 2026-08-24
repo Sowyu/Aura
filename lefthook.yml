@@ -12,11 +12,10 @@ pre-commit:
     swiftlint:
       glob: "**/*.swift"
       run: swiftlint lint --use-alternative-excluding {staged_files}
-    no-prompt-docs:
-      glob: "*.{md,MD}"
-      run: scripts/check-no-prompt-docs.sh {staged_files}
 
 pre-push:
   commands:
+    no-prompt-docs:
+      run: scripts/check-no-prompt-docs.sh $(git ls-tree -r --name-only HEAD -- '*.md' '*.MD')
     test:
       run: ./scripts/xctest-debug.sh
