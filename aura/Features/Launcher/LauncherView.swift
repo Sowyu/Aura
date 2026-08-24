@@ -62,19 +62,30 @@ struct LauncherView: View {
         if let engine = engineToUse,
            let url = viewModel.searchEngineService.createSearchURL(for: engine, query: correctInput)
         {
-            tabManager
-                .openTab(
+            // Captured now: unmounting the panel clears the view's state, and the
+            // environment objects outlive it.
+            let tabManager = self.tabManager
+            let historyManager = self.historyManager
+            let downloadManager = self.downloadManager
+            let isPrivate = privacyMode.isPrivate
+            // Dismiss first and open one turn later, so the dismissal paints before
+            // the tab's WKWebView is built. Built inline, the whole main-thread stall
+            // showed as the launcher frozen on screen.
+            appState.showLauncher = false
+            DispatchQueue.main.async {
+                tabManager.openTab(
                     url: url,
                     historyManager: historyManager,
                     downloadManager: downloadManager,
-                    isPrivate: privacyMode.isPrivate
+                    isPrivate: isPrivate
                 )
+            }
+            return
         }
         appState.showLauncher = false
     }
 
     private func dismiss() {
-        guard tabManager.activeTab != nil else { return }
         isVisible = false
         DispatchQueue.main.async {
             appState.showLauncher = false
@@ -225,11 +236,6 @@ struct LauncherView: View {
             input = ""
             match = nil
             isTextFieldFocused = false
-            // The host drops this view when the window loses its last tab. Leaving the
-            // flag set re-opened the launcher on its own the next time a tab appeared.
-            DispatchQueue.main.async {
-                if tabManager.activeTab == nil { appState.showLauncher = false }
-            }
         }
         .onChange(of: appState.showLauncher) { _, newValue in
             isVisible = newValue

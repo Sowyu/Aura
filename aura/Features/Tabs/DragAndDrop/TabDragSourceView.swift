@@ -62,8 +62,13 @@ final class TabDragSourceRegistry {
         switch event.type {
         case .leftMouseDown:
             reset()
-            pressedView = pressedSource(for: event)
-            pressedPoint = event.locationInWindow
+            // A press on the row's trailing action slot never arms a drag: 4pt of
+            // pointer travel there cancelled the close button's press and dragged
+            // the tab instead, which is most of the "close click didn't register".
+            if let source = pressedSource(for: event), source.pressArmsDrag(at: event.locationInWindow) {
+                pressedView = source
+                pressedPoint = event.locationInWindow
+            }
             // Always passed through: a click still has to select the tab.
             return event
         case .leftMouseDragged:
@@ -125,6 +130,9 @@ final class TabDragSourceNSView: NSView {
     /// What the row means outside Aura. Nil for a folder, which is not an address.
     var dragURL: URL?
     var dragTitle = ""
+    /// Width of the trailing strip where a press stays a click — the row's
+    /// action-button slot. Zero for rows with no trailing button.
+    var trailingClickWidth: CGFloat = 0
 
     private var registeredID: UUID?
 
@@ -133,6 +141,14 @@ final class TabDragSourceNSView: NSView {
 
     /// The view only exists to be measured and dragged from; clicks belong to SwiftUI.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    /// Whether a press at this window point may arm a drag. Middle-click close is
+    /// unaffected: it hit-tests the whole row separately.
+    func pressArmsDrag(at locationInWindow: NSPoint) -> Bool {
+        guard trailingClickWidth > 0 else { return true }
+        let local = convert(locationInWindow, from: nil)
+        return local.x < bounds.width - trailingClickWidth
+    }
 
     func register() {
         let id = UUID()
@@ -292,6 +308,7 @@ private struct TabDragSourceAnchor: NSViewRepresentable {
     let url: URL?
     let title: String
     let onMiddleClick: (() -> Void)?
+    let trailingClickWidth: CGFloat
 
     func makeNSView(context: Context) -> TabDragSourceNSView {
         let view = TabDragSourceNSView()
@@ -301,6 +318,7 @@ private struct TabDragSourceAnchor: NSViewRepresentable {
         view.dragURL = url
         view.dragTitle = title
         view.onMiddleClick = onMiddleClick
+        view.trailingClickWidth = trailingClickWidth
         view.register()
         return view
     }
@@ -313,6 +331,7 @@ private struct TabDragSourceAnchor: NSViewRepresentable {
         nsView.dragTitle = title
         // Re-read every pass: the closure captures the row's current tab.
         nsView.onMiddleClick = onMiddleClick
+        nsView.trailingClickWidth = trailingClickWidth
     }
 
     static func dismantleNSView(_ nsView: TabDragSourceNSView, coordinator: ()) {
@@ -326,13 +345,16 @@ extension View {
     /// row well before the press, so the sidebar's window drag gesture is already off.
     /// `onMiddleClick` rides along because the same monitor already hit-tests the rows.
     /// `url` and `title` are what the row means to another app; a folder passes neither.
+    /// `trailingClickWidth` marks the row's action-button slot, where a press must stay
+    /// a click instead of arming a drag.
     func tabDragSource(
         id: UUID,
         isFolder: Bool = false,
         in zone: TabDragZone,
         url: URL? = nil,
         title: String = "",
-        onMiddleClick: (() -> Void)? = nil
+        onMiddleClick: (() -> Void)? = nil,
+        trailingClickWidth: CGFloat = 0
     ) -> some View {
         background(TabDragSourceAnchor(
             id: id,
@@ -340,7 +362,8 @@ extension View {
             zone: zone,
             url: url,
             title: title,
-            onMiddleClick: onMiddleClick
+            onMiddleClick: onMiddleClick,
+            trailingClickWidth: trailingClickWidth
         ))
         .onHover { TabDragSession.shared.setPointerOnRow(id, $0) }
     }

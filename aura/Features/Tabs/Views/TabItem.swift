@@ -117,11 +117,14 @@ struct TabItem: View {
             )
             tabTitle
             Spacer(minLength: 4)
-            // Always laid out, so hovering toggles opacity only: nothing moves or reflows.
+            // Always laid out, so hovering toggles opacity only: nothing moves or
+            // reflows. Hit-testable even while invisible: after a close the next row
+            // slides under a stationary pointer, `onHover` does not re-fire, and
+            // gating hits on `isHovering` sent that click to the row's tap gesture —
+            // selecting the tab the user was trying to close.
             actionButton
                 .frame(width: 20, height: 20)
                 .opacity(isHovering ? 1 : 0)
-                .allowsHitTesting(isHovering)
         }
         .onAppear {
             if tabManager.isActive(tab) {

@@ -196,8 +196,9 @@ struct BrowserView: View {
 
             // Above every piece of chrome, not just the page: the launcher centres on the
             // window and dims all of it, so a revealed sidebar or toolbar must not draw
-            // over its backdrop. Mounted only while open.
-            if appState.showLauncher, tabManager.activeTab != nil {
+            // over its backdrop. Mounted only while open — including with no tab, where
+            // it floats over the start page.
+            if appState.showLauncher {
                 LauncherView()
             }
 

@@ -246,6 +246,9 @@ struct OraRoot: View {
             StartupProfiler.measure("builtInBlockingMigration") {
                 BuiltInBlockingMigration.runIfNeeded()
             }
+            // After first paint: the first real tab should not pay for WebKit's XPC
+            // services spinning up inside the keystroke.
+            BrowserEngine.shared.warmUp()
         }
         guard SettingsStore.shared.autoUpdateEnabled else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -373,7 +376,8 @@ extension OraRoot {
             WindowEvent(.quitRequested, .exactWindow) { _ in confirmQuit() },
             WindowEvent(.showLauncher) { _ in
                 Task { @MainActor in
-                    guard tabManager.activeTab != nil else { return }
+                    // No active-tab guard: the launcher floats over the start page
+                    // too, so ⌘T works on any page including the homepage.
                     appState.showLauncher.toggle()
                 }
             },

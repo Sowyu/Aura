@@ -50,6 +50,16 @@ struct NormalTabsList: View {
     }
 
     var body: some View {
+        // Index lookups built once per rebuild: a `firstIndex` scan per row made the
+        // list O(n²) on every change.
+        let currentIndex = Dictionary(
+            tabs.enumerated().map { ($1.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let previousIndex = Dictionary(
+            previousTabIds.enumerated().map { ($1, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         // Lazy: switching tabs re-reads `tabManager.activeTab` here, so a plain stack
         // rebuilt every row in the space on every switch.
         LazyVStack(spacing: 8) {
@@ -57,7 +67,7 @@ struct NormalTabsList: View {
             ForEach(rows) { row in
                 switch row {
                 case let .tab(tab):
-                    tabRow(tab)
+                    tabRow(tab, moved: hasMoved(tab, in: currentIndex, previously: previousIndex))
                 case let .folder(folder):
                     folderRow(folder)
                 }
@@ -73,7 +83,7 @@ struct NormalTabsList: View {
     }
 
     @ViewBuilder
-    private func tabRow(_ tab: Tab) -> some View {
+    private func tabRow(_ tab: Tab, moved: Bool) -> some View {
         TabItem(
             tab: tab,
             isSelected: tabManager.isActive(tab),
@@ -99,13 +109,15 @@ struct NormalTabsList: View {
             in: zone,
             url: tab.url,
             title: tab.title,
-            onMiddleClick: { onClose(tab) }
+            onMiddleClick: { onClose(tab) },
+            // The close button's 20pt slot plus the row's 8pt trailing padding.
+            trailingClickWidth: 28
         )
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .move(edge: .bottom)),
             removal: .opacity.combined(with: .move(edge: .top))
         ))
-        .animation(AnimationSettings.easeOut(0.15), value: shouldAnimate(tab))
+        .animation(AnimationSettings.easeOut(0.15), value: moved)
     }
 
     @ViewBuilder
@@ -131,7 +143,9 @@ struct NormalTabsList: View {
 
             if !folder.isCollapsed {
                 ForEach(folder.sortedTabs) { tab in
-                    tabRow(tab)
+                    // Foldered tabs are not in `tabs`, so they always counted as
+                    // moved; kept that way.
+                    tabRow(tab, moved: true)
                         .padding(.leading, 16)
                 }
             }
@@ -139,12 +153,13 @@ struct NormalTabsList: View {
         .animation(AnimationSettings.easeOut(0.12), value: folder.isCollapsed)
     }
 
-    private func shouldAnimate(_ tab: Tab) -> Bool {
-        // Only animate if the tab's position has actually changed
-        guard let currentIndex = tabs.firstIndex(where: { $0.id == tab.id }),
-              let previousIndex = previousTabIds.firstIndex(where: { $0 == tab.id })
+    /// Only animate if the tab's position has actually changed. Unknown rows (new
+    /// tabs, tabs just created) count as moved.
+    private func hasMoved(_ tab: Tab, in current: [UUID: Int], previously previous: [UUID: Int]) -> Bool {
+        guard let currentIndex = current[tab.id],
+              let previousIndex = previous[tab.id]
         else {
-            return true // Animate new tabs or tabs that were just created
+            return true
         }
         return currentIndex != previousIndex
     }

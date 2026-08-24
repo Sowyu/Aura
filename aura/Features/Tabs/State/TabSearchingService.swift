@@ -44,11 +44,12 @@ final class TabSearchingService: TabSearchingProviding {
             let results = try modelContext.fetch(descriptor)
             let now = Date()
 
-            return results.sorted { result1, result2 in
-                let result1Score = combinedScore(for: result1, query: trimmedText, now: now)
-                let result2Score = combinedScore(for: result2, query: trimmedText, now: now)
-                return result1Score > result2Score
-            }
+            // Score once per tab: recomputing inside the comparator ran the scorer
+            // O(n log n) times per launcher keystroke.
+            return results
+                .map { (tab: $0, score: combinedScore(for: $0, query: trimmedText, now: now)) }
+                .sorted { $0.score > $1.score }
+                .map(\.tab)
 
         } catch {
             return []

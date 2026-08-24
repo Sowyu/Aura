@@ -32,7 +32,7 @@ struct NewContainerDialog: View {
 
     @State private var name = ""
     @State private var emoji = ""
-    @State private var iconSymbol: String?
+    @State private var iconSymbol: String? = ContainerConstants.defaultIconSymbol
     @State private var iconColorHex: String?
     @State private var isIconPickerOpen = false
 

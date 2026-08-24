@@ -51,7 +51,9 @@ struct PinnedTabsList: View {
                         in: zone,
                         url: tab.url,
                         title: tab.title,
-                        onMiddleClick: { onClose(tab) }
+                        onMiddleClick: { onClose(tab) },
+                        // The close button's 20pt slot plus the row's 8pt trailing padding.
+                        trailingClickWidth: 28
                     )
                 }
             }

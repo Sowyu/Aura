@@ -230,12 +230,18 @@ class LauncherViewModel: ObservableObject {
                         tab.loadURL(url.absoluteString)
                     }
                 } else {
-                    tabManager.openFromEngine(
-                        engineName: engineName,
-                        query: query ?? self.currentText,
-                        historyManager: historyManager,
-                        isPrivate: privacyMode.isPrivate
-                    )
+                    // Resolved now: `reset()` clears `currentText` when the panel
+                    // unmounts, before the deferred open runs.
+                    let resolvedQuery = query ?? self.currentText
+                    let isPrivate = privacyMode.isPrivate
+                    DispatchQueue.main.async {
+                        tabManager.openFromEngine(
+                            engineName: engineName,
+                            query: resolvedQuery,
+                            historyManager: historyManager,
+                            isPrivate: isPrivate
+                        )
+                    }
                 }
             }
         )
@@ -255,15 +261,20 @@ class LauncherViewModel: ObservableObject {
                 score: 1 - Float(rank) * 0.01,
                 completingText: text,
                 action: {
-                    if !tab.isWebViewReady {
-                        tab.restoreTransientState(
-                            historyManager: historyManager,
-                            downloadManager: downloadManager,
-                            tabManager: tabManager,
-                            isPrivate: privacyMode.isPrivate
-                        )
+                    let isPrivate = privacyMode.isPrivate
+                    // One turn later: rebuilding a hibernated tab's web view blocks
+                    // the main thread, and the launcher should be gone first.
+                    DispatchQueue.main.async {
+                        if !tab.isWebViewReady {
+                            tab.restoreTransientState(
+                                historyManager: historyManager,
+                                downloadManager: downloadManager,
+                                tabManager: tabManager,
+                                isPrivate: isPrivate
+                            )
+                        }
+                        tabManager.activateTab(tab)
                     }
-                    tabManager.activateTab(tab)
                 }
             )
         }
@@ -294,11 +305,16 @@ class LauncherViewModel: ObservableObject {
                 if navigateCurrent {
                     tabManager.activeTab?.loadURL(url.absoluteString)
                 } else {
-                    tabManager.openTab(
-                        url: url,
-                        historyManager: historyManager,
-                        isPrivate: privacyMode.isPrivate
-                    )
+                    let isPrivate = privacyMode.isPrivate
+                    // One turn later, so the launcher's dismissal paints before the
+                    // new tab's web view blocks the main thread.
+                    DispatchQueue.main.async {
+                        tabManager.openTab(
+                            url: url,
+                            historyManager: historyManager,
+                            isPrivate: isPrivate
+                        )
+                    }
                 }
             }
         )
@@ -392,11 +408,16 @@ class LauncherViewModel: ObservableObject {
                     if navigateCurrent {
                         tabManager.activeTab?.loadURL(history.url.absoluteString)
                     } else {
-                        tabManager.openTab(
-                            url: history.url,
-                            historyManager: historyManager,
-                            isPrivate: privacyMode.isPrivate
-                        )
+                        let isPrivate = privacyMode.isPrivate
+                        // One turn later, so the dismissal paints before the web
+                        // view build stalls the main thread.
+                        DispatchQueue.main.async {
+                            tabManager.openTab(
+                                url: history.url,
+                                historyManager: historyManager,
+                                isPrivate: isPrivate
+                            )
+                        }
                     }
                 }
             )

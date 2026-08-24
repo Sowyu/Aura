@@ -5,6 +5,11 @@ enum ContainerConstants {
     /// Default emoji used when no emoji is selected for a container
     static let defaultEmoji = "•"
 
+    /// Glyph a new space starts with. A `SpaceIconCatalog` name that is also a valid
+    /// SF Symbol: the menu render path draws `iconSymbol` via `Image(systemName:)`
+    /// with no catalog lookup, so a name outside both sets goes blank there.
+    static let defaultIconSymbol = "heart"
+
     /// Default time in seconds after which a tab is no longer considered alive
     static let defaultTabAliveTimeout: TimeInterval = 60 * 60 // 1 hour
 

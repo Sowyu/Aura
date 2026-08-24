@@ -103,6 +103,18 @@ final class TabManager {
     @ObservationIgnored var recentlyClosedTabs: [ClosedTabSnapshot] = []
     let maxRecentlyClosedTabs = 5
 
+    /// Window-level fallbacks for tabs opened without explicit managers. These were
+    /// built fresh on every activation, and a `DownloadManager` init runs a store
+    /// fetch, so each launcher-opened tab paid SwiftData round trips it never used.
+    @ObservationIgnored private lazy var fallbackHistoryManager = HistoryManager(
+        modelContainer: modelContainer,
+        modelContext: modelContext
+    )
+    @ObservationIgnored private lazy var fallbackDownloadManager = DownloadManager(
+        modelContainer: modelContainer,
+        modelContext: modelContext
+    )
+
     init(
         modelContainer: ModelContainer,
         modelContext: ModelContext,
@@ -257,7 +269,7 @@ final class TabManager {
         // the space, not the tab.
         if wasActive {
             if let replacement {
-                activateTab(replacement)
+                activateTab(replacement, persist: false)
             } else {
                 activeTab?.maybeIsActive = false
                 activeTab = nil
@@ -290,8 +302,8 @@ final class TabManager {
     @discardableResult
     func createContainer(
         name: String = "Default",
-        emoji: String = "•",
-        iconSymbol: String? = nil,
+        emoji: String = ContainerConstants.defaultEmoji,
+        iconSymbol: String? = ContainerConstants.defaultIconSymbol,
         iconColorHex: String? = nil
     ) -> TabContainer {
         let newContainer = TabContainer(
@@ -382,7 +394,7 @@ final class TabManager {
             .sorted(by: { ($0.lastAccessedAt ?? .distantPast) > ($1.lastAccessedAt ?? .distantPast) })
             .first
         {
-            activateTab(lastAccessedTab)
+            activateTab(lastAccessedTab, persist: false)
         } else {
             activeTab?.maybeIsActive = false
             activeTab = nil
@@ -445,7 +457,7 @@ final class TabManager {
         // it: the hand-rolled version here set `activeTab` and left `activeContainer`
         // pointing at the space the user was looking at before.
         if activateAfterAdding {
-            activateTab(newTab)
+            activateTab(newTab, persist: false)
         }
 
         saveOrLog(modelContext)
@@ -576,17 +588,16 @@ final class TabManager {
         }
 
         if focusAfterOpening {
-            activateTab(newTab)
-        }
-        if focusAfterOpening || loadSilently {
-            // Initialize the WebView for the new active tab. An internal page returns
-            // from here without one.
+            // Builds the web view too: the tab carries the managers it was created
+            // with, so the second `restoreTransientState` that used to follow was a
+            // guaranteed no-op that still constructed a `DownloadManager`.
+            activateTab(newTab, persist: false)
+        } else if loadSilently {
+            // Initialize the WebView for the new background tab. An internal page
+            // returns from here without one.
             newTab.restoreTransientState(
                 historyManager: historyManager,
-                downloadManager: downloadManager ?? DownloadManager(
-                    modelContainer: modelContainer,
-                    modelContext: modelContext
-                ),
+                downloadManager: downloadManager ?? fallbackDownloadManager,
                 tabManager: self,
                 isPrivate: isPrivate
             )
@@ -636,7 +647,7 @@ final class TabManager {
         if self.activeTab?.id == tab.id {
             tab.maybeIsActive = false
             if let nextTab = neighbour(after: tab) {
-                self.activateTab(nextTab)
+                self.activateTab(nextTab, persist: false)
             } else {
                 self.activeTab = nil
             }
@@ -676,7 +687,10 @@ final class TabManager {
         oldTab?.evaluateJavaScript("window.__oraTriggerPiP()")
     }
 
-    func activateTab(_ tab: Tab) {
+    /// `persist: false` is for callers that go on to mutate and save again before
+    /// returning: opening or closing a tab used to commit two or three SQLite
+    /// transactions on the main thread inside one click.
+    func activateTab(_ tab: Tab, persist: Bool = true) {
         // Toggle Picture-in-Picture on tab switch
         togglePiP(tab, activeTab)
 
@@ -699,20 +713,14 @@ final class TabManager {
         // Lazy load WebView if not ready
         if !tab.isWebViewReady {
             tab.restoreTransientState(
-                historyManager: tab.historyManager ?? HistoryManager(
-                    modelContainer: modelContainer,
-                    modelContext: modelContext
-                ),
-                downloadManager: tab.downloadManager ?? DownloadManager(
-                    modelContainer: modelContainer,
-                    modelContext: modelContext
-                ),
+                historyManager: tab.historyManager ?? fallbackHistoryManager,
+                downloadManager: tab.downloadManager ?? fallbackDownloadManager,
                 tabManager: self,
                 isPrivate: tab.isPrivate
             )
         }
         tab.updateHeaderColor()
-        saveOrLog(modelContext)
+        if persist { saveOrLog(modelContext) }
     }
 
     /// Start the automatic cleanup timer
@@ -820,10 +828,7 @@ final class TabManager {
         if !tab.url.isOraInternal, let historyManager = tab.historyManager {
             copy.restoreTransientState(
                 historyManager: historyManager,
-                downloadManager: tab.downloadManager ?? DownloadManager(
-                    modelContainer: modelContainer,
-                    modelContext: modelContext
-                ),
+                downloadManager: tab.downloadManager ?? fallbackDownloadManager,
                 tabManager: self,
                 isPrivate: tab.isPrivate
             )

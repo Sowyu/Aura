@@ -1,4 +1,5 @@
 import Foundation
+import WebKit
 
 struct BrowserPageConfiguration {
     let userAgent: String?
@@ -47,6 +48,25 @@ final class BrowserEngine {
     static let defaultStoreIdentifier = UUID(uuidString: "6E9F1C34-2B7A-4C05-9E1D-3A5B8C7D0F42")!
     private let profileCacheLock = NSLock()
     private var profileCache: [ProfileKey: BrowserEngineProfile] = [:]
+
+    /// Held briefly so the warm-up view is not torn down before its load starts.
+    @MainActor private var warmupView: WKWebView?
+
+    /// Spins up WebKit's XPC services (WebContent, Networking, GPU) with a throwaway
+    /// empty web view at launch. Without it, a window that opens onto the start page
+    /// pays for the whole stack inside the first ⌘T keystroke; a window restoring a
+    /// live tab warms it as a side effect and this is a cheap no-op on top.
+    @MainActor
+    func warmUp() {
+        guard warmupView == nil else { return }
+        let view = WKWebView(frame: .zero)
+        view.loadHTMLString("", baseURL: nil)
+        warmupView = view
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            self?.warmupView = nil
+        }
+    }
 
     func makeProfile(identifier: UUID, isPrivate: Bool) -> BrowserEngineProfile {
         if isPrivate {
