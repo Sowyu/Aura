@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 @preconcurrency import WebKit
 
 /// WebKit's callbacks into the browser: which windows and tabs exist, how to open
@@ -198,11 +199,19 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         for context: WKWebExtensionContext,
         completionHandler: @escaping ((any Error)?) -> Void
     ) {
+        // The errors below go back to WebKit, which shows nothing for them: to the
+        // user they are a click that did nothing, so they get logged here too.
         guard let popover = action.popupPopover else {
+            ExtensionManager.log.error("""
+            no popup popover for \(context.uniqueIdentifier, privacy: .public)
+            """)
             completionHandler(ExtensionActionError.noPopup)
             return
         }
         guard let anchor = ExtensionManager.shared.popupAnchor(for: context.uniqueIdentifier) else {
+            ExtensionManager.log.error("""
+            no popup anchor for \(context.uniqueIdentifier, privacy: .public)
+            """)
             completionHandler(ExtensionActionError.noBrowserWindow)
             return
         }
@@ -216,7 +225,19 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         // Ported from Nook, `Nook/Managers/ExtensionManager/ExtensionManager+Delegate.swift`
         // by Maciek Bagiński (GPL-3.0).
         if context.webExtension.hasBackgroundContent {
-            Task { try? await context.loadBackgroundContent() }
+            let id = context.uniqueIdentifier
+            Task {
+                do {
+                    try await context.loadBackgroundContent()
+                } catch {
+                    // The popup is on screen by now; a background that will not come
+                    // up is why it would be sitting empty.
+                    ExtensionManager.log.error("""
+                    background wake failed for \(id, privacy: .public): \
+                    \(error.localizedDescription, privacy: .public)
+                    """)
+                }
+            }
         }
 
         popover.behavior = .transient

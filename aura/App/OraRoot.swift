@@ -155,6 +155,12 @@ struct OraRoot: View {
 
     var body: some View {
         BrowserView()
+            // Install consent can start needing an answer with no settings surface
+            // open: the launch scan queues one whenever an installed extension's
+            // permissions no longer match what was agreed to. Unanswered, the
+            // extension sits unloaded with a toolbar icon that does nothing, so the
+            // browser window itself has to be able to put the sheet up.
+            .extensionConsentPrompt()
             .background(WindowReader(window: $window))
             .background(
                 WindowAccessor(
@@ -491,6 +497,11 @@ extension OraRoot {
                     guard let containerId = note.userInfo?["containerId"] as? UUID else { return }
                     tabManager.refreshPrivacySettings(for: containerId)
                 }
+            },
+            // The injected-bundle probe gave up: every window rebuilds its loaded web
+            // views off the broken pool, not only the one in front.
+            WindowEvent(.requestBlockingBecameUnavailable, .anyWindow) { _ in
+                Task { @MainActor in tabManager.rescueTabsFromUnavailableRequestBlocking() }
             },
             WindowEvent(.clearCacheAndReload) { _ in
                 Task { @MainActor in clearSiteData(cookies: false) }

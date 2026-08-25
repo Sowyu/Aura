@@ -28,6 +28,26 @@ WKProcessPool *AuraMakeInjectedBundleProcessPool(NSURL *bundleURL)
     return [[WKProcessPool alloc] _initWithConfiguration:configuration];
 }
 
+// Private API, transcribed from WebKit trunk
+// Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfigurationPrivate.h:
+// @property (nonatomic, setter=_setClientNavigationsRunAtForegroundPriority:)
+//     BOOL _clientNavigationsRunAtForegroundPriority;
+// The older `_setAlwaysRunsAtForegroundPriority:` spelling is declared inside
+// `#if TARGET_OS_IPHONE` and implemented under `PLATFORM(IOS_FAMILY)`, so on
+// macOS it never answers; it is kept as the fallback in case an SDK moves it.
+BOOL AuraSetAlwaysForegroundPriority(WKWebViewConfiguration *configuration)
+{
+    SEL selector = NSSelectorFromString(@"_setClientNavigationsRunAtForegroundPriority:");
+    if (![configuration respondsToSelector:selector]) {
+        selector = NSSelectorFromString(@"_setAlwaysRunsAtForegroundPriority:");
+        if (![configuration respondsToSelector:selector]) { return NO; }
+    }
+
+    void (*setter)(id, SEL, BOOL) = (void (*)(id, SEL, BOOL))[configuration methodForSelector:selector];
+    setter(configuration, selector, YES);
+    return YES;
+}
+
 // MARK: - Synchronous messages from the injected bundle
 
 // UI-process half of WebKit's injected-bundle C API, transcribed from

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 @preconcurrency import WebKit
 
 /// One installed extension as shown in Settings. Mirrored from disk so the
@@ -102,6 +103,19 @@ final class ExtensionManager {
     private static let disabledIDsKey = "extensions.disabledIDs"
     private static let consentGrandfatheredKey = "extensions.consent.grandfathered"
     static let awaitingConsentNote = "Not loaded: waiting for you to review what it can do."
+
+    static let log = Logger(subsystem: "com.aurabrowser.app", category: "extensions")
+
+    /// Whether the scan and installs rewrite extensions for the shim.
+    ///
+    /// `AuraWebBundle.isEnabled` alone is latched at launch, so in the session where
+    /// the user first switches request blocking on it still reads false and full uBO
+    /// was installed (and consented) unpatched — the next launch's patch then changed
+    /// the manifest under an approval already given. Reading the live setting too
+    /// means what the user consents to is already the manifest the next launch runs.
+    var shimPatchingEnabled: Bool {
+        AuraWebBundle.isEnabled || SettingsStore.shared.extensionRequestBlocking
+    }
 
     /// Ids whose update is downloading right now, so the row can say so. Stored here,
     /// and internal rather than private, because `ExtensionManager+Updates` is an
@@ -217,7 +231,7 @@ final class ExtensionManager {
         }
 
         let directory = extensionsDirectory
-        let patchesShim = AuraWebBundle.isEnabled
+        let patchesShim = shimPatchingEnabled
         scanTask = Task { [weak self] in
             let found = await Task.detached(priority: .utility) {
                 ExtensionManager.scan(directory: directory, patchesShim: patchesShim)
@@ -233,7 +247,7 @@ final class ExtensionManager {
     private func finishScanNow() {
         guard hasStarted, !hasScanned else { return }
         scanTask?.cancel()
-        adoptScan(Self.scan(directory: extensionsDirectory, patchesShim: AuraWebBundle.isEnabled))
+        adoptScan(Self.scan(directory: extensionsDirectory, patchesShim: shimPatchingEnabled))
     }
 
     private func adoptScan(_ found: [ScannedExtension]) {
@@ -241,11 +255,36 @@ final class ExtensionManager {
         hasScanned = true
         scanTask = nil
         grandfatherExistingConsent(found)
+        // Before the plan: `fullConsentStands` reads these records, and an
+        // unmigrated one would park full uBO for the launch.
+        migrateShimPatchedConsent(found)
         // Which of the two bundled blockers this launch runs, before the rows are built:
         // `disabledIDs` is what decides whether `register` loads one of them at all.
         BundledExtensions.applyBlockingPlan()
         for entry in found { register(entry) }
         checkForUpdates()
+    }
+
+    /// Consent used to be hashed over the shim-patched manifest, which carries the
+    /// shim's own `nativeMessaging`. Now that it is hashed over the pristine one, a
+    /// record written under the old rule would drift and re-prompt for permissions the
+    /// user already answered. Only a record matching the pristine list plus exactly
+    /// that one entry is rewritten — that is precisely the list the old sheet showed —
+    /// so a genuine permission change still comes back through the sheet. Self-
+    /// limiting: after the rewrite nothing matches the old shape any more.
+    private func migrateShimPatchedConsent(_ found: [ScannedExtension]) {
+        var consent = SettingsStore.shared.extensionConsent
+        var changed = false
+        for entry in found {
+            guard let record = consent[entry.id] else { continue }
+            let pristine = Self.requestedPermissions(at: entry.directoryURL)
+            let oldScheme = ExtensionConsent.permissionsHash(pristine + ["nativeMessaging"])
+            let newScheme = ExtensionConsent.permissionsHash(pristine)
+            guard record.permissionsHash == oldScheme, oldScheme != newScheme else { continue }
+            consent[entry.id] = ExtensionConsentRecord(version: record.version, permissionsHash: newScheme)
+            changed = true
+        }
+        if changed { SettingsStore.shared.extensionConsent = consent }
     }
 
     /// Extensions already on disk when the consent gate shipped were installed under the
@@ -322,7 +361,19 @@ final class ExtensionManager {
     func performAction(extensionID: String, anchor: NSView) {
         guard #available(macOS 15.4, *) else { return }
         actionAnchors[extensionID] = WeakAnchor(anchor)
-        engine.context(for: extensionID)?.performAction(for: currentTabAdapter(for: extensionID))
+        guard let context = engine.context(for: extensionID) else {
+            // The icon renders from the installed row, so a click can land while no
+            // context exists: consent pending, a load error, or a load still in
+            // flight. Silence here looks like a dead button, so at least the log
+            // says which of those it was.
+            let reason = installedExtensions.first { $0.id == extensionID }?.loadError ?? "still loading"
+            Self.log.error("""
+            toolbar action ignored for \(extensionID, privacy: .public): \
+            \(reason, privacy: .public)
+            """)
+            return
+        }
+        context.performAction(for: currentTabAdapter(for: extensionID))
     }
 
     /// The action's current icon, which follows `browser.action.setIcon` and
@@ -624,15 +675,27 @@ final class ExtensionManager {
         guard let index = installedExtensions.firstIndex(where: { $0.id == id }) else { return }
         installedExtensions[index].isEnabled = enabled
         installedExtensions[index].loadError = nil
+        // Flipping one of the two bundled blockers by hand has to go back through the
+        // plan, or a full-uBO row re-enabled while its relaunch is still pending runs
+        // next to uBO Lite (and a consent declined from the store tab left the
+        // Settings switch on). No-op for every other extension, and for the plan's
+        // own toggles.
         if enabled {
             disabledIDs.remove(id)
-            loadIntoEngine(installedExtensions[index])
+            // Plan first, then load. The plan can park this row straight back off, and
+            // its unload runs synchronously — before a load queued here would have
+            // installed the context, so it would unload nothing and leave both
+            // blockers running behind a row that reads off.
+            BundledExtensions.rowDidChange(id: id)
+            guard let entry = installedExtensions.first(where: { $0.id == id }), entry.isEnabled else { return }
+            loadIntoEngine(entry)
         } else {
             disabledIDs.insert(id)
             stopObservingErrors(of: id)
             if #available(macOS 15.4, *) {
                 loadedEngine?.unload(id: id)
             }
+            BundledExtensions.rowDidChange(id: id)
         }
     }
 
@@ -680,8 +743,23 @@ final class ExtensionManager {
     /// here too: they are page access the user is agreeing to just as much as
     /// `host_permissions` is, and an extension that declares only those still reads and
     /// rewrites every page it matches.
+    ///
+    /// Read from the pristine backup when the folder has been shim-patched: the patch
+    /// adds `nativeMessaging`, which is Aura's own transport rather than anything the
+    /// extension asked the user for. Consent is about what the author shipped, and
+    /// hashing the patched list instead meant a patch that landed after the sheet
+    /// (enable full uBO, consent, relaunch, scan patches) changed the hash and
+    /// silently sent an already-approved extension back to the consent queue.
     nonisolated static func requestedPermissions(at directory: URL) -> [String] {
-        let url = directory.appendingPathComponent("manifest.json")
+        let pristine = directory.appendingPathComponent(ExtensionShim.originalManifestName)
+        return permissions(fromManifestAt: FileManager.default.fileExists(atPath: pristine.path)
+            ? pristine
+            : directory.appendingPathComponent("manifest.json"))
+    }
+
+    /// The permission set as one manifest file states it. Kept separate so the consent
+    /// migration can also hash the patched manifest the old rule was written over.
+    nonisolated private static func permissions(fromManifestAt url: URL) -> [String] {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return [] }

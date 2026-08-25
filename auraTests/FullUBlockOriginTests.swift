@@ -65,9 +65,72 @@ struct FullUBlockOriginTests {
         let settings = manifest?["browser_specific_settings"] as? [String: Any]
         #expect((settings?["gecko"] as? [String: Any])?["id"] as? String == Pin.geckoID)
 
-        // Second call finds the folder and leaves it exactly as it is: a copy that has
-        // been running must never be overwritten underneath the user.
+        // Second call finds the folder at the pinned version and leaves it exactly as
+        // it is: a copy that has been running is not re-unpacked for nothing.
         #expect(BundledExtensions.unpackFullIfNeeded(into: profile)?.path == folder.path)
+    }
+
+    /// A folder at any other version is an older build's unpack (the folder name is
+    /// Aura's own vendoring, never a hand install), and returning it untouched forever
+    /// meant a stale or broken uBO survived every app update. It gets replaced.
+    @Test func aStaleVendoredFolderIsReplaced() throws {
+        let profile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aura-ubo-stale-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: profile) }
+
+        let folder = try #require(BundledExtensions.unpackFullIfNeeded(into: profile))
+        let manifestURL = folder.appendingPathComponent("manifest.json")
+        var manifest = try #require(JSONSerialization.jsonObject(
+            with: Data(contentsOf: manifestURL)
+        ) as? [String: Any])
+        manifest["version"] = "1.0.0"
+        try JSONSerialization.data(withJSONObject: manifest).write(to: manifestURL)
+
+        let replaced = try #require(BundledExtensions.unpackFullIfNeeded(into: profile))
+        let fresh = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: replaced.appendingPathComponent("manifest.json"))
+        ) as? [String: Any]
+        #expect(fresh?["version"] as? String == Pin.version)
+    }
+
+    /// The shim patch adds `nativeMessaging` to the manifest, and hashing the patched
+    /// list once sent an already-approved uBO back to the consent queue after the
+    /// enable-relaunch cycle: consented unpatched, patched at the next scan, hash
+    /// drifted, extension parked unloaded with a dead toolbar icon and uBO Lite
+    /// already paused. Consent reads the pristine manifest, so the patch changes
+    /// nothing the user answered.
+    @Test func theShimPatchDoesNotChangeWhatConsentCovers() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aura-shim-consent-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        let manifest: [String: Any] = [
+            "manifest_version": 2,
+            "name": "uBlock-shaped",
+            "version": "1.0",
+            "permissions": ["webRequest", "webRequestBlocking", "<all_urls>"],
+            "background": ["scripts": ["background.js"]],
+            "browser_action": ["default_popup": "popup.html"]
+        ]
+        try JSONSerialization.data(withJSONObject: manifest)
+            .write(to: folder.appendingPathComponent("manifest.json"))
+        try Data("<script src=\"popup.js\"></script>".utf8)
+            .write(to: folder.appendingPathComponent("popup.html"))
+
+        let before = ExtensionManager.requestedPermissions(at: folder)
+        #expect(try ExtensionShim.apply(at: folder))
+        let after = ExtensionManager.requestedPermissions(at: folder)
+
+        #expect(before == after)
+        #expect(ExtensionConsent.permissionsHash(before) == ExtensionConsent.permissionsHash(after))
+
+        // The patch itself did land: the live manifest carries the shim's transport
+        // permission, it just is not something consent asks about.
+        let patched = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: folder.appendingPathComponent("manifest.json"))
+        ) as? [String: Any]
+        #expect((patched?["permissions"] as? [String])?.contains("nativeMessaging") == true)
     }
 
     /// Full uBO is not the pre-consented one. Installing Aura is consent for what Aura
@@ -98,10 +161,13 @@ struct FullUBlockOriginTests {
 
     // MARK: - The blocker state machine
 
+    /// `fullConsentRecorded` follows `fullConsented` unless a test says otherwise:
+    /// consent that stands implies a record, and most unconsented states have none.
     private func inputs(
         fullRequested: Bool = true,
         fullInstalled: Bool = true,
         fullConsented: Bool = true,
+        fullConsentRecorded: Bool? = nil,
         fullDisabled: Bool = false,
         bundleActive: Bool = true,
         unavailable: Bool = false
@@ -110,6 +176,7 @@ struct FullUBlockOriginTests {
             fullRequested: fullRequested,
             fullInstalled: fullInstalled,
             fullConsented: fullConsented,
+            fullConsentRecorded: fullConsentRecorded ?? fullConsented,
             fullDisabled: fullDisabled,
             bundleActive: bundleActive,
             unavailable: unavailable
@@ -166,6 +233,23 @@ struct FullUBlockOriginTests {
         #expect(plan.requestBlocking == false)
         #expect(plan.fullRequested == false)
         #expect(plan.pending == .none)
+    }
+
+    /// A record that exists but no longer matches the manifest is an update asking for
+    /// more, not a refusal — even though the plan itself had parked the row off. The
+    /// switch must survive and the state must read as waiting on the sheet, with uBO
+    /// Lite blocking in the meantime; the refused branch reverting the switch here was
+    /// how a uBO permission change silently turned Full ad blocking off.
+    @Test func staleConsentAsksAgainInsteadOfRevertingTheSwitch() {
+        let plan = BundledExtensions.plan(for: inputs(
+            fullConsented: false,
+            fullConsentRecorded: true,
+            fullDisabled: true
+        ))
+        #expect(plan.activeBlocker == .lite)
+        #expect(plan.requestBlocking == true)
+        #expect(plan.fullRequested == nil)
+        #expect(plan.pending == .consent)
     }
 
     /// The health probe failing outranks the switch: Lite comes back for the session

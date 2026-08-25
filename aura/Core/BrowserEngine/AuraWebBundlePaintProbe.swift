@@ -156,6 +156,11 @@ extension AuraWebBundle {
         static func run(pool: WKProcessPool, settle: TimeInterval = 2) async -> Verdict {
             let configuration = WKWebViewConfiguration()
             configuration.processPool = pool
+            // The fixture runs the same keep-alive and foreground-priority levers real
+            // pages get, so the verdict is about the stack the user will actually be
+            // on, mitigations included.
+            AuraPaintKeepAlive.apply(to: configuration)
+            AuraWebBundle.applyForegroundPriorityIfWanted(to: configuration)
             let view = WKWebView(frame: CGRect(x: 0, y: 0, width: 320, height: 200), configuration: configuration)
             let window = hostWindow(for: view)
             defer {

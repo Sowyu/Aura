@@ -14,10 +14,18 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @class WKProcessPool;
+@class WKWebViewConfiguration;
 
 /// Builds a process pool whose WebContent processes dlopen the injected bundle
 /// at `bundleURL`. Returns nil when the private API is missing.
 WKProcessPool *_Nullable AuraMakeInjectedBundleProcessPool(NSURL *bundleURL);
+
+/// Asks WebKit to run this configuration's pages at foreground priority
+/// (`_clientNavigationsRunAtForegroundPriority`; the iOS-only
+/// `_alwaysRunsAtForegroundPriority` is the fallback spelling). Aimed at the
+/// Development WebContent service's failed foreground assertion, which is what
+/// purges its layers. Returns NO when neither private property exists.
+BOOL AuraSetAlwaysForegroundPriority(WKWebViewConfiguration *configuration);
 
 /// Answers the synchronous messages the injected bundle posts to this process.
 ///

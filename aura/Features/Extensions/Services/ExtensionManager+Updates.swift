@@ -10,6 +10,11 @@ extension ExtensionManager {
     /// Read from settings rather than memory so the offer survives a relaunch without
     /// another round trip to AMO.
     func availableUpdate(for id: String) -> String? {
+        // The vendored full uBO is pinned to a hash-checked archive in the app bundle
+        // and re-unpacked at that version whenever the folder drifts, so an AMO copy
+        // written over it would be reverted at the next launch — a silent downgrade
+        // loop. Nothing to offer: it moves with Aura.
+        guard id != BundledExtensions.FullUBlockOrigin.folderName else { return nil }
         guard let latest = SettingsStore.shared.extensionAvailableUpdates[id],
               let entry = installedExtensions.first(where: { $0.id == id }),
               let current = entry.displayVersion,
@@ -53,6 +58,8 @@ extension ExtensionManager {
     /// files, and the load goes back through the consent gate: an update that asks for
     /// more than the user agreed to comes back through the sheet instead of loading.
     func updateExtension(_ id: String) async throws {
+        // Same rule as `availableUpdate`, for an offer persisted by an earlier build.
+        guard id != BundledExtensions.FullUBlockOrigin.folderName else { return }
         guard !updatingIDs.contains(id),
               let entry = installedExtensions.first(where: { $0.id == id }),
               let geckoID = entry.geckoID
@@ -66,7 +73,7 @@ extension ExtensionManager {
         defer { try? FileManager.default.removeItem(at: archive) }
 
         let directory = entry.directoryURL
-        let patchesShim = AuraWebBundle.isEnabled
+        let patchesShim = shimPatchingEnabled
         // Unpacking and copying an add-on is tens of megabytes of file work; the main
         // actor only comes back for the reload.
         let scanned = try await Task.detached(priority: .userInitiated) {

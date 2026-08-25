@@ -1,7 +1,46 @@
 # How Aura ships uBlock Origin (full)
 
-Status: design, ready to implement. Builds on the extension startup probe from the
-deep-audit workstream.
+Status: Track 1 shipped and hardened (2026-08-24); Track 2's two most promising
+levers are in the code behind env switches, awaiting A/B on a real macOS build
+(`HANDOFF-MACOS.md`). Track 3 remains the endgame.
+
+## Status update, 2026-08-24: why the shipped Track 1 presented as broken
+
+Two chained failures, both fixed on this branch:
+
+1. **The re-consent trap (dead toolbar icon, no blocker at all).** Consent was
+   hashed over the *patched* manifest's permission list. Enabling full uBO
+   installed it unpatched (the shim gate read the launch-latched bundle flag),
+   the user consented to that hash, and the next launch's scan patched the
+   manifest (adding `nativeMessaging`) — hash drift, so the loader silently
+   parked full uBO on the consent queue while the blocker plan (which only
+   nil-checked the consent record) had already paused uBO Lite. Result: no
+   blocker, a toolbar icon whose click was a silent no-op, and every page on the
+   Development service. Fixed by hashing consent over `manifest.original.json`
+   (the shim's entries are Aura's business, not something the user answers for),
+   patching at install based on the *persisted* setting, aligning the plan's
+   consent input with the loader's decision, and hosting the consent sheet in
+   the browser window rather than only in Settings.
+2. **The paint probe failing open.** `painted` and `inconclusive` both counted
+   as healthy, the probe raced tab restore (restored tabs landed on the bundle
+   pool before any verdict), and a failed verdict could not rescue pages already
+   on the pool. Fixed: inconclusive retries once and then falls back, the paint
+   stage runs for every bundle session (not only full uBO), and `markUnavailable`
+   now rebuilds every loaded web view so live tabs leave the broken pool instead
+   of staying blank for the session.
+
+Also shipped: MV2 persistent backgrounds are woken at load (uBO's `webRequest`
+listeners and the popup's message relay only exist once the background runs; MV3
+workers stay lazy), the vendored `ublock-origin-full` folder is replaced when its
+version drifts from the pin, and the popup path's silent error exits are logged.
+
+Track 2 levers now in code, both on by default on the bundle pool and switchable
+per session for the A/B: `AURA_FG_PRIORITY=0` (WebKit's
+`_alwaysRunsAtForegroundPriority` on page configurations, aimed at the failed
+foreground assertion itself) and `AURA_PAINT_KEEPALIVE=0` (a one-pixel
+`requestAnimationFrame` loop that keeps rendering updates committing, since the
+measured purge left on-demand rendering intact). The paint probe runs with the
+same keep-alive real pages get, so its verdict is about the mitigated stack.
 
 ## Goal
 

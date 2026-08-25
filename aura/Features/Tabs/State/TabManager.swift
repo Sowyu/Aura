@@ -848,4 +848,18 @@ final class TabManager {
         }
     }
 
+    /// The injected-bundle health probe failed mid-session. Every loaded web view was
+    /// built on the broken pool (the probe races tab restore and always loses), and a
+    /// pool cannot be swapped under a live web view — so each one is torn down and
+    /// rebuilt, which re-runs `AuraWebBundle.apply` against the now-false `isEnabled`
+    /// and lands the tab back on the ordinary WebContent service. One reload per
+    /// loaded tab, against the alternative of a session of blank pages.
+    func rescueTabsFromUnavailableRequestBlocking() {
+        for container in fetchContainers() {
+            for tab in container.tabs.filter(\.isWebViewReady) {
+                tab.refreshBrowserPageForPrivacySettings()
+            }
+        }
+    }
+
 }

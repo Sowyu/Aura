@@ -85,10 +85,36 @@ enum AuraWebBundle {
         }
     }
 
+    /// `AURA_FG_PRIORITY=0` switches the experiment below off for a session.
+    private static let wantsForegroundPriority: Bool =
+        ProcessInfo.processInfo.environment["AURA_FG_PRIORITY"] != "0"
+
+    /// Logged once rather than per page.
+    nonisolated(unsafe) private static var reportedForegroundPriority = false
+
     /// Points `configuration` at the injected-bundle process pool. No-op when disabled.
     static func apply(to configuration: WKWebViewConfiguration) {
         guard isEnabled, let processPool else { return }
         configuration.processPool = processPool
+        applyForegroundPriorityIfWanted(to: configuration)
+    }
+
+    /// Track 2 experiment (see UBLOCK-ORIGIN.md): the Development service loses its
+    /// RunningBoard foreground assertion, and that task-state change is what purges
+    /// the layers. `_clientNavigationsRunAtForegroundPriority` is WebKit's own switch
+    /// for clients whose pages must not drop to background priority; if it holds here,
+    /// the purge never starts. Selector-checked, so an SDK that drops it makes this a
+    /// no-op rather than a crash, and the log line says which of the two it was.
+    ///
+    /// Also called by the paint probe, so the fixture runs with the same lever real
+    /// pages get and the verdict is about the mitigated stack.
+    static func applyForegroundPriorityIfWanted(to configuration: WKWebViewConfiguration) {
+        guard wantsForegroundPriority else { return }
+        let applied = AuraSetAlwaysForegroundPriority(configuration)
+        if !reportedForegroundPriority {
+            reportedForegroundPriority = true
+            log.info("always-foreground priority \(applied ? "applied" : "unavailable", privacy: .public)")
+        }
     }
 
     // MARK: - Health
@@ -124,6 +150,11 @@ enum AuraWebBundle {
         // uBO Lite comes back on the spot. The session it was switched off for has just
         // turned out to be one where full uBlock Origin cannot block anything.
         BundledExtensions.applyBlockingPlan()
+        // Pages built before this verdict are stuck on the broken pool — a pool cannot
+        // be swapped under a live web view. Every window rebuilds its loaded tabs on
+        // the ordinary WebContent service, so the fallback rescues the tabs the user
+        // is looking at rather than only the ones they have not opened yet.
+        NotificationCenter.default.post(name: .requestBlockingBecameUnavailable, object: nil)
     }
 
     /// Round trip through the whole private-API stack, once per launch.
@@ -151,14 +182,32 @@ enum AuraWebBundle {
     static func probe(timeout: TimeInterval = 3) async -> Bool {
         guard isEnabled, let processPool else { return true }
         guard await answersMessages(within: timeout, pool: processPool) else { return false }
-        guard SettingsStore.shared.extensionFullAdBlocking else { return true }
 
+        // Every page on the bundle pool is exposed to the paint failure, not only the
+        // ones full uBlock Origin routed there: the experimental request-blocking
+        // switch on its own used to skip this stage and got the blank tabs with no
+        // fallback at all.
         switch await PaintProbe.run(pool: processPool) {
+        case .painted:
+            return true
         case .blank:
             markUnavailable("Pages stopped painting when Aura checked at launch.")
             return false
-        case .painted, .inconclusive:
-            return true
+        case .inconclusive:
+            // One clean retry with a fresh page, then fail toward the fallback. An
+            // unreadable probe used to count as healthy, and when the stack really was
+            // broken that verdict cost the user every tab in the session; reading it
+            // as broken costs one session of uBO Lite and says so in Settings.
+            switch await PaintProbe.run(pool: processPool) {
+            case .painted:
+                return true
+            case .blank:
+                markUnavailable("Pages stopped painting when Aura checked at launch.")
+                return false
+            case .inconclusive:
+                markUnavailable("Aura could not confirm pages keep painting with request blocking on.")
+                return false
+            }
         }
     }
 

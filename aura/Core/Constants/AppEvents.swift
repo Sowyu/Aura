@@ -42,6 +42,10 @@ extension Notification.Name {
     static let clearCacheAndReload = Notification.Name("ClearCacheAndReload")
     static let clearCookiesAndReload = Notification.Name("ClearCookiesAndReload")
     static let spacePrivacySettingsChanged = Notification.Name("SpacePrivacySettingsChanged")
+    /// The injected-bundle health probe gave up mid-session. Every window rebuilds its
+    /// loaded web views so tabs stuck on the broken pool come back on the ordinary
+    /// WebContent service.
+    static let requestBlockingBecameUnavailable = Notification.Name("RequestBlockingBecameUnavailable")
     /// A per-site JavaScript rule or the global default changed. userInfo: ["host": String] when
     /// a single site changed, absent when the global default did.
     static let javaScriptPolicyChanged = Notification.Name("JavaScriptPolicyChanged")

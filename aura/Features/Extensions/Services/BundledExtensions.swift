@@ -212,8 +212,14 @@ extension BundledExtensions {
         var fullRequested: Bool
         /// Full uBO's folder is in the profile.
         var fullInstalled: Bool
-        /// The user has seen its permissions and agreed to them.
+        /// The user has seen the permissions the manifest asks for *now* and agreed to
+        /// them: a record exists and its hash still matches. False either because there
+        /// is no record, or because uBO's permission set changed since the approval.
         var fullConsented: Bool
+        /// A consent record exists at all, whatever it now hashes to. Refusal is the
+        /// absence of one (a decline clears it); recorded-but-stale means "ask again",
+        /// which must not read as "the sheet was refused".
+        var fullConsentRecorded: Bool
         /// It is switched off in the extensions list, which is also where a refused
         /// consent sheet leaves it.
         var fullDisabled: Bool
@@ -261,8 +267,10 @@ extension BundledExtensions {
         }
         // Installed, switched off, and no consent on record: the sheet was refused, or
         // the user switched full uBO off in the extensions list before it ever ran.
-        // Nothing changes, and the switch goes back to where it was.
-        if inputs.fullInstalled, !inputs.fullConsented, inputs.fullDisabled {
+        // Nothing changes, and the switch goes back to where it was. A record that
+        // exists but no longer matches is not this: that is an update asking for more,
+        // and it falls through to the general branch as pending consent.
+        if inputs.fullInstalled, !inputs.fullConsentRecorded, inputs.fullDisabled {
             return BlockingPlan(
                 activeBlocker: .lite, installsFull: false,
                 requestBlocking: false, fullRequested: false, pending: .none
@@ -296,18 +304,70 @@ extension BundledExtensions {
         return BlockingInputs(
             fullRequested: settings.extensionFullAdBlocking,
             fullInstalled: row != nil || FileManager.default.fileExists(atPath: folder.path),
-            fullConsented: settings.extensionConsent[id] != nil,
+            fullConsented: fullConsentStands(for: folder),
+            fullConsentRecorded: settings.extensionConsent[id] != nil,
             fullDisabled: row.map { !$0.isEnabled } ?? manager.disabledIDs.contains(id),
             bundleActive: AuraWebBundle.isEnabled,
             unavailable: settings.requestBlockingUnavailable
         )
     }
 
-    /// Runs the plan and makes it true. Idempotent, and called from the three places the
-    /// answer can change: the settings switch, the launch scan, and the health probe
-    /// giving up on the injected bundle.
+    /// Consent as the loader will actually read it: a record for the same permission
+    /// set the manifest asks for now. A bare "a record exists" check disagreed with
+    /// `ExtensionConsent.decision` whenever the stored hash had drifted, and the plan
+    /// then paused uBO Lite for a full uBO the loader was about to park on the consent
+    /// queue — a session with no blocker at all and every page on the fragile pool.
+    @MainActor
+    private static func fullConsentStands(for folder: URL) -> Bool {
+        guard let record = SettingsStore.shared.extensionConsent[FullUBlockOrigin.folderName] else {
+            return false
+        }
+        let permissions = ExtensionManager.requestedPermissions(at: folder)
+        return record.permissionsHash == ExtensionConsent.permissionsHash(permissions)
+    }
+
+    /// True while `applyBlockingPlan` is switching rows itself, so the manager's
+    /// `setEnabled` reporting back through `rowDidChange` cannot recurse.
+    @MainActor
+    private static var isApplyingPlan = false
+
+    /// A row in the extensions list was flipped by hand, or a consent sheet was
+    /// answered. For the two bundled blockers that is an answer the plan has to hear —
+    /// a full uBO re-enabled during its pending relaunch would otherwise run alongside
+    /// uBO Lite, and a consent declined outside Settings left the Privacy switch on.
+    /// Everything else is none of the plan's business.
+    ///
+    /// A full uBO row whose state disagrees with the Privacy switch answers the
+    /// switch, the same way uninstalling it does: without this, the plan (for which
+    /// the switch is the source of truth) would flip the row straight back under the
+    /// user's click. Rows turned *on* always answer it — an unconsented one flipped on
+    /// is asking for the feature, and the plan's consent gate takes it from there.
+    /// Turned *off* without a consent record is the refused-sheet state, which the
+    /// plan reads off the row itself, so that falls through.
+    @MainActor
+    static func rowDidChange(id: String) {
+        guard !isApplyingPlan else { return }
+        if id == FullUBlockOrigin.folderName {
+            let enabled = ExtensionManager.shared.installedExtensions
+                .first { $0.id == id }?.isEnabled == true
+            if SettingsStore.shared.extensionFullAdBlocking != enabled,
+               enabled || SettingsStore.shared.extensionConsent[id] != nil {
+                setFullBlocking(enabled)
+                return
+            }
+            applyBlockingPlan()
+            return
+        }
+        if id == folderName { applyBlockingPlan() }
+    }
+
+    /// Runs the plan and makes it true. Idempotent, and called from the places the
+    /// answer can change: the settings switch, the launch scan, a hand-flipped blocker
+    /// row, and the health probe giving up on the injected bundle.
     @MainActor
     static func applyBlockingPlan() {
+        isApplyingPlan = true
+        defer { isApplyingPlan = false }
         let plan = plan(for: blockingInputs())
         let settings = SettingsStore.shared
 
@@ -348,6 +408,13 @@ extension BundledExtensions {
         // sheet: declining turns it off, approving turns it on and loads it.
         if plan.pending != .consent {
             setEnabled(plan.activeBlocker == .full, id: FullUBlockOrigin.folderName, manager: manager)
+        } else if SettingsStore.shared.extensionConsent[FullUBlockOrigin.folderName] != nil {
+            // Pending consent with a record on file is a stale approval — uBO's
+            // permission set changed — not an unanswered first sheet. The row was
+            // parked off by an earlier plan run, and it has to come back on for the
+            // loader to reach the consent gate and queue the re-prompt at all. uBO
+            // Lite is still the active blocker while the sheet waits.
+            setEnabled(true, id: FullUBlockOrigin.folderName, manager: manager)
         }
 
         let defaults = UserDefaults.standard
@@ -407,17 +474,34 @@ extension BundledExtensions {
         }
     }
 
-    /// Puts full uBO's folder in the profile, hash-checked, and returns it. Returns the
-    /// existing folder untouched when it is already there, so this is safe to call on
-    /// every launch and never overwrites a copy that has been running.
+    /// Puts full uBO's folder in the profile, hash-checked, and returns it. An existing
+    /// folder at the pinned version is returned untouched, so this is safe to call on
+    /// every launch. A folder at any other version (or with an unreadable manifest) is
+    /// replaced: the name is Aura's own vendoring, never a hand install, so what is
+    /// there came from an older build or a broken unpack, and loading it forever is how
+    /// a stale uBO survives every update. Its user data lives in WebKit's storage keyed
+    /// by the extension id, not in the folder, so nothing of the user's goes with it.
     ///
     /// `nonisolated` on purpose: the launch path calls it from inside the extension scan,
     /// before the directory listing, so the folder is picked up by that same scan.
+    /// Serializes `unpackFullIfNeeded`: the background scan, `finishScanNow` and the
+    /// settings switch's install can all reach it, and with the stale-version delete
+    /// above a second caller mid-unpack would race the first destructively. The loser
+    /// blocks briefly, then returns through the version fast path.
+    private static let unpackLock = NSLock()
+
     @discardableResult
     static func unpackFullIfNeeded(into extensionsDirectory: URL) -> URL? {
+        unpackLock.lock()
+        defer { unpackLock.unlock() }
+
         let destination = extensionsDirectory
             .appendingPathComponent(FullUBlockOrigin.folderName, isDirectory: true)
-        if FileManager.default.fileExists(atPath: destination.path) { return destination }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            if installedVersion(at: destination) == FullUBlockOrigin.version { return destination }
+            log.info("replacing full uBlock Origin at a stale or unreadable version")
+            try? FileManager.default.removeItem(at: destination)
+        }
 
         guard let archive = FullUBlockOrigin.verifiedArchiveURL() else {
             log.error("full uBlock Origin archive missing or does not match the pinned hash")
@@ -429,5 +513,14 @@ extension BundledExtensions {
             log.error("full uBlock Origin unpack failed: \(error.localizedDescription, privacy: .public)")
             return nil
         }
+    }
+
+    /// The manifest version of the copy on disk, or nil when there is no readable one.
+    /// The shim patch never touches `version`, so this reads the same either way.
+    private static func installedVersion(at folder: URL) -> String? {
+        guard let data = try? Data(contentsOf: folder.appendingPathComponent("manifest.json")),
+              let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return manifest["version"] as? String
     }
 }

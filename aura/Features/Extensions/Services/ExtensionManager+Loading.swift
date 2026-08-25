@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 @preconcurrency import WebKit
 
 /// Loading half of `ExtensionManager`: the consent gate an extension passes before
@@ -10,7 +11,7 @@ extension ExtensionManager {
     // MARK: - Loading
 
     func registerExtension(at directory: URL, source: ExtensionInstallSource) {
-        register(Self.prepare(at: directory, patchesShim: AuraWebBundle.isEnabled), source: source)
+        register(Self.prepare(at: directory, patchesShim: shimPatchingEnabled), source: source)
     }
 
     func register(_ scanned: ScannedExtension, source: ExtensionInstallSource? = nil) {
@@ -89,7 +90,14 @@ extension ExtensionManager {
         setRunsInPrivateWindows(allowsPrivateWindows, for: request.id)
         SettingsStore.shared.extensionConsent[request.id] = ExtensionConsent.record(for: request)
         pendingConsent.removeAll { $0.id == request.id }
-        guard let entry = installedExtensions.first(where: { $0.id == request.id }) else { return }
+        // An answered sheet changes the blocker plan's inputs, and the sheet is no
+        // longer only shown from Settings (whose onChange used to re-run the plan).
+        // Before the load, so a full uBO consented while its relaunch is still
+        // pending is parked by the plan rather than loaded next to uBO Lite.
+        BundledExtensions.rowDidChange(id: request.id)
+        guard let entry = installedExtensions.first(where: { $0.id == request.id }),
+              entry.isEnabled
+        else { return }
         update(id: request.id) { $0.loadError = nil }
         performLoad(entry)
     }
@@ -99,18 +107,35 @@ extension ExtensionManager {
     /// worse than leaving an extension switched off: the store row's toggle asks again.
     func declineConsent(_ request: ExtensionConsentRequest) {
         pendingConsent.removeAll { $0.id == request.id }
+        // A record from an earlier approval no longer reflects the user's answer, and
+        // it is what the blocker plan reads as "parked for a re-prompt, put the row
+        // back on" — leaving it would re-raise the sheet the user just declined.
+        SettingsStore.shared.extensionConsent[request.id] = nil
         setEnabled(false, for: request.id)
     }
 
     func performLoad(_ entry: InstalledExtension) {
         guard #available(macOS 15.4, *) else { return }
         Task { @MainActor in
+            // The row can be switched back off between this enqueue and the task
+            // running — the blocker plan vetoing a hand-flipped row does exactly that —
+            // and `unload` on a context that was never registered is a no-op.
+            guard installedExtensions.first(where: { $0.id == entry.id })?.isEnabled == true else { return }
             do {
                 let loaded = try await engine.load(
                     directory: entry.directoryURL,
                     id: entry.id,
                     privateAccess: runsInPrivateWindows(entry.id)
                 )
+                // `setEnabled(false)` during the await above could not reach this
+                // load: the context enters the engine's map only once `load` returns,
+                // so the unload found nothing. The paint probe's fallback disables
+                // full uBO from exactly that window, and skipping this check would
+                // leave it running next to the uBO Lite the fallback just restored.
+                guard installedExtensions.first(where: { $0.id == entry.id })?.isEnabled == true else {
+                    engine.unload(id: entry.id)
+                    return
+                }
                 update(id: entry.id) { item in
                     item.displayName = loaded.displayName ?? item.displayName
                     item.displayVersion = loaded.displayVersion ?? item.displayVersion
@@ -119,15 +144,26 @@ extension ExtensionManager {
                 }
                 observeErrors(of: entry.id)
                 applyCommandShortcuts()
+                // A persistent (MV2) background is the extension's whole engine: full
+                // uBlock Origin registers its blocking `webRequest` listeners and the
+                // shim's relay port only once it runs, and WebKit keeps even
+                // "persistent" backgrounds lazy. Left asleep, nothing blocks and the
+                // popup opens against a background that is not there. MV3 workers
+                // (uBO Lite, and its launch-time rule compile) stay lazy on purpose.
+                if loaded.hasPersistentBackgroundContent {
+                    do {
+                        try await engine.context(for: entry.id)?.loadBackgroundContent()
+                    } catch {
+                        Self.log.error("""
+                        background start failed for \(entry.id, privacy: .public): \
+                        \(error.localizedDescription, privacy: .public)
+                        """)
+                    }
+                }
                 // A background script fails asynchronously, and used to be given a flat
                 // three seconds to do it in before its errors were read once and never
                 // again. The observer above is what reports them now, whenever they
                 // happen; this is only the state at load time.
-                //
-                // Deliberately not `loadBackgroundContent()`: forcing the background up
-                // would report errors sooner and cost every launch the start-up of every
-                // MV3 worker WebKit was keeping lazy, uBlock Origin Lite's rule compile
-                // included.
                 refreshErrors(for: entry.id)
             } catch {
                 update(id: entry.id) { item in
