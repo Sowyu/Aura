@@ -34,13 +34,70 @@ listeners and the popup's message relay only exist once the background runs; MV3
 workers stay lazy), the vendored `ublock-origin-full` folder is replaced when its
 version drifts from the pin, and the popup path's silent error exits are logged.
 
-Track 2 levers now in code, both on by default on the bundle pool and switchable
-per session for the A/B: `AURA_FG_PRIORITY=0` (WebKit's
-`_alwaysRunsAtForegroundPriority` on page configurations, aimed at the failed
-foreground assertion itself) and `AURA_PAINT_KEEPALIVE=0` (a one-pixel
-`requestAnimationFrame` loop that keeps rendering updates committing, since the
-measured purge left on-demand rendering intact). The paint probe runs with the
-same keep-alive real pages get, so its verdict is about the mitigated stack.
+## Track 2 result, 2026-08-25: the Development service paints
+
+Root cause, read off WebKit trunk (319772@main) and confirmed on macOS 27 (Xcode
+27.0 beta 27A5218g). `com.apple.WebKit.WebContent.Development.xpc` ships without
+`com.apple.runningboard.assertions.webkit` and without the RunningBoard block in its
+Info.plist (WebKit bug 263078 took it out of launchd's hands and stopped there), so
+every assertion WebKit takes against it is refused. WebKit's UI-process throttler
+reads a refusal as suspension: `ProcessAssertion::acquireSync` ->
+`processAssertionWasInvalidated` -> `ProcessThrottler::invalidateAllActivities` ->
+`sendPrepareToSuspend`. The web process freezes its layer tree
+(`WebProcess::prepareToSuspend` -> `freezeAllLayerTrees`, and `requestAnimationFrame`
+is serviced inside the frozen rendering update) and the UI process detaches the
+page's root layer (`RemoteLayerTreeDrawingAreaProxy::hideContentUntilPendingUpdate`).
+Pages paint once, go blank, and their JavaScript keeps running. `takeSnapshot`
+still works because it re-renders on demand, which is why the old probe never saw it.
+
+Fix, in `AuraWebBundleSupport.m`: RunningBoard never manages that process, so Aura
+answers WebKit's assertions for it in-process. `-[RBSAssertion acquireWithError:]`
+is swizzled to report success without contacting RunningBoard when the target pid's
+executable is `WebContent.Development`, and the matching `invalidate` is skipped;
+every other target goes through RunningBoard untouched. Measured through the paint
+probe: 0 rAF callbacks per 2 s and an empty layer tree for the bundle page without
+it, 120 per 2 s, a full tree and a 100% window-server fill with it; the ordinary
+service's control page reads the same either way.
+
+What did not work, so nobody tries it again: `_clientNavigationsRunAtForegroundPriority`
+(only adds activities that need the same refused assertion),
+`_alwaysRunsAtForegroundPriority` (iOS-only), a rAF keep-alive script (rAF is what
+freezes), `shouldTakeUIBackgroundAssertion` (not on macOS), switching off
+`PageVisibilityBasedProcessSuppressionEnabled`,
+`BackgroundWebContentRunningBoardThrottlingEnabled` or
+`UseGPUProcessForDOMRenderingEnabled`, `WKPageForceRepaint` or
+`WKBundlePageForceRepaint` on a timer (both no-ops while frozen), an `NSProcessInfo`
+activity inside the bundle, and faking only the entitlement error while still
+calling RunningBoard (its client library reports the refusal to WebKit's observer
+regardless of the return value). A pool whose bundle path points at nothing still
+freezes, so none of Aura's bundle code is involved.
+
+The paint probe (`AuraWebBundlePaintProbe.swift`) now counts the fixture's own rAF
+frames against a control page on the ordinary service and reads the window
+server's image of both windows, so if an OS update moves WebKit's acquisition to
+ExtensionKit and the shim becomes a no-op, launch falls back to uBO Lite and says so.
+
+Alternatives on the table if that day comes, from the survey below: Orion ships its
+own WebKit build (no Development service, no RunningBoard) with a patched
+NetworkProcess resource interceptor and per-event policy caches; the honest fallback
+without a WebKit build is uBO Lite semantics through content rule lists, which are
+more capable than Apple's docs say (`redirect` with `remove-parameters`,
+`modify-headers`, `ignore-following-rules`).
+
+Credits for this track (ideas and reading, no code copied):
+
+- WebKit (BSD-2-Clause / LGPL-2.1), https://github.com/WebKit/WebKit: the files named
+  above, plus `WebProcessProxyMac.mm` (`shouldAllowNonValidInjectedCode`) and
+  `ProcessLauncherCocoa.mm` (service selection). WebKit bug 263078 (Elliott
+  Williams, 2023) for the Development-service RunningBoard history.
+- Kagi's Orion browser (closed source), https://orionbrowser.com, for the
+  self-built-WebKit plus resource-interceptor architecture, read off its shipping
+  bundle's symbols and https://help.kagi.com/orion/faq/faq.html.
+- gorhill/uBlock (GPL-3.0), `platform/mv3/safari/patch-ruleset.js` and
+  `src/js/static-dnr-filtering.js`, and AdguardTeam/SafariConverterLib (GPL-3.0), as
+  the reference converters should content rule lists ever have to carry the load.
+- Apple DTS, Developer Forums threads 747253 and 743592, for the confirmation that
+  `com.apple.runningboard.assertions.webkit` cannot be self-granted.
 
 ## Goal
 
@@ -92,7 +149,8 @@ the generic shim entry-point insertion every extension gets.
 the rendering stack for every page, which is a bigger deal than installing a filter
 list. Settings → Privacy grows one row, "Full ad blocking (uBlock Origin)":
 
-- Off (default): uBOLiteRedux handles blocking through DNR, exactly today.
+- On (default since 2026-08-25, once the Development service painted): full uBO,
+  pre-consented like Lite. Off: uBOLiteRedux handles blocking through DNR.
 - On: flips `extensionRequestBlocking` on (next-launch effect, matching the existing
   setting semantics), installs/loads full uBO, and disables uBOLiteRedux while enabled —
   running both double-filters and their rule sets fight. Re-enabling Lite when full is

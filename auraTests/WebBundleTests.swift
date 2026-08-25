@@ -1,10 +1,9 @@
+@testable import Aura
 import Foundation
 import Network
 import os
 import Testing
 import WebKit
-
-@testable import Aura
 
 /// The injected bundle ships inside the signed app and is never written to:
 /// a file written into a signed bundle breaks its seal and Gatekeeper then
@@ -46,6 +45,21 @@ struct WebBundleTests {
     /// window is not enough to reproduce either on this build. Which one it is is what
     /// gets read off the log by hand each OS beta; the reducers behind it are pinned by
     /// `FullUBlockOriginTests`.
+    /// Partition for the paint failure: a pool whose bundle path points at nothing
+    /// still puts pages on the Development WebContent service (the path being
+    /// non-empty and outside /System is what selects it), but runs none of Aura's
+    /// bundle code. A blank here means the service alone freezes rendering.
+    @Test(.enabled(if: WebBundleTests.isEnabled))
+    @MainActor
+    func theDevelopmentServiceAloneIsProbed() async throws {
+        let pool =
+            try #require(AuraMakeInjectedBundleProcessPool(URL(fileURLWithPath: "/tmp/aura-no-such-bundle.wkbundle")))
+        let verdict = await AuraWebBundle.PaintProbe.run(pool: pool, settle: 2)
+        // swiftlint:disable:next no_print_statements
+        print("PAINT PROBE (empty bundle path) verdict=\(verdict)")
+        #expect([.painted, .blank, .inconclusive].contains(verdict))
+    }
+
     @Test(.enabled(if: WebBundleTests.isEnabled))
     @MainActor
     func thePaintProbeReachesAVerdict() async throws {
@@ -109,7 +123,6 @@ struct WebBundleHealthTests {
 /// the mask answered with whichever bit was tested first. Every request whose
 /// type could not be inferred came back as `sub_frame`, and uBlock Origin then
 /// judged a page's own JSON API by its `$subdocument` filters.
-@Suite
 struct ResourceTypeNameTests {
     private func name(
         _ path: String,
@@ -285,7 +298,9 @@ final class LocalHTTPServer {
             let resumed = OSAllocatedUnfairLock(initialState: false)
             let claim: () -> Bool = {
                 resumed.withLock { done -> Bool in
-                    if done { return false }
+                    if done {
+                        return false
+                    }
                     done = true
                     return true
                 }
@@ -293,9 +308,13 @@ final class LocalHTTPServer {
             listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    if claim() { continuation.resume(returning: self.listener.port?.rawValue ?? 0) }
+                    if claim() {
+                        continuation.resume(returning: self.listener.port?.rawValue ?? 0)
+                    }
                 case let .failed(error):
-                    if claim() { continuation.resume(throwing: error) }
+                    if claim() {
+                        continuation.resume(throwing: error)
+                    }
                 default:
                     break
                 }

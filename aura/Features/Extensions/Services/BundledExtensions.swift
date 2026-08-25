@@ -11,11 +11,12 @@ import os
 ///
 /// uBO Lite blocks through `declarativeNetRequest`, which WebKit compiles and
 /// enforces itself. Full uBlock Origin blocks through `webRequest`, which only
-/// answers with Aura's injected bundle loaded, and that bundle has been known to
-/// stop pages painting on this macOS. So Lite is the default and full uBO is
-/// opt-in, behind the switch in Settings > Privacy and behind the health probe
-/// that takes it away again if pages stop painting. `plan(for:)` is the rule
-/// that decides which of the two a given launch runs.
+/// answers with Aura's injected bundle loaded. That bundle used to stop pages
+/// painting on macOS; `AuraWebBundleSupport.m` answers the RunningBoard assertions
+/// WebKit could not hold for it, so full uBO is now the default, behind the switch
+/// in Settings > Privacy and behind the health probe that puts Lite back if pages
+/// ever stop painting again. `plan(for:)` is the rule that decides which of the
+/// two a given launch runs.
 enum BundledExtensions {
     private static let markerKey = "extensions.bundled.ublock-origin-lite"
     private static let folderName = "ublock-origin-lite"
@@ -32,11 +33,15 @@ enum BundledExtensions {
     private static let log = Logger(subsystem: "com.aurabrowser.app", category: "extensions")
 
     /// Ids that load without the consent sheet. Installing Aura is the consent for
-    /// what Aura itself puts in the profile.
-    static let preConsentedIDs: Set<String> = [folderName, geckoID]
+    /// what Aura itself puts in the profile, both blockers included. Full uBO only by
+    /// its folder: its gecko id is also the one in the legacy `ublock-origin` folder
+    /// and in any copy a user installs by hand, and neither is Aura's to vouch for.
+    static let preConsentedIDs: Set<String> = [folderName, geckoID, FullUBlockOrigin.folderName]
 
     static func isBundled(id: String, geckoID: String?) -> Bool {
-        if preConsentedIDs.contains(id) { return true }
+        if preConsentedIDs.contains(id) {
+            return true
+        }
         guard let geckoID else { return false }
         return preConsentedIDs.contains(geckoID)
     }
@@ -72,7 +77,9 @@ enum BundledExtensions {
             newMarker: defaults.bool(forKey: markerKey)
         )
 
-        if plan.removesLegacy { removeLegacy(at: legacy) }
+        if plan.removesLegacy {
+            removeLegacy(at: legacy)
+        }
         // Full uBlock Origin only when the user asked for it, and here rather than from
         // the settings switch so the caller's directory listing picks the folder up in
         // the same pass. Which of the two then runs is `plan(for:)`'s call.
@@ -137,7 +144,9 @@ enum BundledExtensions {
         Bundle.main.url(forResource: folderName, withExtension: "xpi")
     }
 
-    static var folderID: String { folderName }
+    static var folderID: String {
+        folderName
+    }
 }
 
 // MARK: - Full uBlock Origin
@@ -304,26 +313,15 @@ extension BundledExtensions {
         return BlockingInputs(
             fullRequested: settings.extensionFullAdBlocking,
             fullInstalled: row != nil || FileManager.default.fileExists(atPath: folder.path),
-            fullConsented: fullConsentStands(for: folder),
-            fullConsentRecorded: settings.extensionConsent[id] != nil,
+            // Pre-consented like Lite: installing Aura is the consent, and the loader
+            // agrees (`ExtensionConsent.decision` loads a bundled source unasked), so
+            // the plan never parks it on a sheet that will not come.
+            fullConsented: true,
+            fullConsentRecorded: true,
             fullDisabled: row.map { !$0.isEnabled } ?? manager.disabledIDs.contains(id),
             bundleActive: AuraWebBundle.isEnabled,
             unavailable: settings.requestBlockingUnavailable
         )
-    }
-
-    /// Consent as the loader will actually read it: a record for the same permission
-    /// set the manifest asks for now. A bare "a record exists" check disagreed with
-    /// `ExtensionConsent.decision` whenever the stored hash had drifted, and the plan
-    /// then paused uBO Lite for a full uBO the loader was about to park on the consent
-    /// queue — a session with no blocker at all and every page on the fragile pool.
-    @MainActor
-    private static func fullConsentStands(for folder: URL) -> Bool {
-        guard let record = SettingsStore.shared.extensionConsent[FullUBlockOrigin.folderName] else {
-            return false
-        }
-        let permissions = ExtensionManager.requestedPermissions(at: folder)
-        return record.permissionsHash == ExtensionConsent.permissionsHash(permissions)
     }
 
     /// True while `applyBlockingPlan` is switching rows itself, so the manager's
@@ -351,14 +349,17 @@ extension BundledExtensions {
             let enabled = ExtensionManager.shared.installedExtensions
                 .first { $0.id == id }?.isEnabled == true
             if SettingsStore.shared.extensionFullAdBlocking != enabled,
-               enabled || SettingsStore.shared.extensionConsent[id] != nil {
+               enabled || SettingsStore.shared.extensionConsent[id] != nil
+            {
                 setFullBlocking(enabled)
                 return
             }
             applyBlockingPlan()
             return
         }
-        if id == folderName { applyBlockingPlan() }
+        if id == folderName {
+            applyBlockingPlan()
+        }
     }
 
     /// Runs the plan and makes it true. Idempotent, and called from the places the
@@ -377,7 +378,9 @@ extension BundledExtensions {
         if let requestBlocking = plan.requestBlocking, requestBlocking != settings.extensionRequestBlocking {
             settings.extensionRequestBlocking = requestBlocking
         }
-        if plan.installsFull { installFull() }
+        if plan.installsFull {
+            installFull()
+        }
         apply(plan)
     }
 
@@ -391,7 +394,9 @@ extension BundledExtensions {
     static func setFullBlocking(_ enabled: Bool) {
         let settings = SettingsStore.shared
         settings.extensionFullAdBlocking = enabled
-        if !enabled { settings.extensionRequestBlocking = false }
+        if !enabled {
+            settings.extensionRequestBlocking = false
+        }
         applyBlockingPlan()
     }
 
@@ -455,9 +460,7 @@ extension BundledExtensions {
     }
 
     /// Unpacks the vendored archive mid-session and hands the folder to the ordinary
-    /// install path, which is what puts the consent sheet on screen. Full uBO is not
-    /// pre-consented like the Lite build: it asks for `<all_urls>` and switching it on
-    /// changes how every page in the browser is rendered.
+    /// install path. Bundled, so it loads without a sheet, like the Lite build.
     ///
     /// Off the main actor because ~17 MB of it lands on disk, then back for the register.
     @MainActor
@@ -466,10 +469,7 @@ extension BundledExtensions {
         Task.detached(priority: .userInitiated) {
             guard let folder = unpackFullIfNeeded(into: directory) else { return }
             await MainActor.run {
-                ExtensionManager.shared.registerExtension(
-                    at: folder,
-                    source: .archive(FullUBlockOrigin.assetName)
-                )
+                ExtensionManager.shared.registerExtension(at: folder, source: .bundled)
             }
         }
     }
@@ -498,7 +498,9 @@ extension BundledExtensions {
         let destination = extensionsDirectory
             .appendingPathComponent(FullUBlockOrigin.folderName, isDirectory: true)
         if FileManager.default.fileExists(atPath: destination.path) {
-            if installedVersion(at: destination) == FullUBlockOrigin.version { return destination }
+            if installedVersion(at: destination) == FullUBlockOrigin.version {
+                return destination
+            }
             log.info("replacing full uBlock Origin at a stale or unreadable version")
             try? FileManager.default.removeItem(at: destination)
         }

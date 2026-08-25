@@ -1,8 +1,7 @@
+@testable import Aura
 import CoreGraphics
 import Foundation
 import Testing
-
-@testable import Aura
 
 /// The opt-in full uBlock Origin: the blob Aura vendors, and the rule that decides
 /// which of the two blockers a launch runs.
@@ -133,23 +132,23 @@ struct FullUBlockOriginTests {
         #expect((patched?["permissions"] as? [String])?.contains("nativeMessaging") == true)
     }
 
-    /// Full uBO is not the pre-consented one. Installing Aura is consent for what Aura
-    /// puts in the profile by itself, and this is not that: it asks for `<all_urls>`
-    /// and changes how every page is rendered.
-    @Test func fullUBlockOriginIsNotPreConsented() {
-        #expect(!BundledExtensions.isBundled(id: Pin.folderName, geckoID: Pin.geckoID))
-        #expect(!BundledExtensions.preConsentedIDs.contains(Pin.folderName))
-        #expect(!BundledExtensions.preConsentedIDs.contains(Pin.geckoID))
+    /// Both bundled blockers are pre-consented: installing Aura is consent for what Aura
+    /// itself puts in the profile, and the loader agrees with the plan about it.
+    @Test func fullUBlockOriginIsPreConsented() {
+        #expect(BundledExtensions.preConsentedIDs.contains(Pin.folderName))
+        #expect(BundledExtensions.isBundled(id: Pin.folderName, geckoID: Pin.geckoID))
+        // By folder only: a hand-installed copy shares the gecko id and is not Aura's.
+        #expect(!BundledExtensions.isBundled(id: "some-other-folder", geckoID: Pin.geckoID))
 
         let request = ExtensionConsentRequest(
             id: Pin.folderName,
             displayName: "uBlock Origin",
             displayDescription: nil,
             version: Pin.version,
-            source: .archive(Pin.assetName),
-            permissions: ["webRequest", "webRequestBlocking", "<all_urls>"]
+            source: .bundled,
+            permissions: ["<all_urls>", "webRequest", "webRequestBlocking"]
         )
-        #expect(ExtensionConsent.decision(for: request, stored: nil) == .prompt)
+        #expect(ExtensionConsent.decision(for: request, stored: nil) == .load)
     }
 
     /// The folder full uBO installs into is not the one the old preinstall used, which
@@ -323,7 +322,7 @@ struct FullUBlockOriginTests {
     }
 
     @Test func theFixtureColourReadsAsPainted() throws {
-        let sample = AuraWebBundle.PaintProbe.sample(try fixtureImage())
+        let sample = try AuraWebBundle.PaintProbe.sample(fixtureImage())
         #expect(sample.pixels > 0)
         #expect(sample.fixtureShare > 0.99)
         #expect(AuraWebBundle.PaintProbe.reading(for: sample) == .painted)
@@ -332,7 +331,7 @@ struct FullUBlockOriginTests {
     /// What a purged layer tree leaves behind: one flat colour that the page never
     /// painted. White here, but black and fully transparent read the same way.
     @Test func aFlatWhiteImageReadsAsBlank() throws {
-        let sample = AuraWebBundle.PaintProbe.sample(try flatImage(red: 1, green: 1, blue: 1))
+        let sample = try AuraWebBundle.PaintProbe.sample(flatImage(red: 1, green: 1, blue: 1))
         #expect(sample.fixtureShare == 0)
         #expect(sample.dominantShare > 0.99)
         #expect(AuraWebBundle.PaintProbe.reading(for: sample) == .blank)
@@ -341,7 +340,7 @@ struct FullUBlockOriginTests {
     /// Something is on screen, but not the fixture. Not proof of either, so nothing is
     /// switched off on it.
     @Test func aMixedImageIsInconclusive() throws {
-        let sample = AuraWebBundle.PaintProbe.sample(try quadrantImage())
+        let sample = try AuraWebBundle.PaintProbe.sample(quadrantImage())
         #expect(AuraWebBundle.PaintProbe.reading(for: sample) == .inconclusive)
         #expect(AuraWebBundle.PaintProbe.reading(for: .init(pixels: 0, fixtureShare: 0, dominantShare: 0))
             == .inconclusive)
@@ -351,8 +350,8 @@ struct FullUBlockOriginTests {
     /// surface that never painted at all is the probe's own failure, not the browser's,
     /// and a page still painting after the settle is simply healthy.
     @Test func onlyPaintedThenBlankCountsAgainstTheStack() throws {
-        let painted = AuraWebBundle.PaintProbe.sample(try fixtureImage())
-        let blank = AuraWebBundle.PaintProbe.sample(try flatImage(red: 1, green: 1, blue: 1))
+        let painted = try AuraWebBundle.PaintProbe.sample(fixtureImage())
+        let blank = try AuraWebBundle.PaintProbe.sample(flatImage(red: 1, green: 1, blue: 1))
         let verdict = AuraWebBundle.PaintProbe.verdict
 
         #expect(verdict(painted, blank) == .blank)
@@ -361,11 +360,61 @@ struct FullUBlockOriginTests {
         #expect(verdict(blank, painted) == .inconclusive)
     }
 
-    /// The fixture page paints the colour the matcher looks for; the two are generated
-    /// from one constant so they cannot drift apart.
+    /// The fixture page paints the colour the matcher looks for and runs the frame
+    /// counter the probe reads; all generated from one place so they cannot drift.
     @Test func theFixturePageCarriesTheColourTheMatcherWants() {
         let level = AuraWebBundle.PaintProbe.fixtureLevel
         let hex = String(format: "#%02x%02x%02x", level, level, level)
         #expect(AuraWebBundle.PaintProbe.fixtureHTML.contains("background:\(hex)"))
+        #expect(AuraWebBundle.PaintProbe.fixtureHTML.contains(AuraWebBundle.PaintProbe.framesScript))
+        #expect(AuraWebBundle.PaintProbe.framesScript.contains("window.__auraFrames"))
+    }
+
+    /// The reading that caught the real failure: the bundle page's counter stood still
+    /// while a control page on the ordinary service ticked. A control that does not
+    /// tick means the probe window itself was not being rendered, and decides nothing;
+    /// a throttled bundle page is not the purge either.
+    @Test func frozenFramesAgainstALiveControlCountAgainstTheStack() {
+        let verdict = AuraWebBundle.PaintProbe.frameVerdict
+        #expect(verdict(0, 120, 2) == .blank)
+        #expect(verdict(2, 120, 2) == .blank)
+        #expect(verdict(110, 120, 2) == .painted)
+        #expect(verdict(30, 30, 2) == .painted)
+        #expect(verdict(0, 0, 2) == .inconclusive)
+        #expect(verdict(0, 10, 2) == .inconclusive)
+        #expect(verdict(15, 120, 2) == .inconclusive)
+    }
+
+    /// The window server's own image decides when it can: it is what the user sees. A
+    /// capture that shows nothing for the bundle window while the control's is painted
+    /// is the failure; a control that did not capture either way decides nothing.
+    @Test func theScreenReadingNeedsAPaintedControl() {
+        let verdict = AuraWebBundle.PaintProbe.screenVerdict
+        let painted = AuraWebBundle.PaintProbe.Sample(pixels: 64, fixtureShare: 1, dominantShare: 1)
+        let blank = AuraWebBundle.PaintProbe.Sample(pixels: 64, fixtureShare: 0, dominantShare: 1)
+        let partial = AuraWebBundle.PaintProbe.Sample(pixels: 64, fixtureShare: 0.3, dominantShare: 0.5)
+        #expect(verdict(blank, painted) == .blank)
+        #expect(verdict(painted, painted) == .painted)
+        #expect(verdict(partial, painted) == .inconclusive)
+        #expect(verdict(blank, blank) == .inconclusive)
+        #expect(verdict(nil, painted) == .inconclusive)
+        #expect(verdict(blank, nil) == .inconclusive)
+    }
+
+    /// Screen first, frames second, and the snapshot can only add a `blank`.
+    /// `takeSnapshot` re-renders on demand and read `painted` on a stack whose pages
+    /// were blank on screen, so its `painted` certifies nothing, and readings that saw
+    /// nothing are left for the caller's retry rather than waved through.
+    @Test func theScreenDecidesThenFramesAndTheSnapshotCanOnlySayBlank() {
+        let verdict = AuraWebBundle.PaintProbe.combined(snapshot:frames:screen:)
+        #expect(verdict(.painted, .blank, .painted) == .painted)
+        #expect(verdict(.blank, .painted, .painted) == .blank)
+        #expect(verdict(.painted, .painted, .blank) == .blank)
+        #expect(verdict(.painted, .blank, .inconclusive) == .blank)
+        #expect(verdict(.inconclusive, .blank, .inconclusive) == .blank)
+        #expect(verdict(.blank, .painted, .inconclusive) == .blank)
+        #expect(verdict(.inconclusive, .painted, .inconclusive) == .painted)
+        #expect(verdict(.painted, .inconclusive, .inconclusive) == .inconclusive)
+        #expect(verdict(.inconclusive, .inconclusive, .inconclusive) == .inconclusive)
     }
 }

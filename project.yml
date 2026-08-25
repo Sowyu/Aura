@@ -208,6 +208,7 @@ targets:
       - target: aura
     settings:
       base:
+        GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Aura.app/Contents/MacOS/Aura"
         BUNDLE_LOADER: "$(TEST_HOST)"
         SWIFT_OBJC_BRIDGING_HEADER: aura/Core/BrowserEngine/AuraWebBundleSupport.h

@@ -21,7 +21,9 @@ final class SecurityScopedFolder {
 
     /// The folder for `bookmark`, calling `resolve` only when the bookmark changed.
     func url(for bookmark: Data?, resolve: (Data) -> URL?) -> URL? {
-        if let bookmark, bookmark == self.bookmark { return resolved }
+        if let bookmark, bookmark == self.bookmark {
+            return resolved
+        }
         release()
         guard let bookmark, let url = resolve(bookmark) else { return nil }
         self.bookmark = bookmark
@@ -31,7 +33,9 @@ final class SecurityScopedFolder {
     }
 
     func release() {
-        if started, let resolved { stop(resolved) }
+        if started, let resolved {
+            stop(resolved)
+        }
         bookmark = nil
         resolved = nil
         started = false
@@ -418,8 +422,10 @@ class SettingsStore {
         cookiesPolicy = defaults.string(forKey: cookiesPolicyKey)
             .flatMap(CookiesPolicy.init(rawValue:)) ?? .allowAll
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
-        extensionRequestBlocking = defaults.bool(forKey: extensionRequestBlockingKey)
-        extensionFullAdBlocking = defaults.bool(forKey: Self.extensionFullAdBlockingKey)
+        // Full uBlock Origin is the default blocker; a profile that never touched the
+        // switches gets it, one that switched them off stays off.
+        extensionRequestBlocking = defaults.object(forKey: extensionRequestBlockingKey) as? Bool ?? true
+        extensionFullAdBlocking = defaults.object(forKey: Self.extensionFullAdBlockingKey) as? Bool ?? true
         launcherBlur = defaults.object(forKey: launcherBlurKey) as? Bool ?? true
         addressEditingBlur = defaults.object(forKey: addressEditingBlurKey) as? Bool ?? true
         sitePermissions = Self.loadCodable([String: SitePermissionSettings].self, key: sitePermissionsKey) ?? [:]
@@ -491,7 +497,9 @@ class SettingsStore {
     var homePageURL: URL {
         let trimmed = homePageURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .oraHome }
-        if let url = URL(string: trimmed), url.scheme != nil { return url }
+        if let url = URL(string: trimmed), url.scheme != nil {
+            return url
+        }
         return URL(string: "https://\(trimmed)") ?? .oraHome
     }
 
@@ -528,7 +536,9 @@ class SettingsStore {
                 downloadFolderBookmark = nil
                 return nil
             }
-            if isStale { storeDownloadFolderBookmark(for: url) }
+            if isStale {
+                storeDownloadFolderBookmark(for: url)
+            }
             return url
         }
     }
@@ -544,7 +554,11 @@ class SettingsStore {
 
     private func storeDownloadFolderBookmark(for url: URL) {
         let accessed = url.startAccessingSecurityScopedResource()
-        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        defer {
+            if accessed {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
         downloadFolderBookmark = try? url.bookmarkData(
             options: [.withSecurityScope],
             includingResourceValuesForKeys: nil,
@@ -566,7 +580,7 @@ class SettingsStore {
     /// Internal rather than private: the extensions in the sibling files use both.
     func saveCodable(_ value: some Encodable, forKey key: String) {
         do {
-            defaults.set(try JSONEncoder().encode(value), forKey: key)
+            try defaults.set(JSONEncoder().encode(value), forKey: key)
         } catch {
             Self.log.error(
                 "Failed to encode \(key, privacy: .public): \(error.localizedDescription, privacy: .public)"
@@ -626,7 +640,9 @@ class SettingsStore {
         supported: [TimeInterval]
     ) -> TimeInterval {
         let value: TimeInterval = raw == 0 ? defaultSeconds : raw
-        if supported.contains(value) { return value }
+        if supported.contains(value) {
+            return value
+        }
         return supported.min { abs($0 - value) < abs($1 - value) } ?? defaultSeconds
     }
 }

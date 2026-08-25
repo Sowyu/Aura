@@ -29,7 +29,9 @@ enum AuraWebBundle {
     /// Read once: a page put on the injected-bundle pool cannot be taken off it,
     /// so flipping the setting mid-session would only split the tabs in two.
     private static let isConfigured: Bool = {
-        if let override = ProcessInfo.processInfo.environment["AURA_WEB_BUNDLE"] { return override != "0" }
+        if let override = ProcessInfo.processInfo.environment["AURA_WEB_BUNDLE"] {
+            return override != "0"
+        }
         return SettingsStore.shared.extensionRequestBlocking
     }()
 
@@ -37,7 +39,9 @@ enum AuraWebBundle {
     /// probe can take this off mid-session, which is the one direction that is
     /// safe: pages already on the pool keep working, and every page created
     /// afterwards goes back to the ordinary WebContent service.
-    static var isEnabled: Bool { isConfigured && !SettingsStore.shared.requestBlockingUnavailable }
+    static var isEnabled: Bool {
+        isConfigured && !SettingsStore.shared.requestBlockingUnavailable
+    }
 
     /// `Aura.app/Contents/PlugIns/AuraWebBundle.wkbundle`, the bundle WebKit loads.
     static let builtInBundleURL: URL? = Bundle.main.builtInPlugInsURL?.appendingPathComponent(bundleName)
@@ -60,7 +64,7 @@ enum AuraWebBundle {
     }()
 
     /// Set once `processPool` exists, so pushes never force the pool into being.
-    nonisolated(unsafe) private static var livePool: WKProcessPool?
+    private nonisolated(unsafe) static var livePool: WKProcessPool?
 
     /// Answers the bundle's synchronous messages: the webRequest active flag and
     /// the block/allow questions `WebRequestBroker` handles.
@@ -85,36 +89,10 @@ enum AuraWebBundle {
         }
     }
 
-    /// `AURA_FG_PRIORITY=0` switches the experiment below off for a session.
-    private static let wantsForegroundPriority: Bool =
-        ProcessInfo.processInfo.environment["AURA_FG_PRIORITY"] != "0"
-
-    /// Logged once rather than per page.
-    nonisolated(unsafe) private static var reportedForegroundPriority = false
-
     /// Points `configuration` at the injected-bundle process pool. No-op when disabled.
     static func apply(to configuration: WKWebViewConfiguration) {
         guard isEnabled, let processPool else { return }
         configuration.processPool = processPool
-        applyForegroundPriorityIfWanted(to: configuration)
-    }
-
-    /// Track 2 experiment (see UBLOCK-ORIGIN.md): the Development service loses its
-    /// RunningBoard foreground assertion, and that task-state change is what purges
-    /// the layers. `_clientNavigationsRunAtForegroundPriority` is WebKit's own switch
-    /// for clients whose pages must not drop to background priority; if it holds here,
-    /// the purge never starts. Selector-checked, so an SDK that drops it makes this a
-    /// no-op rather than a crash, and the log line says which of the two it was.
-    ///
-    /// Also called by the paint probe, so the fixture runs with the same lever real
-    /// pages get and the verdict is about the mitigated stack.
-    static func applyForegroundPriorityIfWanted(to configuration: WKWebViewConfiguration) {
-        guard wantsForegroundPriority else { return }
-        let applied = AuraSetAlwaysForegroundPriority(configuration)
-        if !reportedForegroundPriority {
-            reportedForegroundPriority = true
-            log.info("always-foreground priority \(applied ? "applied" : "unavailable", privacy: .public)")
-        }
     }
 
     // MARK: - Health
@@ -216,7 +194,9 @@ enum AuraWebBundle {
     /// stop.
     @MainActor
     private static func answersMessages(within timeout: TimeInterval, pool: WKProcessPool) async -> Bool {
-        if await heardFromBundle(within: timeout) { return true }
+        if await heardFromBundle(within: timeout) {
+            return true
+        }
 
         guard let blank = URL(string: "about:blank") else { return true }
         let configuration = WKWebViewConfiguration()

@@ -119,14 +119,6 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         let contentController = WKUserContentController()
         webConfiguration.userContentController = contentController
 
-        // After the fresh controller, or the script would be thrown away with the old
-        // one. Only pages on the injected-bundle pool need keeping alive; `window.open`
-        // popups inherit the opener's pool inside `webConfiguration`, which is why this
-        // is gated on the bundle being enabled rather than on which init ran.
-        if AuraWebBundle.isEnabled {
-            AuraPaintKeepAlive.apply(to: webConfiguration)
-        }
-
         MainActor.assumeIsolated {
             ExtensionManager.shared.attach(to: webConfiguration, isPrivate: profile.isPrivate)
         }
@@ -631,12 +623,11 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         type: WKMediaCaptureType,
         decisionHandler: @escaping (WKPermissionDecision) -> Void
     ) {
-        let kind: BrowserPermissionKind
-        switch type {
-        case .camera: kind = .camera
-        case .microphone: kind = .microphone
-        case .cameraAndMicrophone: kind = .cameraAndMicrophone
-        @unknown default: kind = .cameraAndMicrophone
+        let kind: BrowserPermissionKind = switch type {
+        case .camera: .camera
+        case .microphone: .microphone
+        case .cameraAndMicrophone: .cameraAndMicrophone
+        @unknown default: .cameraAndMicrophone
         }
 
         guard let delegate else {

@@ -8,6 +8,7 @@
 #define AuraWebBundleSupport_h
 
 #import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 
 #import "AuraResourceTypes.h"
 
@@ -20,12 +21,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// at `bundleURL`. Returns nil when the private API is missing.
 WKProcessPool *_Nullable AuraMakeInjectedBundleProcessPool(NSURL *bundleURL);
 
-/// Asks WebKit to run this configuration's pages at foreground priority
-/// (`_clientNavigationsRunAtForegroundPriority`; the iOS-only
-/// `_alwaysRunsAtForegroundPriority` is the fallback spelling). Aimed at the
-/// Development WebContent service's failed foreground assertion, which is what
-/// purges its layers. Returns NO when neither private property exists.
-BOOL AuraSetAlwaysForegroundPriority(WKWebViewConfiguration *configuration);
 
 /// Answers the synchronous messages the injected bundle posts to this process.
 ///
@@ -47,3 +42,11 @@ NS_ASSUME_NONNULL_END
 #endif /* AuraWebBundleSupport_h */
 
 #import "AuraExceptionCatcher.h"
+
+/// Answers RunningBoard assertions for Development WebContent processes in-process,
+/// so WebKit's throttler never freezes their rendering. Installed once per process;
+/// returns NO if the RunningBoardServices class is not what WebKit uses here.
+BOOL AuraInstallRunningBoardShim(void);
+
+/// The window server's current image of one of this process's windows, or NULL.
+CGImageRef _Nullable AuraCaptureWindow(uint32_t windowNumber) CF_RETURNS_RETAINED;
