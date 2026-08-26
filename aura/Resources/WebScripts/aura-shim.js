@@ -27,7 +27,7 @@
     const RELAY_BACKGROUND = 'app.aurabrowser.relay.background';
     const RELAY_PAGE = 'app.aurabrowser.relay.page';
     // Bumped when the protocol changes so a stale patched extension is repatched.
-    const SHIM_VERSION = 4;
+    const SHIM_VERSION = 6;
 
     const api = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
     if (!api || globalThis.__auraShimInstalled) { return; }
@@ -305,7 +305,18 @@
     }
 
     function senderInfo() {
+        // `origin` too: Bitwarden's background answers a popup's port only after
+        // checking `sender.origin` against its own runtime URL, and without it the
+        // port sits open with no reply and the popup never gets past its spinner.
         const sender = { url: location.href, frameId: 0 };
+        try {
+            const origin = location.origin;
+            if (typeof origin === 'string' && origin !== '' && origin !== 'null') {
+                sender.origin = origin;
+            } else if (typeof api.runtime.getURL === 'function') {
+                sender.origin = api.runtime.getURL('').replace(/\/$/, '');
+            }
+        } catch (_) { /* leave it out rather than guess */ }
         try {
             if (typeof api.runtime.id === 'string') { sender.id = api.runtime.id; }
         } catch (_) { /* WebKit does not always expose it */ }
@@ -763,6 +774,25 @@
     }
     if (typeof nativeWebRequest.handlerBehaviorChanged !== 'function') {
         webRequestMembers.set('handlerBehaviorChanged', () => {});
+    }
+    // Chrome's option enums, which WebKit leaves out. DuckDuckGo's background
+    // script reads `OnHeadersReceivedOptions.EXTRA_HEADERS` at startup and died
+    // on the missing object, so its popup had nothing to talk to.
+    const OPTION_ENUMS = {
+        OnBeforeRequestOptions: { BLOCKING: 'blocking', REQUEST_BODY: 'requestBody', EXTRA_HEADERS: 'extraHeaders' },
+        OnBeforeSendHeadersOptions: { BLOCKING: 'blocking', REQUEST_HEADERS: 'requestHeaders', EXTRA_HEADERS: 'extraHeaders' },
+        OnSendHeadersOptions: { REQUEST_HEADERS: 'requestHeaders', EXTRA_HEADERS: 'extraHeaders' },
+        OnHeadersReceivedOptions: { BLOCKING: 'blocking', RESPONSE_HEADERS: 'responseHeaders', EXTRA_HEADERS: 'extraHeaders' },
+        OnAuthRequiredOptions: { BLOCKING: 'blocking', ASYNC_BLOCKING: 'asyncBlocking', RESPONSE_HEADERS: 'responseHeaders', EXTRA_HEADERS: 'extraHeaders' },
+        OnResponseStartedOptions: { RESPONSE_HEADERS: 'responseHeaders', EXTRA_HEADERS: 'extraHeaders' },
+        OnBeforeRedirectOptions: { RESPONSE_HEADERS: 'responseHeaders', EXTRA_HEADERS: 'extraHeaders' },
+        OnCompletedOptions: { RESPONSE_HEADERS: 'responseHeaders', EXTRA_HEADERS: 'extraHeaders' },
+        OnErrorOccurredOptions: { EXTRA_HEADERS: 'extraHeaders' },
+    };
+    for (const name of Object.keys(OPTION_ENUMS)) {
+        if (nativeWebRequest[name] === undefined) {
+            webRequestMembers.set(name, Object.freeze(OPTION_ENUMS[name]));
+        }
     }
 
     // Only the background context blocks requests; a popup registering a

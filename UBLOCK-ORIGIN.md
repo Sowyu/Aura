@@ -59,6 +59,13 @@ probe: 0 rAF callbacks per 2 s and an empty layer tree for the bundle page witho
 it, 120 per 2 s, a full tree and a 100% window-server fill with it; the ordinary
 service's control page reads the same either way.
 
+Measured again on 2026-08-26, ad-hoc signed Debug build, full uBO on, three launches:
+`paint probe verdict: painted (snapshot painted, frames bundle 121 control 121, screen
+painted: fixture share bundle 1.00 control 1.00)`, then 121/120 and 123/123.
+`scripts/paint-probe.html` on the bundle service kept its rAF counter climbing at ~60/s
+for the life of the page (3707 frames at 62 s) with `__auraKeepAlive` absent. The
+Track 2 A/B table above is moot on this build: both levers are gone.
+
 What did not work, so nobody tries it again: `_clientNavigationsRunAtForegroundPriority`
 (only adds activities that need the same refused assertion),
 `_alwaysRunsAtForegroundPriority` (iOS-only), a rAF keep-alive script (rAF is what

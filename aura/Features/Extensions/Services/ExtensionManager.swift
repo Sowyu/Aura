@@ -197,6 +197,23 @@ final class ExtensionManager {
         start()
     }
 
+    /// The configuration a tab has to be built on to show `url` when it is an extension's
+    /// own page (its dashboard, options page or any other file of its own); nil when it
+    /// is not one, or its extension has not loaded yet.
+    ///
+    /// WebKit serves an extension page as a main frame only to a web view whose
+    /// configuration names that extension (`_requiredWebExtensionBaseURL`, which only
+    /// `WKWebExtensionContext.webViewConfiguration` sets); any other web view gets
+    /// `NSURLErrorResourceUnavailable`, which is what put Aura's error page on every
+    /// extension page opened in a tab. And a web view built that way shows nothing else,
+    /// so a tab crossing that line in either direction swaps web views (`Tab.rehost`).
+    func pageConfiguration(hosting url: URL) -> WKWebViewConfiguration? {
+        guard #available(macOS 15.4, *), url.scheme?.lowercased() == ExtensionOrigin.scheme,
+              let context = loadedEngine?.controller.extensionContext(for: url), context.isLoaded
+        else { return nil }
+        return context.webViewConfiguration
+    }
+
     // MARK: - Private windows
 
     /// True when `id` may see private windows, tabs and cookies. Default off: an
@@ -430,6 +447,11 @@ final class ExtensionManager {
     /// everything else.
     func windowDidOpen(_ window: NSWindow, tabManager: TabManager, isPrivate: Bool = false) {
         guard #available(macOS 15.4, *) else { return }
+        // Otherwise nothing runs until the first web view is built: a launch onto
+        // aura://settings or aura://home showed a toolbar with no extension buttons and
+        // a blocker that had not loaded, and the bundled blockers' bookkeeping (which
+        // blocker is paused for which) only reconciled once the user opened a page.
+        start()
         startWindowObservers()
         let adapter = ExtensionWindowAdapter.adapter(for: window, tabManager: tabManager, isPrivate: isPrivate)
         loadedEngine?.controller.didOpenWindow(adapter)

@@ -137,7 +137,19 @@ final class ExtensionEngine: NSObject {
     /// WebKit caches the compiled declarativeNetRequest rules against it, so uBO
     /// Lite's ~100k rules cost about 30 s on first launch and seconds after. A
     /// non-persistent configuration would recompile them every launch.
-    let controller = WKWebExtensionController(configuration: .default())
+    let controller: WKWebExtensionController = {
+        let configuration = WKWebExtensionController.Configuration.default()
+        // The background page, the popup and an extension page in a tab are all built
+        // on this configuration, and without this they report WebKit's bare default
+        // user agent, with no Safari, Chrome or Firefox token in it. Bitwarden's
+        // background page reads that as "no known browser", gets nil for the device,
+        // and dies on `device.toString` before its popup can ask it anything.
+        let webViewConfiguration: WKWebViewConfiguration = configuration.webViewConfiguration
+        webViewConfiguration.applicationNameForUserAgent = BrowserPageConfiguration.oraUserAgent
+        configuration.webViewConfiguration = webViewConfiguration
+        return WKWebExtensionController(configuration: configuration)
+    }()
+
     private var contexts: [String: WKWebExtensionContext] = [:]
 
     override init() {

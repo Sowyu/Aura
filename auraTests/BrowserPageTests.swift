@@ -65,6 +65,31 @@ struct BrowserPageTests {
         #expect(!TabBrowserPageDelegate.shouldRetryExtensionPage(web, attempts: 0, extensionsAreLoading: true))
     }
 
+    /// WebKit serves an extension's own page only to a web view built for that extension,
+    /// and such a web view serves nothing else, so a main-frame navigation across that
+    /// line swaps web views. Unless the extension is not up yet: then the load is left to
+    /// fail and be retried, or every launch would rebuild the restored tab in a loop.
+    @Test
+    func extensionPagesAndTheWebNeverShareAWebView() throws {
+        let dashboard = try #require(
+            URL(string: "webkit-extension://f47ac10b-58cc-4372-a567-0e02b2c3d479/dashboard.html")
+        )
+        let other = try #require(URL(string: "webkit-extension://0a1b2c3d-58cc-4372-a567-0e02b2c3d479/popup.html"))
+        let web = try #require(URL(string: "https://example.com/"))
+        let host = try #require(dashboard.host)
+
+        // An ordinary web view hands over for an extension page, once one can host it.
+        #expect(TabBrowserPageDelegate.needsRehost(hostedExtensionHost: nil, target: dashboard, canHost: true))
+        #expect(!TabBrowserPageDelegate.needsRehost(hostedExtensionHost: nil, target: dashboard, canHost: false))
+        #expect(!TabBrowserPageDelegate.needsRehost(hostedExtensionHost: nil, target: web, canHost: false))
+
+        // An extension's web view keeps its own pages and hands over for everything else.
+        #expect(!TabBrowserPageDelegate.needsRehost(hostedExtensionHost: host, target: dashboard, canHost: true))
+        #expect(TabBrowserPageDelegate.needsRehost(hostedExtensionHost: host, target: web, canHost: false))
+        #expect(TabBrowserPageDelegate.needsRehost(hostedExtensionHost: host, target: other, canHost: true))
+        #expect(!TabBrowserPageDelegate.needsRehost(hostedExtensionHost: host, target: other, canHost: false))
+    }
+
     // MARK: - Find in page
 
     /// A term that appears exactly once, searched twice. The second search starts past

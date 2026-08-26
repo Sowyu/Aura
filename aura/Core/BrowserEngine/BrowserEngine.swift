@@ -14,12 +14,16 @@ struct BrowserPageConfiguration {
     let userScripts: [BrowserUserScript]
     let privacySettings: SpacePrivacySettings
 
+    /// What every page reports, extension pages included (see `ExtensionEngine`).
+    static let oraUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        + "Version/26.0.1 Safari/605.1.15"
+
     static func oraDefault(
         userScripts: [BrowserUserScript],
         privacySettings: SpacePrivacySettings
     ) -> BrowserPageConfiguration {
         BrowserPageConfiguration(
-            userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0.1 Safari/605.1.15",
+            userAgent: oraUserAgent,
             allowsPictureInPicture: true,
             allowsJavaScript: true,
             allowsJavaScriptWindowsAutomatically: false,
@@ -96,11 +100,14 @@ final class BrowserEngine {
         profileCache[ProfileKey(identifier: identifier, isPrivate: false)] = nil
     }
 
+    /// `hosting` is what the page will load first; an extension's own page gets a web
+    /// view built for that extension (see `BrowserPage.init(profile:configuration:delegate:hosting:)`).
     func makePage(
         profile: BrowserEngineProfile,
         configuration: BrowserPageConfiguration,
-        delegate: BrowserPageDelegate?
+        delegate: BrowserPageDelegate?,
+        hosting url: URL? = nil
     ) -> BrowserPage {
-        BrowserPage(profile: profile, configuration: configuration, delegate: delegate)
+        BrowserPage(profile: profile, configuration: configuration, delegate: delegate, hosting: url)
     }
 }

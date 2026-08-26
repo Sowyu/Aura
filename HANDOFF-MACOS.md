@@ -131,3 +131,87 @@ Done by the agent before handing the checklist back to a human:
 - Second pass, same day: on the branch build the profile healed (hash migrated, no sheet) and pages were still blank, with Lite left paused, so the probe had said `painted`. Fixed in `AuraWebBundlePaintProbe.swift`: the fixture counts its own rAF frames, a control page on the ordinary service loads beside it, a bundle counter that stands still while the control's climbs is `blank` and outranks the snapshot, and the host window keeps one point on screen so rAF ticks at all. Reducers covered in `FullUBlockOriginTests`. Item 4 (fallback + rescue) is now the launch to watch: expect `paint probe verdict: blank (snapshot painted, frames bundle ~2 control ~120)` in the log, Settings showing the reason, Lite back, open tabs reloading onto the ordinary service.
 - Live probe on this machine after the fix (`TEST_RUNNER_AURA_BUNDLE=1`, suite `auraTests/WebBundleTests`): `paint probe verdict: blank (snapshot painted, frames bundle 0 control 61)`. The gated `theBundleAnswersTheStartupProbe` now fails here on purpose: it asserts the stack is healthy, and on macOS 27 it is not. It is not part of the pre-push gate.
 - Third pass, same day: root cause found and fixed. WebKit refuses to hold RunningBoard assertions for the Development WebContent service and its throttler then freezes the process's rendering; `AuraWebBundleSupport.m` now answers those assertions in-process for Development targets only (details and credits in `UBLOCK-ORIGIN.md`, "Track 2 result"). The paint probe reads `painted (frames bundle 120 control 121, screen painted)` on this Mac and the gated `theBundleAnswersTheStartupProbe` passes again. The Track 2 A/B rows above are moot: all four read blank, and both levers (`AURA_FG_PRIORITY`, `AURA_PAINT_KEEPALIVE`) are deleted. Items 1, 2, 5, 6 and 7 of the checklist are still yours to run by hand; item 3 is answered and item 4 was seen firing before the fix.
+
+## Run notes, 2026-08-26 (same Mac, macOS 27, Xcode 27 beta; ad-hoc signed Debug build)
+
+Build: `xcodebuild ... CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=""`.
+The only signing identity on this Mac is team 8TZ464JNCL, not the project's, and an
+unsigned build has no sandbox and therefore reads the wrong profile
+(`~/Library/Application Support/Aura` instead of the container). Ad-hoc keeps the
+entitlements, so the container profile is what ran. First launch after the signature
+change gets macOS's "differs from previously opened versions" prompt; Open Anyway.
+Backup of the container profile before any of this:
+`~/Library/Application Support/Aura-backups/2026-08-26-pre-extensions-run`.
+
+Check 1 (popups with full ad blocking off), as shipped in 7c67777: the gate was not
+the whole cause. With the shim unconditional the relay attaches on both ends
+(`relay: background attached for <id>` at launch, and the popup's own hello reads
+`shimVersion, role page, relay 1` in the `webrequest` debug log, which is the
+`__auraShimInstalled / __auraShimRole / __auraShimRelay` check without opening the
+inspector), and Bitwarden still sat on its spinner and DuckDuckGo stayed blank. A
+diagnostic copy of the shim that forwards `error`, `unhandledrejection` and
+`console.error` to the log found three separate causes, two of them in the
+background pages rather than the relay:
+
+1. Bitwarden's background gates every popup port on `port.sender.origin`
+   (`senderIsInternal`), and the shim's page ports carried `{url, frameId}` only. Fixed
+   in `senderInfo()` (aura-shim.js).
+2. Bitwarden's background then died on `this.device.toString` (null): its browser
+   detection wants a Safari, Chrome or Firefox token in `navigator.userAgent`, and
+   extension web views reported WebKit's bare default UA. Fixed in `ExtensionEngine`:
+   the controller's configuration now carries `BrowserPageConfiguration.oraUserAgent`,
+   the same string tabs use. Bitwarden's popup renders (onboarding screen).
+3. DuckDuckGo's background died at startup on
+   `webRequest.OnHeadersReceivedOptions.EXTRA_HEADERS` (Chrome's option enums, which
+   WebKit does not define). Fixed in the shim's webRequest namespace. Its background
+   now starts, but the popup is still blank: on opening it, the background rejects
+   `getPrivacyDashboardData` at `background.js:27139`, "unreachable - cannot access
+   current tab with ID <n>", i.e. DuckDuckGo's own tab tracker has no record for the
+   tab WebKit reports. That is a tabs/webNavigation-event gap, not the relay; not
+   fixed here. Still open from the reading pass: the page half has no
+   `runtime.onMessage` and the relay has no background-to-page broadcast, so a
+   rendered Bitwarden popup will not hear sync/unlock events.
+
+Shim version is 6 now; the first launch re-patches every folder (`shimmed extension
+at <folder>` x5 seen) and every folder keeps its `manifest.original.json`. No consent
+sheet on any launch.
+
+Check 2 (extension pages in tabs): `ExtensionOrigin` holds. The dashboard opened at
+`webkit-extension://17b7cf7d-d730-5b6b-ab4c-d3be2b761448/dashboard.html`, which is
+exactly `ExtensionOrigin.host(for: "ublock-origin-full")`, and the restored tab came
+back at the same address. But it failed in the same session too, before any relaunch,
+with NSURLError -1008, and the retry could not help: WebKit's scheme handler
+(`WebExtensionURLSchemeHandlerCocoa.mm`) serves an extension page as a main frame only
+to a web view whose configuration carries `_requiredWebExtensionBaseURL` for that
+extension, which only `WKWebExtensionContext.webViewConfiguration` sets, and such a
+web view can show nothing else. So the third fork from the brief. Fixed: a tab whose
+address is an extension page builds its `BrowserPage` on the context's configuration
+(`ExtensionManager.pageConfiguration(hosting:)`), a main-frame navigation across that
+line tears the web view down and rebuilds it (`Tab.rehost`, the same move aura://
+pages already make; the back list goes with it), and the launch retry rebuilds instead
+of reloading into the same web view. Rule in `TabBrowserPageDelegate.needsRehost`,
+test in `BrowserPageTests`. Result: dashboard renders in the tab (settings, filter
+lists, storage 20.3 MB), survives quit/relaunch (first visual layout 133 ms on the
+restored tab), and reopens from the popup's gear. Seen once and not reproduced: the
+very first restored load after the fix laid out but painted black until a reload.
+
+Also fixed while here: `ExtensionManager.start()` only ran from the first
+`BrowserPage`, so a launch onto aura://settings (or home) had no extensions at all:
+no toolbar buttons, Lite's dashboard button disabled, and the blocker bookkeeping
+(`pausedForFull`, `disabledIDs`) unreconciled until a page opened. `windowDidOpen`
+starts it now; the engine was up 0.5 s after first paint with the Settings tab active.
+
+Checklist status: 1 done (no sheet, full uBO loads, popup shows live stats: 25 blocked
+on the page, 534 since install). 3 done, numbers in UBLOCK-ORIGIN.md. 6 partly:
+dashboard yes, popup yes; element picker and per-site power button not exercised.
+7 done with full off: Lite loads, the probe page paints (rAF ~60/s), `__auraKeepAlive`
+absent, `adsbygoogle.js` blocked as script and as fetch, Lite's popup shows "optimal"
+and a badge. 2, 4 and 5 not run: 2 needs a clean profile, 4 no longer has a lever to
+force, 5 needs the extensions list driven by hand. Note for 7 on this profile: the
+Lite folder was missing from the container although its "installed once" marker was
+set; clearing `extensions.bundled.ublock-origin-lite` made the next launch unpack it.
+
+Two things noticed and not touched: Cmd+Q and the `quit` AppleEvent hang three times
+out of four (the process stays at 0% CPU with no dialog; SIGTERM was needed), and the
+main window keeps being re-parked at the display's right edge (x = 3439 on a 3440 pt
+display) after a popup closes.

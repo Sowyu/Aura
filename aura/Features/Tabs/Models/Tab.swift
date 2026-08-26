@@ -268,7 +268,8 @@ class Tab: ObservableObject, Identifiable {
                 userScripts: userScripts,
                 privacySettings: privacySettings
             ),
-            delegate: nil
+            delegate: nil,
+            hosting: loading ?? launchURL
         )
         browserPage = page
 
@@ -397,6 +398,16 @@ class Tab: ObservableObject, Identifiable {
         browserPage = nil
         pageDelegate = nil
         isWebViewReady = false
+    }
+
+    /// Drops the web view and builds a new one for `url`, for a page the current web view
+    /// cannot show: an extension's own page, or anything else from a web view built for
+    /// one (WebKit serves extension pages only to a web view configured for that
+    /// extension, and such a web view serves nothing else). Same cost as leaving an
+    /// aura:// page: WebKit's back list goes with the old view.
+    func rehost(_ url: URL) {
+        destroyWebView()
+        navigate(to: url)
     }
 
     func setNavigationError(_ error: Error, for url: URL?) {

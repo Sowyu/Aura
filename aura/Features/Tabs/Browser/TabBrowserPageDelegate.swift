@@ -90,6 +90,9 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         if let routed = routeToRuleSpace(navigationAction, page: page) {
             return routed
         }
+        if let rehosted = rehostAcrossExtensionBoundary(navigationAction, page: page) {
+            return rehosted
+        }
 
         let intent = LinkOpenIntent.from(
             buttonNumber: navigationAction.buttonNumber,
@@ -272,10 +275,48 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
 
         extensionPageRetries += 1
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.extensionPageRetryDelay) { [weak page] in
-            page?.load(URLRequest(url: url))
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.extensionPageRetryDelay) { [weak self, weak page] in
+            // Once the extension is up the page has to be rebuilt on its configuration;
+            // loading again into this web view would fail the same way forever. Until
+            // then the same load fails again and comes back through here.
+            let hostable = MainActor.assumeIsolated { ExtensionManager.shared.pageConfiguration(hosting: url) != nil }
+            if hostable {
+                self?.tab?.rehost(url)
+            } else {
+                page?.load(URLRequest(url: url))
+            }
         }
         return true
+    }
+
+    /// `.cancel`, with the tab rebuilding its web view, when a main-frame navigation
+    /// crosses between an extension's own pages and everything else; nil otherwise. See
+    /// `Tab.rehost` for why the web view has to go.
+    private func rehostAcrossExtensionBoundary(
+        _ navigationAction: BrowserNavigationAction,
+        page: BrowserPage
+    ) -> BrowserNavigationActionDisposition? {
+        guard navigationAction.isMainFrame, let url = navigationAction.request.url, let tab else { return nil }
+        let canHost = MainActor.assumeIsolated { ExtensionManager.shared.pageConfiguration(hosting: url) != nil }
+        guard Self.needsRehost(hostedExtensionHost: page.hostedExtensionHost, target: url, canHost: canHost) else {
+            return nil
+        }
+        // Off this callback: it belongs to the web view about to be torn down.
+        DispatchQueue.main.async { tab.rehost(url) }
+        return .cancel
+    }
+
+    /// The rule: an extension page needs a web view built for its extension, so as long
+    /// as one can be built now (`canHost`) any other web view hands over; a web view
+    /// built for an extension hands over for anything that is not one of its own pages.
+    /// An extension page whose extension is not up yet stays put: WebKit fails that
+    /// load and `retriedExtensionPage` waits for the extension instead.
+    static func needsRehost(hostedExtensionHost: String?, target: URL, canHost: Bool) -> Bool {
+        let isExtensionPage = target.scheme?.lowercased() == ExtensionOrigin.scheme
+        if let hostedExtensionHost {
+            return !isExtensionPage || (target.host != hostedExtensionHost && canHost)
+        }
+        return isExtensionPage && canHost
     }
 
     /// Half a second between tries, twelve at most: six seconds is longer than a cold

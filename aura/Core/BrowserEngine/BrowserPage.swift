@@ -37,12 +37,32 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     /// same message handlers, user scripts and preferences.
     private let profile: BrowserEngineProfile
     private let pageConfiguration: BrowserPageConfiguration
+    /// Host of the extension whose own pages this web view was built for, or nil for an
+    /// ordinary page. See `ExtensionManager.pageConfiguration(hosting:)`.
+    let hostedExtensionHost: String?
 
+    /// `hosting` is the address the page is about to load. When that is an extension's own
+    /// page, the web view is built on the extension's configuration instead of the
+    /// profile's: that one carries the controller's data store and process pool, and it is
+    /// the only kind WebKit serves such a page to.
     convenience init(
         profile: BrowserEngineProfile,
         configuration: BrowserPageConfiguration,
-        delegate: BrowserPageDelegate?
+        delegate: BrowserPageDelegate?,
+        hosting url: URL? = nil
     ) {
+        if let url, let extensionConfiguration = MainActor.assumeIsolated({
+            ExtensionManager.shared.pageConfiguration(hosting: url)
+        }) {
+            self.init(
+                profile: profile,
+                configuration: configuration,
+                webConfiguration: extensionConfiguration,
+                delegate: delegate,
+                hostedExtensionHost: url.host
+            )
+            return
+        }
         let webConfiguration = WKWebViewConfiguration()
         webConfiguration.websiteDataStore = profile.dataStore
         // Private tabs get the injected bundle too: request blocking is not
@@ -81,10 +101,12 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         profile: BrowserEngineProfile,
         configuration: BrowserPageConfiguration,
         webConfiguration: WKWebViewConfiguration,
-        delegate: BrowserPageDelegate?
+        delegate: BrowserPageDelegate?,
+        hostedExtensionHost: String? = nil
     ) {
         self.profile = profile
         self.pageConfiguration = configuration
+        self.hostedExtensionHost = hostedExtensionHost
         webConfiguration.applicationNameForUserAgent = configuration.userAgent
         webConfiguration.allowsAirPlayForMediaPlayback = configuration.allowsAirPlayForMediaPlayback
         webConfiguration.preferences.setValue(
