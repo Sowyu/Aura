@@ -16,7 +16,7 @@ import os
 /// change re-patches by itself.
 enum ExtensionShim {
     /// Must match `SHIM_VERSION` in aura-shim.js.
-    static let version = 6
+    static let version = 7
 
     static let scriptName = "aura-shim.js"
     /// Generated per extension: `runtime.getManifest()` returns undefined under

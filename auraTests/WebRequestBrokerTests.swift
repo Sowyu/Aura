@@ -578,6 +578,14 @@ struct WebRequestBrokerTests {
         )
         #expect(result["disconnects"] as? Int == 1, "the background page has to see the page's disconnect")
         #expect((result["oneShot"] as? [String: Any])?["pong"] as? String == "ping")
+        // The other direction: the background's sendMessage reaches the page's
+        // onMessage, and the page's answer comes back to the background.
+        #expect(result["broadcast"] as? String == "hey", "the background's sendMessage never reached the page")
+        #expect((result["broadcastSenderUrl"] as? String ?? "").hasPrefix(context.baseURL.absoluteString))
+        #expect(
+            (result["shoutReply"] as? [String: Any])?["heard"] as? String == "hey",
+            "the page's answer never came back"
+        )
 
         print("RELAY page->background round trip: \(log)")
     }
@@ -624,7 +632,10 @@ struct WebRequestBrokerTests {
         print("UBOL POPUP \(report)")
 
         #expect(filled, "the popup rendered nothing: \(report)")
-        #expect(ExtensionMessageRelay.shared.openPortCount(for: id) > 0, "the popup's port should be tunnelled")
+        // uBO Lite's popup talks in one-shots, whose tunnelled ports close on reply, so
+        // an open-port count proves nothing here; the shim's own relay flag does.
+        let parsed = try JSONSerialization.jsonObject(with: Data(report.utf8)) as? [String: Any]
+        #expect(parsed?["relay"] as? Bool == true, "the popup fell back to WebKit's messaging: \(report)")
 
         // The dashboard is the harder case: a page in a tab that frames another
         // page, each one connecting on its own.
@@ -709,13 +720,27 @@ struct WebRequestBrokerTests {
             replyPort.postMessage({ echo: message, name: replyPort.name, senderUrl: sender.url });
         });
     });
-    browser.runtime.onMessage.addListener(message => Promise.resolve({ pong: message && message.ping }));
+    let lastShoutReply = null;
+    browser.runtime.onMessage.addListener(message => {
+        if (message && message.shout) {
+            return browser.runtime.sendMessage({ shout: message.shout })
+                .then(reply => { lastShoutReply = reply; return { sent: true }; });
+        }
+        if (message && message.what === 'shoutReply') { return Promise.resolve({ reply: lastShoutReply }); }
+        return Promise.resolve({ pong: message && message.ping });
+    });
     """
 
     private static let relayPage = """
     (async () => {
         const log = {};
         window.__auraLog = log;
+        browser.runtime.onMessage.addListener((message, sender) => {
+            if (!message || !message.shout) { return undefined; }
+            log.broadcast = message.shout;
+            log.broadcastSenderUrl = sender && sender.url;
+            return Promise.resolve({ heard: message.shout });
+        });
         const answer = (port, message) => new Promise(resolve => {
             port.onMessage.addListener(resolve);
             port.postMessage(message);
@@ -728,6 +753,8 @@ struct WebRequestBrokerTests {
             const second = browser.runtime.connect({ name: 'second' });
             Object.assign(log, await answer(second, { what: 'status' }));
             log.oneShot = await browser.runtime.sendMessage({ ping: 'ping' });
+            log.sent = await browser.runtime.sendMessage({ shout: 'hey' });
+            log.shoutReply = (await browser.runtime.sendMessage({ what: 'shoutReply' })).reply;
             window.__auraDone = true;
         } catch (error) {
             log.error = String(error);

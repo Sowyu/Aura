@@ -30,6 +30,9 @@ final class ExtensionMessageRelay {
     /// Which page opened each tunnelled port, so the background's replies know
     /// where to go. Keyed by extension, then by the page-minted port id.
     private var owners: [String: [String: WKWebExtension.MessagePort]] = [:]
+    /// Every page's own relay port, per extension, so the background's one-shot
+    /// broadcasts have somewhere to go. Pruned as pages disconnect.
+    private var pages: [String: [WKWebExtension.MessagePort]] = [:]
     /// Frames from a page that arrived before the background page connected.
     /// Capped: a background page that never connects must not grow this forever.
     private var queued: [String: [[String: Any]]] = [:]
@@ -61,6 +64,7 @@ final class ExtensionMessageRelay {
         // otherwise leave its tunnelled ports in `owners` for good, and every
         // reopen would add more. Fifty popup opens, fifty leaked entries.
         pruneDeadOwners(for: extensionID)
+        pages[extensionID, default: []].append(port)
         port.messageHandler = { [weak self] message, _ in
             MainActor.assumeIsolated { self?.fromPage(message, port: port, extensionID: extensionID) }
         }
@@ -91,10 +95,24 @@ final class ExtensionMessageRelay {
     private func fromBackground(_ message: Any?, extensionID: String) {
         guard let frame = message as? [String: Any],
               let portID = frame["portId"] as? String,
-              let operation = frame["op"] as? String,
-              let page = owners[extensionID]?[portID]
+              let operation = frame["op"] as? String
         else { return }
 
+        // `runtime.sendMessage` from the background: every open page hears it, the
+        // first answer goes back (the pages' `response` frames route like any other),
+        // and with no page open the host answers itself so the promise settles.
+        if operation == "broadcast" {
+            let live = (pages[extensionID] ?? []).filter { !$0.isDisconnected }
+            pages[extensionID] = live.isEmpty ? nil : live
+            guard !live.isEmpty else {
+                sendToBackground(["op": "response", "portId": portID, "message": NSNull()], extensionID: extensionID)
+                return
+            }
+            for page in live { page.sendMessage(frame, completionHandler: nil) }
+            return
+        }
+
+        guard let page = owners[extensionID]?[portID] else { return }
         // Both close the tunnelled port: a one-shot reply has no second message.
         if operation == "disconnect" || operation == "response" {
             owners[extensionID]?.removeValue(forKey: portID)
@@ -118,6 +136,8 @@ final class ExtensionMessageRelay {
     /// A popup dismissed or a dashboard tab closed. The background page is still
     /// holding the port it was handed, so it has to be told.
     private func pageDidDisconnect(_ port: WKWebExtension.MessagePort, extensionID: String) {
+        pages[extensionID]?.removeAll { $0 === port || $0.isDisconnected }
+        if pages[extensionID]?.isEmpty == true { pages[extensionID] = nil }
         guard var owned = owners[extensionID] else { return }
         let orphaned = owned.filter { $0.value === port }.map(\.key)
         for portID in orphaned {
@@ -133,12 +153,20 @@ final class ExtensionMessageRelay {
     func detach(extensionID: String) {
         backgroundPorts.removeValue(forKey: extensionID)?.disconnect()
         queued.removeValue(forKey: extensionID)
+        for page in pages.removeValue(forKey: extensionID) ?? [] where !page.isDisconnected {
+            page.disconnect()
+        }
         for page in (owners.removeValue(forKey: extensionID) ?? [:]).values where !page.isDisconnected {
             page.disconnect()
         }
     }
 
     private func pruneDeadOwners(for extensionID: String) {
+        // The broadcast list too: a popup WebKit tore down without a disconnect
+        // handler would otherwise stay in it for good and every broadcast would
+        // grow by one dead send per popup ever opened.
+        pages[extensionID]?.removeAll(where: \.isDisconnected)
+        if pages[extensionID]?.isEmpty == true { pages[extensionID] = nil }
         guard var owned = owners[extensionID] else { return }
         let dead = owned.filter { $0.value.isDisconnected }.map(\.key)
         guard !dead.isEmpty else { return }

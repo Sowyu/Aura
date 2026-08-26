@@ -215,3 +215,54 @@ Two things noticed and not touched: Cmd+Q and the `quit` AppleEvent hang three t
 out of four (the process stays at 0% CPU with no dialog; SIGTERM was needed), and the
 main window keeps being re-parked at the display's right edge (x = 3439 on a 3440 pt
 display) after a popup closes.
+
+## Run notes, 2026-08-27 (Bitwarden and DuckDuckGo popups, follow-up to the 26th)
+
+Bitwarden's popup was already rendering after the 26th's origin and user-agent fixes;
+what remained was that it could not hear the background afterwards. The relay now
+carries the other direction too: the background's `runtime.sendMessage` goes out as a
+broadcast frame to every open page port of that extension (`ExtensionMessageRelay`
+keeps them in `pages`), each page dispatches it on a relay-backed `runtime.onMessage`
+that both sides now install, the first page answer settles the background's promise,
+and the host answers null itself when no page is open so nothing awaits forever. The
+live round-trip test (`WebRequestBrokerTests.anExtensionPageReachesItsBackgroundPage`)
+now drives both directions: page connect/echo/disconnect, page one-shot, background
+broadcast heard by the page, page answer back at the background. Passes.
+
+DuckDuckGo's popup was blank because its background threw "unreachable - cannot
+access current tab with ID <n>" (`getPrivacyDashboardData`): its own tab table only
+learns a tab from `tabs.onCreated`/`onUpdated`/`webNavigation.onBeforeNavigate`, and
+none of those fired for the tab under the popup. Three causes, three fixes:
+
+1. WebKit marks the tabs it finds at context load open with events suppressed
+   (`populateWindowsAndTabs`), so launch-restored tabs were never announced.
+   `ExtensionManager.announceOpenTabs(to:)` now reports every open tab as a property
+   change once the extension's background is up (after the persistent-background
+   wake), which lands as `tabs.onUpdated` and creates the record.
+2. `tabDidActivate` now sends `didOpenTab` (a no-op when WebKit already knows the
+   tab) and a property change before the activation, so tabs from other spaces and
+   tabs back from hibernation stop being ids nobody has heard of. WebKit's own log
+   showed the signature: "Invalid call to webNavigation.getAllFrames(). Tab not
+   found."
+3. An aura:// page matches no host pattern, so WebKit hid its URL and DuckDuckGo's
+   table dropped the tab (Chrome shows chrome:// URLs to the `tabs` permission).
+   `ExtensionTabAdapter.shouldBypassPermissions(for:)` returns true for internal
+   tabs only; nothing runs in them, so the bypass exposes an address and no more.
+
+Verified live: DuckDuckGo's popup renders on a launch-restored web tab (shows the
+"Privacy Protections are not available for special pages or local pages" banner for
+127.0.0.1, correctly), and Bitwarden still renders with the broadcast in place. Not
+re-verified live one by one (the Mac's owner was using it by then): the popup on a
+freshly opened tab and on an aura:// page after the bypass; both ride the same
+record-creation paths the restored case proved. Shim version is 7 (the broadcast
+went in after the 6 bump, so patched folders re-patch once more).
+
+Still open, DuckDuckGo only: its background logs "Error loading https lists" and a
+`TypeError: null is not an object (evaluating 'list.data.entities')`
+(public/js/background.js:5300) while loading its tracker lists; the extensions page
+shows it on the row. Separate from the popup path, untouched.
+
+Also cleaned up: `bundledBlockersPopupAndDashboardRender` asserted
+`openPortCount > 0` after uBO Lite's popup rendered, but that popup speaks in
+one-shots whose tunnelled ports close on reply, so the assertion raced (it failed at
+4851de6 too, before any of this). It now checks the popup's own relay flag.

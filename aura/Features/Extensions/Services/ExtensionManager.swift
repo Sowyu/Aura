@@ -494,6 +494,11 @@ final class ExtensionManager {
         guard #available(macOS 15.4, *), reportsTab(tab), let engine = loadedEngine else { return }
         let adapter = ExtensionTabAdapter.adapter(for: tab)
         let previousAdapter = previous.flatMap { $0.id == tab.id ? nil : ExtensionTabAdapter.adapter(for: $0) }
+        // A tab from another space, or one back from hibernation, may never have been
+        // reported: WebKit ignores the open when it already knows the tab, and the
+        // property change is what an extension's own tab table (DuckDuckGo) needs.
+        engine.controller.didOpenTab(adapter)
+        engine.controller.didChangeTabProperties([.URL, .title, .loading], for: adapter)
         engine.controller.didActivateTab(adapter, previousActiveTab: previousAdapter)
         engine.controller.didSelectTabs([adapter])
     }

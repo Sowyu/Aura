@@ -27,7 +27,7 @@
     const RELAY_BACKGROUND = 'app.aurabrowser.relay.background';
     const RELAY_PAGE = 'app.aurabrowser.relay.page';
     // Bumped when the protocol changes so a stale patched extension is repatched.
-    const SHIM_VERSION = 6;
+    const SHIM_VERSION = 7;
 
     const api = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
     if (!api || globalThis.__auraShimInstalled) { return; }
@@ -380,6 +380,10 @@
             if (IS_PAGE) { return; }
             dispatchOneShot(frame);
             break;
+        case 'broadcast':
+            if (!IS_PAGE) { return; }
+            dispatchOneShot(frame);
+            break;
         case 'response': {
             const resolve = relayReplies.get(frame.portId);
             if (resolve === undefined) { return; }
@@ -392,7 +396,42 @@
         }
     }
 
+    /// One-shot send through the relay. From a page it reaches the background's
+    /// onMessage; from the background it reaches every open page's onMessage (a
+    /// popup, the dashboard), and the first page to answer settles the promise. The
+    /// host answers null itself when no page is open, so nothing waits forever.
+    function relaySendMessage(op, args) {
+        const callback = typeof args[args.length - 1] === 'function' ? args.pop() : null;
+        // (extensionId, message, options) or (message, options).
+        const message = args.length >= 2 && typeof args[0] === 'string' ? args[1] : args[0];
+        const portId = newPortId();
+        const promise = new Promise(resolve => { relayReplies.set(portId, resolve); });
+        relaySend({ op: op, portId: portId, message: message, sender: senderInfo() });
+        if (callback === null) { return promise; }
+        promise.then(callback, () => {});
+        return undefined;
+    }
+
     function installRelayMembers() {
+        // Both sides listen the same way. A page's listener hears the background's
+        // broadcasts (Bitwarden's popup waits for unlock and sync events this way);
+        // the background's hears the pages' one-shots.
+        const nativeMessageEvent = api.runtime.onMessage;
+        runtimeMembers.set('onMessage', {
+            __auraShim: true,
+            addListener(fn) {
+                if (typeof fn !== 'function' || relayMessageListeners.includes(fn)) { return; }
+                relayMessageListeners.push(fn);
+                if (nativeMessageEvent) { try { nativeMessageEvent.addListener(fn); } catch (_) {} }
+            },
+            removeListener(fn) {
+                const at = relayMessageListeners.indexOf(fn);
+                if (at !== -1) { relayMessageListeners.splice(at, 1); }
+                if (nativeMessageEvent) { try { nativeMessageEvent.removeListener(fn); } catch (_) {} }
+            },
+            hasListener(fn) { return relayMessageListeners.includes(fn); },
+        });
+
         if (IS_PAGE) {
             const nativeConnect = typeof api.runtime.connect === 'function'
                 ? api.runtime.connect.bind(api.runtime) : null;
@@ -411,18 +450,20 @@
 
             runtimeMembers.set('sendMessage', function sendMessage(...args) {
                 if (!relayUsable) { return nativeSend ? nativeSend(...args) : Promise.resolve(); }
-                const callback = typeof args[args.length - 1] === 'function' ? args.pop() : null;
-                // (extensionId, message, options) or (message, options).
-                const message = args.length >= 2 && typeof args[0] === 'string' ? args[1] : args[0];
-                const portId = newPortId();
-                const promise = new Promise(resolve => { relayReplies.set(portId, resolve); });
-                relaySend({ op: 'message', portId: portId, message: message, sender: senderInfo() });
-                if (callback === null) { return promise; }
-                promise.then(callback, () => {});
-                return undefined;
+                return relaySendMessage('message', args);
             });
             return;
         }
+
+        // The background's sendMessage only ever targets the extension's own pages
+        // (content scripts are tabs.sendMessage), and WebKit delivers it to none of
+        // them, so it goes through the relay alone: no native call, no duplicates.
+        const nativeBackgroundSend = typeof api.runtime.sendMessage === 'function'
+            ? api.runtime.sendMessage.bind(api.runtime) : null;
+        runtimeMembers.set('sendMessage', function sendMessage(...args) {
+            if (!relayUsable) { return nativeBackgroundSend ? nativeBackgroundSend(...args) : Promise.resolve(); }
+            return relaySendMessage('broadcast', args);
+        });
 
         const nativeConnectEvent = api.runtime.onConnect;
         runtimeMembers.set('onConnect', {
@@ -436,22 +477,6 @@
                 if (nativeConnectEvent) { try { nativeConnectEvent.removeListener(fn); } catch (_) {} }
             },
             hasListener(fn) { return relayConnectListeners.hasListener(fn); },
-        });
-
-        const nativeMessageEvent = api.runtime.onMessage;
-        runtimeMembers.set('onMessage', {
-            __auraShim: true,
-            addListener(fn) {
-                if (typeof fn !== 'function' || relayMessageListeners.includes(fn)) { return; }
-                relayMessageListeners.push(fn);
-                if (nativeMessageEvent) { try { nativeMessageEvent.addListener(fn); } catch (_) {} }
-            },
-            removeListener(fn) {
-                const at = relayMessageListeners.indexOf(fn);
-                if (at !== -1) { relayMessageListeners.splice(at, 1); }
-                if (nativeMessageEvent) { try { nativeMessageEvent.removeListener(fn); } catch (_) {} }
-            },
-            hasListener(fn) { return relayMessageListeners.includes(fn); },
         });
     }
 

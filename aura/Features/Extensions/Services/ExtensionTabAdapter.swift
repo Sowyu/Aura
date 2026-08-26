@@ -100,6 +100,15 @@ final class ExtensionTabAdapter: NSObject, WKWebExtensionTab {
         tab?.type == .pinned
     }
 
+    /// An aura:// page matches no host pattern, so WebKit hides its address from every
+    /// extension and the tab looks like one with no URL. Chrome shows chrome:// pages
+    /// to anything with the `tabs` permission, and DuckDuckGo's tab table drops tabs
+    /// without a URL, then throws for the current tab from its popup. Nothing runs in
+    /// these tabs (no web view), so the bypass exposes an address and nothing more.
+    func shouldBypassPermissions(for context: WKWebExtensionContext) -> Bool {
+        tab?.url.isOraInternal == true
+    }
+
     func isLoadingComplete(for context: WKWebExtensionContext) -> Bool {
         guard let page = tab?.browserPage else { return true }
         return !page.isLoading

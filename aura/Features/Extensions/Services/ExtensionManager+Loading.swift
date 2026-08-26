@@ -30,6 +30,22 @@ extension ExtensionManager {
         }
     }
 
+    /// Reports every tab already open as a property change, which lands as
+    /// `tabs.onUpdated`. WebKit marks the tabs it finds when a context loads open
+    /// without firing `tabs.onCreated`, so an extension that keeps its own tab table
+    /// (DuckDuckGo) never heard of a launch-restored tab and its popup died on
+    /// "cannot access current tab". Called once the background is up: an event fired
+    /// before the background script has registered its listeners lands on nobody.
+    @available(macOS 15.4, *)
+    func announceOpenTabs(to context: WKWebExtensionContext) {
+        guard let engine = loadedEngine else { return }
+        for window in ExtensionWindowAdapter.openAdapters() {
+            for tab in window.tabs(for: context) {
+                engine.controller.didChangeTabProperties([.URL, .title, .loading], for: tab)
+            }
+        }
+    }
+
     func registerExtension(at directory: URL, source: ExtensionInstallSource) {
         register(Self.prepare(at: directory, patchesShim: shimPatchingEnabled), source: source)
     }
@@ -179,6 +195,9 @@ extension ExtensionManager {
                         \(error.localizedDescription, privacy: .public)
                         """)
                     }
+                }
+                if let context = engine.context(for: entry.id) {
+                    announceOpenTabs(to: context)
                 }
                 // A background script fails asynchronously, and used to be given a flat
                 // three seconds to do it in before its errors were read once and never
