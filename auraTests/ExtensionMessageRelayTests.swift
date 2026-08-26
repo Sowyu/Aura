@@ -70,6 +70,28 @@ struct ExtensionPagePatchTests {
         #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("aura-shim.js").path))
     }
 
+    /// The relay is what an extension's popup talks to its background page over,
+    /// and it only exists in extensions the scan has patched. Patching used to
+    /// wait for the request-blocking setting, which has nothing to do with
+    /// messaging: with ad blocking off — the default — every popup that asks its
+    /// background anything sat there waiting for an answer that could not arrive.
+    @Test @MainActor
+    func popupsGetTheRelayWithRequestBlockingOff() throws {
+        let directory = try Self.makeExtension()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let previous = SettingsStore.shared.extensionRequestBlocking
+        defer { SettingsStore.shared.extensionRequestBlocking = previous }
+        SettingsStore.shared.extensionRequestBlocking = false
+
+        let manager = ExtensionManager()
+        #expect(manager.shimPatchingEnabled)
+        _ = ExtensionManager.prepare(at: directory, patchesShim: manager.shimPatchingEnabled)
+
+        let popup = try String(contentsOf: directory.appendingPathComponent("popup.html"), encoding: .utf8)
+        #expect(popup.contains("/aura-shim.js"), "the popup has no way to reach its background page without it")
+    }
+
     /// An extension whose only claim on Aura is that it has pages: no
     /// webRequest anywhere, so it also proves the patch gate widened.
     static func makeExtension(includePages: Bool = true) throws -> URL {

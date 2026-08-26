@@ -79,6 +79,9 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
     /// covers the rest, on the next navigation or title report that arrives while the
     /// tab is visible.
     private var pendingHeaderColor = false
+    /// How many times this tab has re-tried an extension page that was not there yet.
+    /// See `retriedExtensionPage`.
+    private var extensionPageRetries = 0
 
     func browserPage(
         _ page: BrowserPage,
@@ -245,7 +248,47 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         let isCancellation = (nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled)
             || (nsError.domain == "WebKitErrorDomain" && nsError.code == 102)
         guard !isCancellation else { return }
+        guard !retriedExtensionPage(failingURL ?? tab?.url, page: page) else { return }
         tab?.setNavigationError(error, for: failingURL)
+    }
+
+    /// True when the failed load was an extension's own page and the load is being
+    /// tried again rather than reported.
+    ///
+    /// A tab restored onto `webkit-extension://` beats the extension it names: the
+    /// folder scan, the manifest parse and WebKit's own load all start from the first
+    /// page Aura builds and finish long after that page has begun loading. Until they
+    /// do, nothing answers for the address and WebKit fails it — which put Aura's
+    /// error page on a restored uBlock Origin dashboard on every launch. Retrying
+    /// only while extensions are still coming up keeps an address that will never
+    /// resolve (an extension since removed) reporting straight away.
+    private func retriedExtensionPage(_ url: URL?, page: BrowserPage) -> Bool {
+        // Cheapest test first: every ordinary page that fails comes through here too,
+        // and none of them has any business asking the extension manager anything.
+        guard let url, url.scheme?.lowercased() == ExtensionOrigin.scheme else { return false }
+        let loading = MainActor.assumeIsolated { ExtensionManager.shared.isLoadingExtensions }
+        guard Self.shouldRetryExtensionPage(url, attempts: extensionPageRetries, extensionsAreLoading: loading) else {
+            return false
+        }
+
+        extensionPageRetries += 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.extensionPageRetryDelay) { [weak page] in
+            page?.load(URLRequest(url: url))
+        }
+        return true
+    }
+
+    /// Half a second between tries, twelve at most: six seconds is longer than a cold
+    /// launch spends scanning and loading, and short enough that a page which is never
+    /// coming still reports itself while the user is looking at the tab.
+    static let extensionPageRetryDelay: TimeInterval = 0.5
+
+    /// The rule `retriedExtensionPage` applies, kept separate so it can be read and
+    /// tested without a web view: only an extension's own page, only while the
+    /// extensions are still loading, and only so many times.
+    static func shouldRetryExtensionPage(_ url: URL, attempts: Int, extensionsAreLoading: Bool) -> Bool {
+        guard url.scheme?.lowercased() == ExtensionOrigin.scheme else { return false }
+        return extensionsAreLoading && attempts < 12
     }
 
     func browserPage(_ page: BrowserPage, didReceiveScriptMessage message: BrowserScriptMessage) {

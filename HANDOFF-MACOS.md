@@ -38,6 +38,32 @@ a user-attributable cause. The same model with the pre-fix semantics reproduces
 all three shipped bugs, so the pass is meaningful. What the model cannot cover
 is WebKit runtime behavior — which is items 3, 4 and 6 below.
 
+## Extension pages and popups (added after the first macOS run)
+
+Two things the first real run turned up, both fixed here and both needing a build to
+confirm:
+
+1. **Every popup was talking to nothing.** The shim patch — which carries the
+   page→background messaging relay as well as the blocking-`webRequest` bridge — was
+   gated on the request-blocking setting, so with ad blocking off (the default) no
+   extension got it and any popup that asks its background page anything sat there:
+   Bitwarden on its spinner, DuckDuckGo blank. Patching is unconditional now. Check:
+   with **full ad blocking off**, open the popup of a non-blocker extension and see it
+   render; `log stream --predicate 'subsystem == "com.aurabrowser.app"'` should show
+   `relay: background attached for <id>`. If a popup is still blank *with* the relay
+   attached, the bug is in the relay itself, not the gate — read the popup's console
+   through Inspect Element.
+2. **Extension pages in tabs failed to load.** `WKWebExtensionContext` mints a random
+   `baseURL` host per context and Aura only ever set `uniqueIdentifier`, so an
+   extension's own origin changed on every launch and a restored dashboard tab pointed
+   at an extension nothing answered for — Aura's "Something Went Wrong". The origin is
+   now derived from the extension id (`ExtensionOrigin`), and a tab that asks for an
+   extension page before the extension has finished loading retries for six seconds
+   rather than reporting. Check: open uBO's dashboard in a tab, quit, relaunch — the
+   restored tab has to come back, and the URL has to be the same one it was before.
+   Tabs saved *before* this change still point at a dead origin and will not heal;
+   reopen them once.
+
 ## Functional checklist, in order
 
 1. **Profile heal (the reported bug).** On a profile that already has the broken

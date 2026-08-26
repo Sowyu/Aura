@@ -10,6 +10,26 @@ import os
 extension ExtensionManager {
     // MARK: - Loading
 
+    /// True while extensions are still coming up: the folder scan has not finished, or
+    /// an extension that is meant to load has no context yet.
+    ///
+    /// Nothing answers for a `webkit-extension://` address until the extension that
+    /// owns it is loaded, and that lands well after the first tab has started loading:
+    /// the scan reads every folder and rewrites manifests, then WebKit parses the
+    /// extension and compiles its rules. A tab restored onto an extension's own page
+    /// therefore asks for it too early, which is why `TabBrowserPageDelegate` waits on
+    /// this instead of reporting the failure straight away.
+    var isLoadingExtensions: Bool {
+        guard #available(macOS 15.4, *), hasStarted else { return false }
+        guard hasScanned else { return true }
+        let engine = loadedEngine
+        return installedExtensions.contains { entry in
+            entry.isEnabled
+                && !pendingConsent.contains(where: { $0.id == entry.id })
+                && engine?.context(for: entry.id) == nil
+        }
+    }
+
     func registerExtension(at directory: URL, source: ExtensionInstallSource) {
         register(Self.prepare(at: directory, patchesShim: shimPatchingEnabled), source: source)
     }

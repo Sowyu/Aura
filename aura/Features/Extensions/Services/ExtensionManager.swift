@@ -106,16 +106,22 @@ final class ExtensionManager {
 
     static let log = Logger(subsystem: "com.aurabrowser.app", category: "extensions")
 
-    /// Whether the scan and installs rewrite extensions for the shim.
+    /// Whether the scan and installs rewrite extensions for the shim. Always, now.
     ///
-    /// `AuraWebBundle.isEnabled` alone is latched at launch, so in the session where
-    /// the user first switches request blocking on it still reads false and full uBO
-    /// was installed (and consented) unpatched — the next launch's patch then changed
-    /// the manifest under an approval already given. Reading the live setting too
-    /// means what the user consents to is already the manifest the next launch runs.
-    var shimPatchingEnabled: Bool {
-        AuraWebBundle.isEnabled || SettingsStore.shared.extensionRequestBlocking
-    }
+    /// The shim carries two unrelated things: the blocking-`webRequest` bridge, which
+    /// only means anything while the injected bundle runs, and the relay that carries
+    /// `runtime.connect`/`runtime.sendMessage` from an extension's own pages to its
+    /// background page, which WebKit delivers nowhere on its own (see
+    /// `ExtensionMessageRelay`). Every extension with a popup needs the second one
+    /// whatever the user decided about ad blocking, and gating the patch on the
+    /// request-blocking setting is what left every popup in the default configuration
+    /// talking to a background page that never heard it: a password manager spinning
+    /// forever, a blocker's panel blank.
+    ///
+    /// Nothing is rewritten needlessly: `ExtensionShim.apply` leaves an extension with
+    /// neither blocking `webRequest` nor pages of its own exactly as downloaded, and
+    /// consent is hashed over the pristine manifest, so a patch drifts no permissions.
+    var shimPatchingEnabled: Bool { true }
 
     /// Ids whose update is downloading right now, so the row can say so. Stored here,
     /// and internal rather than private, because `ExtensionManager+Updates` is an
@@ -135,8 +141,9 @@ final class ExtensionManager {
     /// would let the user answer one and stare at the other.
     @ObservationIgnored var presentingConsent: Set<String> = []
 
-    @ObservationIgnored private var hasStarted = false
-    @ObservationIgnored private var hasScanned = false
+    /// Internal rather than private: `isLoadingExtensions` reads both.
+    @ObservationIgnored var hasStarted = false
+    @ObservationIgnored var hasScanned = false
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     @ObservationIgnored var updateCheckTask: Task<Void, Never>?
     /// AnyObject storage because WKWebExtensionController's type is 15.4+;

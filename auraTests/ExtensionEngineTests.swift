@@ -353,6 +353,37 @@ struct ExtensionEngineTests {
         )
         #expect(ExtensionConsent.permissionsHash(["tabs"]) != ExtensionConsent.permissionsHash(["storage"]))
     }
+
+    // MARK: - Page origin
+
+    /// The origin an extension's own pages load from has to be the same one next
+    /// launch, or every address that outlived the session — a restored dashboard
+    /// tab, a bookmark — points at an extension nothing answers for.
+    @Test func extensionPageOriginIsTheSameEveryLaunch() throws {
+        let first = try #require(ExtensionOrigin.baseURL(for: "ublock-origin-9f21ab3c"))
+        let again = try #require(ExtensionOrigin.baseURL(for: "ublock-origin-9f21ab3c"))
+        #expect(first == again)
+
+        let other = try #require(ExtensionOrigin.baseURL(for: "ublock-origin-lite-9f21ab3c"))
+        #expect(first != other, "two extensions cannot share an origin")
+    }
+
+    /// WebKit takes the base URL apart itself: the scheme is its own, the host is the
+    /// identifier, and it rejects a path, query or fragment.
+    @Test func extensionPageOriginIsShapedTheWayWebKitWantsIt() throws {
+        let url = try #require(ExtensionOrigin.baseURL(for: "aura test extension/../.."))
+        #expect(url.scheme == "webkit-extension")
+        #expect(url.path.isEmpty)
+        #expect(url.query == nil)
+        #expect(url.fragment == nil)
+
+        // A folder name is not a host, so the host is a digest of it, in the UUID
+        // shape WebKit generates for itself.
+        let host = try #require(url.host)
+        #expect(host == ExtensionOrigin.host(for: "aura test extension/../.."))
+        #expect(UUID(uuidString: host) != nil, "got \(host)")
+        #expect(host == host.lowercased())
+    }
 }
 
 /// Minimal `WKWebExtensionTab`/`WKWebExtensionWindow` pair. The real adapters need a

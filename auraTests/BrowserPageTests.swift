@@ -45,6 +45,26 @@ struct BrowserPageTests {
         #expect(BrowserPage.crashReloadDelay(forCrashCount: 99) == nil)
     }
 
+    // MARK: - Extension pages
+
+    /// A tab restored onto an extension's own page asks for it before the extension
+    /// has loaded, and WebKit fails that. The address is good, so it is tried again
+    /// rather than reported — but only while there is still an extension coming up,
+    /// and not forever.
+    @Test
+    func extensionPagesWaitForTheirExtensionButNotIndefinitely() throws {
+        let page = try #require(URL(string: "webkit-extension://f47ac10b-58cc-4372-a567-0e02b2c3d479/dashboard.html"))
+        #expect(TabBrowserPageDelegate.shouldRetryExtensionPage(page, attempts: 0, extensionsAreLoading: true))
+        #expect(TabBrowserPageDelegate.shouldRetryExtensionPage(page, attempts: 11, extensionsAreLoading: true))
+        // An extension that is never coming: report the failure now.
+        #expect(!TabBrowserPageDelegate.shouldRetryExtensionPage(page, attempts: 0, extensionsAreLoading: false))
+        #expect(!TabBrowserPageDelegate.shouldRetryExtensionPage(page, attempts: 12, extensionsAreLoading: true))
+
+        // Ordinary pages report the first failure, whatever the extensions are doing.
+        let web = try #require(URL(string: "https://example.com/"))
+        #expect(!TabBrowserPageDelegate.shouldRetryExtensionPage(web, attempts: 0, extensionsAreLoading: true))
+    }
+
     // MARK: - Find in page
 
     /// A term that appears exactly once, searched twice. The second search starts past

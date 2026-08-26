@@ -94,6 +94,40 @@ enum ExtensionConsent {
     }
 }
 
+/// Where one extension's own pages live: `webkit-extension://<host>/…`, the origin
+/// its popup, options page and dashboard load from.
+///
+/// `WKWebExtensionContext` mints a fresh random host for `baseURL` every time one is
+/// built, and setting `uniqueIdentifier` does not move it — the two only happen to
+/// match by default. Nothing persists it, so an extension's pages moved to a new
+/// origin on every launch, and any address that outlived the session pointing at
+/// them (a restored dashboard tab, a bookmark, a back entry) named an extension that
+/// no longer answers. WebKit fails that load, and the tab shows Aura's error page.
+///
+/// Deriving the host from the extension id fixes the origin for as long as the
+/// extension is installed. It is UUID-shaped because that is what WebKit generates
+/// for itself, and a digest rather than the id because a folder name is not a host.
+enum ExtensionOrigin {
+    /// WebKit's own scheme for extension resources.
+    static let scheme = "webkit-extension"
+
+    /// The `baseURL` to give the context for `id`, or nil if the derived host will
+    /// not make a URL (which it always does; the optional only keeps this honest).
+    static func baseURL(for id: String) -> URL? {
+        URL(string: scheme + "://" + host(for: id))
+    }
+
+    /// A UUID (version 5, name-based) over the extension id.
+    static func host(for id: String) -> String {
+        var bytes = Array(SHA256.hash(data: Data("aura.extension.origin.v1\u{0}\(id)".utf8)).prefix(16))
+        bytes[6] = (bytes[6] & 0x0F) | 0x50
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        let hex = Array(bytes.map { String(format: "%02x", $0) }.joined())
+        func group(_ start: Int, _ length: Int) -> String { String(hex[start ..< (start + length)]) }
+        return [group(0, 8), group(8, 4), group(12, 4), group(16, 4), group(20, 12)].joined(separator: "-")
+    }
+}
+
 /// The 15.4+ half: owns the WKWebExtensionController shared by every
 /// non-private page and the loaded contexts.
 @available(macOS 15.4, *)
@@ -131,6 +165,12 @@ final class ExtensionEngine: NSObject {
         let context = WKWebExtensionContext(for: webExtension)
         // Stable identifier keeps chrome.storage data attached across launches.
         context.uniqueIdentifier = id
+        // And a stable origin keeps the extension's own pages reachable across them:
+        // WebKit's default is a new random host per context. Both have to be set
+        // before the load; neither can move afterwards.
+        if let baseURL = ExtensionOrigin.baseURL(for: id) {
+            context.baseURL = baseURL
+        }
         // Firefox's model: the extension runs everywhere, but private windows, tabs and
         // cookies stay invisible to it until the user says otherwise. WebKit does the
         // filtering itself once this is set, so nothing downstream has to remember which
