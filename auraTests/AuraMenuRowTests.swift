@@ -66,7 +66,7 @@ struct AuraMenuRowTests {
     /// and scrolls the rest rather than running off the bottom edge.
     @Test("A 60 item menu is capped to the window with an 8pt margin")
     func aLongMenuIsCappedToTheWindow() {
-        let items = (0..<60).map { AuraMenuItem.item("Row \($0)", action: {}) }
+        let items = (0 ..< 60).map { AuraMenuItem.item("Row \($0)", action: {}) }
         let content = AuraMenuMetrics.height(of: items)
         let available: CGFloat = 800
         let fitted = AuraMenuMetrics.fittedHeight(contentHeight: content, available: available)

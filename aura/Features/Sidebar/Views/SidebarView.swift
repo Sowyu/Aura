@@ -220,8 +220,7 @@ struct SidebarView: View {
                 let threshold = width * 0.25
                 if isShowingPanel {
                     if value.translation.width > threshold
-                        || value.predictedEndTranslation.width > threshold * 2
-                    {
+                        || value.predictedEndTranslation.width > threshold * 2 {
                         withAnimation(AnimationSettings.easeOut(0.15)) {
                             sidebarManager.panel = .none
                             dragOffset = 0
@@ -233,8 +232,7 @@ struct SidebarView: View {
                     }
                 } else if selectedContainerIndex.wrappedValue == 0 {
                     if -value.translation.width > threshold
-                        || -value.predictedEndTranslation.width > threshold * 2
-                    {
+                        || -value.predictedEndTranslation.width > threshold * 2 {
                         withAnimation(AnimationSettings.easeOut(0.15)) {
                             sidebarManager.panel = .downloads
                             dragOffset = 0

@@ -28,8 +28,7 @@ public struct HSplit<P: View, D: SplitDivider, S: View>: View {
     }
 
     public init(@ViewBuilder left: @escaping () -> P, @ViewBuilder right: @escaping () -> S)
-        where D == Splitter
-    {
+        where D == Splitter {
         let fraction = FractionHolder()
         let hide = SideHolder()
         let constraints = SplitConstraints()

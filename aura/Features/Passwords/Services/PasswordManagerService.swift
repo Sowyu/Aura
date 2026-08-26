@@ -602,8 +602,7 @@ final class PasswordManagerService: ObservableObject {
             }
 
             if let genericData = record[kSecAttrGeneric as String] as? Data,
-               let metadata = try? decoder.decode(SavedPasswordMetadata.self, from: genericData)
-            {
+               let metadata = try? decoder.decode(SavedPasswordMetadata.self, from: genericData) {
                 return SavedPasswordSummary(metadata: metadata, persistentReference: persistentReference)
             }
 

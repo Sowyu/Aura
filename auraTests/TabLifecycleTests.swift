@@ -546,8 +546,7 @@ struct TabOrderingTests {
 
     @discardableResult
     private func makeTab(_ manager: TabManager, _ space: TabContainer, order: Int, type: TabType = .normal) throws
-        -> Tab
-    {
+        -> Tab {
         let tab = try Tab(
             url: #require(URL(string: "https://example.com/\(order)")),
             title: "tab \(order)",

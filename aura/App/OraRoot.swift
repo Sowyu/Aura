@@ -465,8 +465,7 @@ extension OraRoot {
                 Task { @MainActor in
                     guard let tab = tabManager.activeTab else { return }
                     if let changedHost = note.userInfo?["host"] as? String,
-                       registrableDomain(from: tab.url) != changedHost
-                    {
+                       registrableDomain(from: tab.url) != changedHost {
                         return
                     }
                     tab.reload()

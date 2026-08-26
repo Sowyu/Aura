@@ -17,9 +17,45 @@
 --enable indent
 --enable trailingClosures
 --disable redundantSelf
---disable sortedImports
+# sortImports was called sortedImports when this config was written; the rename
+# silently un-disabled it. The project keeps imports unsorted on purpose (the
+# matching SwiftLint rule is off too).
+--disable sortImports
 --disable consecutiveSpaces
 --disable redundantReturn
+# Rules added to SwiftFormat after this config was written, never part of the
+# project's chosen style. CI installs latest, so new-by-default rules land here
+# until someone adopts them deliberately.
+--disable wrapIfStatementBodies
+--disable wrapPropertyBodies
+--disable wrapLoopBodies
+--disable wrapFunctionBodies
+--disable wrapMultilineStatementBraces
+--disable docComments
+--disable hoistTry
+--disable hoistAwait
+--disable noForceUnwrapInTests
+--disable redundantThrows
+--disable conditionalAssignment
+--disable redundantMemberwiseInit
+--disable redundantSwiftUIGroup
+--disable redundantViewBuilder
+--disable redundantSwiftTestingSuite
+--disable redundantFileprivate
+--disable redundantVariable
+--disable redundantProperty
+--disable redundantType
+--disable redundantEmptyView
+--disable typeSugar
+--disable opaqueGenericParameters
+--disable genericExtensions
+--disable preferKeyPath
+--disable preferForLoop
+--disable andOperator
+--disable modifierOrder
+--disable numberFormatting
+--disable blankLinesBetweenImports
+--disable headerFileName
 --exclude Pods
 --exclude Carthage
 --exclude .build

@@ -97,74 +97,78 @@ struct URLBarField: View {
 
     var body: some View {
         field
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { appState.urlFieldFrame = $0 }
-        .overlay(alignment: suggestionsFlipUp ? .bottom : .top) {
-            if isEditing {
-                suggestionsOverlay()
-                    .offset(y: suggestionsFlipUp ? -Self.suggestionsGap : Self.suggestionsGap)
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
-                        // Only while the list is really up. The old `.onDisappear` ran a
-                        // frame late and raced the transition, leaving a live hole punched
-                        // in `BrowserView`'s backdrop over nothing.
-                        appState.urlSuggestionsFrame = isEditing ? $0 : .zero
-                    }
-                    .transition(.move(edge: suggestionsFlipUp ? .bottom : .top).combined(with: .opacity))
-            }
-        }
-        .animation(AnimationSettings.easeOut(0.15), value: isEditing)
-        // Hidden button for the focus-address-bar shortcut. Hidden from assistive
-        // technology too: it carries no label, and it is only here to own ⌘L.
-        .overlay(
-            Button("") { startEditing() }
-                .oraShortcut(KeyboardShortcuts.Address.focus)
-                .opacity(0)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        )
-        // Clicking anywhere outside the field or its suggestions ends the edit, the way
-        // every browser's address bar behaves; AppKit alone only does it when the click
-        // lands on something that takes first responder.
-        .onChange(of: isEditing, initial: true) { _, editing in
-            if editing, clickAwayMonitor == nil {
-                clickAwayMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { event in
-                    guard let window = event.window else { return event }
-                    let height = window.contentView?.bounds.height ?? window.frame.height
-                    let point = CGPoint(x: event.locationInWindow.x, y: height - event.locationInWindow.y)
-                    let inside = appState.urlFieldFrame.contains(point) || appState.urlSuggestionsFrame.contains(point)
-                    if !inside { DispatchQueue.main.async { dismissEditing() } }
-                    return event
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { appState.urlFieldFrame = $0 }
+            .overlay(alignment: suggestionsFlipUp ? .bottom : .top) {
+                if isEditing {
+                    suggestionsOverlay()
+                        .offset(y: suggestionsFlipUp ? -Self.suggestionsGap : Self.suggestionsGap)
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                            // Only while the list is really up. The old `.onDisappear` ran a
+                            // frame late and raced the transition, leaving a live hole punched
+                            // in `BrowserView`'s backdrop over nothing.
+                            appState.urlSuggestionsFrame = isEditing ? $0 : .zero
+                        }
+                        .transition(.move(edge: suggestionsFlipUp ? .bottom : .top).combined(with: .opacity))
                 }
-            } else if !editing, let monitor = clickAwayMonitor {
-                NSEvent.removeMonitor(monitor)
-                clickAwayMonitor = nil
             }
-        }
-        .onChange(of: isEditing) { _, editing in
-            if editing {
-                setupInlineLauncher()
-            } else {
-                cleanupInlineLauncher()
+            .animation(AnimationSettings.easeOut(0.15), value: isEditing)
+            // Hidden button for the focus-address-bar shortcut. Hidden from assistive
+            // technology too: it carries no label, and it is only here to own ⌘L.
+            .overlay(
+                Button("") { startEditing() }
+                    .oraShortcut(KeyboardShortcuts.Address.focus)
+                    .opacity(0)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            )
+            // Clicking anywhere outside the field or its suggestions ends the edit, the way
+            // every browser's address bar behaves; AppKit alone only does it when the click
+            // lands on something that takes first responder.
+            .onChange(of: isEditing, initial: true) { _, editing in
+                if editing, clickAwayMonitor == nil {
+                    clickAwayMonitor = NSEvent.addLocalMonitorForEvents(matching: [
+                        .leftMouseDown,
+                        .rightMouseDown
+                    ]) { event in
+                        guard let window = event.window else { return event }
+                        let height = window.contentView?.bounds.height ?? window.frame.height
+                        let point = CGPoint(x: event.locationInWindow.x, y: height - event.locationInWindow.y)
+                        let inside = appState.urlFieldFrame.contains(point) || appState.urlSuggestionsFrame
+                            .contains(point)
+                        if !inside { DispatchQueue.main.async { dismissEditing() } }
+                        return event
+                    }
+                } else if !editing, let monitor = clickAwayMonitor {
+                    NSEvent.removeMonitor(monitor)
+                    clickAwayMonitor = nil
+                }
             }
-        }
-        .onChange(of: tabManager.activeTab?.id) { _, _ in
-            if isEditing {
-                dismissEditing()
+            .onChange(of: isEditing) { _, editing in
+                if editing {
+                    setupInlineLauncher()
+                } else {
+                    cleanupInlineLauncher()
+                }
             }
-        }
-        .onChange(of: appState.showLauncher) { _, newValue in
-            // Dismiss URL bar editing if the center launcher is opened
-            if newValue, isEditing {
-                dismissEditing()
+            .onChange(of: tabManager.activeTab?.id) { _, _ in
+                if isEditing {
+                    dismissEditing()
+                }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .copyAddressURL)) { _ in
-            if let activeTab = tabManager.activeTab {
-                ClipboardUtils.copyWithToast(
-                    activeTab.url.absoluteString,
-                    toastManager: toastManager
-                )
+            .onChange(of: appState.showLauncher) { _, newValue in
+                // Dismiss URL bar editing if the center launcher is opened
+                if newValue, isEditing {
+                    dismissEditing()
+                }
             }
-        }
+            .onReceive(NotificationCenter.default.publisher(for: .copyAddressURL)) { _ in
+                if let activeTab = tabManager.activeTab {
+                    ClipboardUtils.copyWithToast(
+                        activeTab.url.absoluteString,
+                        toastManager: toastManager
+                    )
+                }
+            }
     }
 
     // MARK: - Field

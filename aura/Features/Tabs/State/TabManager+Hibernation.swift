@@ -267,8 +267,7 @@ extension TabManager {
         for container in allContainers {
             for tab in container.tabs {
                 if !tab.isAlive, tab.isWebViewReady, !isActiveInAnyWindow(tab), mayHibernate(tab),
-                   tab.type == .normal
-                {
+                   tab.type == .normal {
                     hibernate(tab)
                 }
             }
@@ -339,8 +338,7 @@ extension TabManager {
                    lastAccessed < cutoffDate,
                    !isActiveInAnyWindow(tab),
                    !tab.isPlayingMedia,
-                   tab.type == .normal
-                {
+                   tab.type == .normal {
                     closeTab(tab: tab, shouldTrackForRestore: false)
                 }
             }
@@ -362,8 +360,7 @@ extension TabManager {
                    lastAccessed < cutoffDate,
                    !isActiveInAnyWindow(tab),
                    !tab.isPlayingMedia,
-                   tab.type == .normal
-                {
+                   tab.type == .normal {
                     // Not a close the user made, so it does not go on the reopen stack,
                     // same as `removeOldTabs`.
                     closeTab(tab: tab, shouldTrackForRestore: false)

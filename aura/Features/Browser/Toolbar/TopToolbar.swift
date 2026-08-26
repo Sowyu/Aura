@@ -264,8 +264,7 @@ struct TopToolbar: View {
     /// all a tab without a web view can offer.
     private func travel(to row: NavigationHistoryRow, forward: Bool, in tab: Tab) {
         if let page = tab.browserPage,
-           let item = page.backForwardItem(atOffset: forward ? row.steps : -row.steps)
-        {
+           let item = page.backForwardItem(atOffset: forward ? row.steps : -row.steps) {
             page.go(to: item)
             return
         }

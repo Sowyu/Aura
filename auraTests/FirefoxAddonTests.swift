@@ -95,17 +95,25 @@ struct FirefoxAddonTests {
     }
 
     @Test func matchesOnGUIDBeforeDisplayName() {
-        let addon = FirefoxAddon(id: 1, slug: "ublock-origin", name: "uBlock Origin",
-                                 guid: "uBlock0@raymondhill.net")
+        let addon = FirefoxAddon(
+            id: 1,
+            slug: "ublock-origin",
+            name: "uBlock Origin",
+            guid: "uBlock0@raymondhill.net"
+        )
 
         // AMO serves the name in the user's locale and add-ons get renamed, so the
         // guid has to win over a name that no longer lines up.
-        #expect(ExtensionManager.matches(addon, installed(name: "uBlock Origin (Bloqueur)",
-                                                          geckoID: "uBlock0@raymondhill.net")))
+        #expect(ExtensionManager.matches(addon, installed(
+            name: "uBlock Origin (Bloqueur)",
+            geckoID: "uBlock0@raymondhill.net"
+        )))
 
         // Two unrelated add-ons are free to ship the same name.
-        #expect(!ExtensionManager.matches(addon, installed(name: "uBlock Origin",
-                                                           geckoID: "impostor@example.com")))
+        #expect(!ExtensionManager.matches(addon, installed(
+            name: "uBlock Origin",
+            geckoID: "impostor@example.com"
+        )))
     }
 
     @Test func matchesFallsBackToNameWithoutAGUID() {
@@ -115,8 +123,10 @@ struct FirefoxAddonTests {
         // A Chrome-shaped manifest declares no gecko id, and an older AMO payload
         // carries no guid. Either gap drops both sides back to the name.
         #expect(ExtensionManager.matches(withGUID, installed(name: "dark reader", geckoID: nil)))
-        #expect(ExtensionManager.matches(withoutGUID, installed(name: "Dark Reader",
-                                                               geckoID: "addon@darkreader.org")))
+        #expect(ExtensionManager.matches(withoutGUID, installed(
+            name: "Dark Reader",
+            geckoID: "addon@darkreader.org"
+        )))
         #expect(!ExtensionManager.matches(withoutGUID, installed(name: "Something Else", geckoID: nil)))
     }
 

@@ -80,7 +80,9 @@ struct DebugPassRegressionTests {
         var starts: [URL] = []
         var stops: [URL] = []
         let folder = SecurityScopedFolder(
-            start: { starts.append($0); return true },
+            start: { starts.append($0)
+                return true
+            },
             stop: { stops.append($0) }
         )
 
@@ -90,8 +92,10 @@ struct DebugPassRegressionTests {
         let bookmarkB = Data("B".utf8)
         var resolutions = 0
 
-        for _ in 0..<3 {
-            #expect(folder.url(for: bookmarkA) { _ in resolutions += 1; return first } == first)
+        for _ in 0 ..< 3 {
+            #expect(folder.url(for: bookmarkA) { _ in resolutions += 1
+                return first
+            } == first)
         }
         #expect(starts == [first])
         #expect(stops.isEmpty)

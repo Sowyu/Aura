@@ -28,8 +28,7 @@ public struct VSplit<P: View, D: SplitDivider, S: View>: View {
     }
 
     public init(@ViewBuilder top: @escaping () -> P, @ViewBuilder bottom: @escaping () -> S)
-        where D == Splitter
-    {
+        where D == Splitter {
         let fraction = FractionHolder()
         let hide = SideHolder()
         let constraints = SplitConstraints()

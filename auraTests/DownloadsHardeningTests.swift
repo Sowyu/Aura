@@ -268,7 +268,9 @@ struct DownloadsHardeningTests {
             for: .keepBoth,
             target: target,
             uniqueName: { $0.deletingLastPathComponent().appendingPathComponent("report (1).pdf") },
-            replaceExisting: { _ in Issue.record("keep both must not delete anything"); return true }
+            replaceExisting: { _ in Issue.record("keep both must not delete anything")
+                return true
+            }
         )
 
         #expect(resolved?.lastPathComponent == "report (1).pdf")
@@ -281,8 +283,12 @@ struct DownloadsHardeningTests {
         let resolved = DownloadManager.destinationURL(
             for: .replace,
             target: target,
-            uniqueName: { _ in Issue.record("replace must not rename"); return target },
-            replaceExisting: { removed = $0; return true }
+            uniqueName: { _ in Issue.record("replace must not rename")
+                return target
+            },
+            replaceExisting: { removed = $0
+                return true
+            }
         )
 
         #expect(resolved == target)
@@ -312,8 +318,12 @@ struct DownloadsHardeningTests {
         let resolved = DownloadManager.destinationURL(
             for: .cancel,
             target: target,
-            uniqueName: { _ in Issue.record("cancel must not rename"); return target },
-            replaceExisting: { _ in Issue.record("cancel must not delete"); return true }
+            uniqueName: { _ in Issue.record("cancel must not rename")
+                return target
+            },
+            replaceExisting: { _ in Issue.record("cancel must not delete")
+                return true
+            }
         )
 
         #expect(resolved == nil)

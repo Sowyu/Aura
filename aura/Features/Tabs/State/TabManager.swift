@@ -33,6 +33,7 @@ final class TabManager {
     var activeTab: Tab? {
         didSet { activePosition = activeTab.map(TabPosition.init) }
     }
+
     /// Copied on every activation, see `TabPosition`.
     @ObservationIgnored private(set) var activePosition: TabPosition?
     /// Sidebar folder currently showing its inline rename field, if any.
@@ -288,8 +289,7 @@ final class TabManager {
             // Get the last accessed tab from the active container
             if let lastAccessedTab = lastAccessedContainer.tabs
                 .sorted(by: { ($0.lastAccessedAt ?? Date.distantPast) > ($1.lastAccessedAt ?? Date.distantPast) })
-                .first
-            {
+                .first {
                 activeTab = lastAccessedTab
                 activeTab?.maybeIsActive = true
             }
@@ -392,8 +392,7 @@ final class TabManager {
 
         if let lastAccessedTab = container.tabs
             .sorted(by: { ($0.lastAccessedAt ?? .distantPast) > ($1.lastAccessedAt ?? .distantPast) })
-            .first
-        {
+            .first {
             activateTab(lastAccessedTab, persist: false)
         } else {
             activeTab?.maybeIsActive = false
@@ -861,5 +860,4 @@ final class TabManager {
             }
         }
     }
-
 }

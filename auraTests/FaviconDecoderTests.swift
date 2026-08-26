@@ -57,7 +57,7 @@ struct FaviconDecoderTests {
     /// entry for every domain ever seen.
     @Test func boundedCacheDropsTheOldestEntryPastItsLimit() {
         var cache = BoundedCache<Int, String>(limit: 3)
-        for index in 0..<5 { cache[index] = "v\(index)" }
+        for index in 0 ..< 5 { cache[index] = "v\(index)" }
 
         #expect(cache.count == 3)
         #expect(cache[0] == nil)

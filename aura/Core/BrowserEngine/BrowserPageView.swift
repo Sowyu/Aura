@@ -39,8 +39,7 @@ final class BrowserPageHostView: NSView {
         configure(contentView: newContentView)
 
         if let previousHost = newContentView.superview as? BrowserPageHostView,
-           previousHost !== self
-        {
+           previousHost !== self {
             previousHost.releaseHostedContentView(newContentView)
         }
 

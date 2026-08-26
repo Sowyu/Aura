@@ -94,8 +94,10 @@ struct AuraColorPicker: View {
     private var intensityBar: some View {
         bar(
             fill: LinearGradient(
-                colors: [Color(hue: hue, saturation: saturation, brightness: value, opacity: 0),
-                         Color(hue: hue, saturation: saturation, brightness: value)],
+                colors: [
+                    Color(hue: hue, saturation: saturation, brightness: value, opacity: 0),
+                    Color(hue: hue, saturation: saturation, brightness: value)
+                ],
                 startPoint: .leading,
                 endPoint: .trailing
             ),

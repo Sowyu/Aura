@@ -115,9 +115,9 @@ struct BrowserWebContentView: View {
                 .clipped()
         } else if tab.url.isOraSettings {
             SettingsContentView(initialTab: tab.url.oraSettingsSection)
-            .id(tab.id)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+                .id(tab.id)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
         } else if tab.isWebViewReady {
             if tab.hasNavigationError, let error = tab.navigationError {
                 StatusPageView(

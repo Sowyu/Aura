@@ -247,8 +247,7 @@ final class MediaController {
             if let tab = tabRefs[session.tabID]?.value,
                let idx = sessions.firstIndex(where: { $0.tabID == session.tabID }),
                !tab.title.isEmpty,
-               tab.title != sessions[idx].title
-            {
+               tab.title != sessions[idx].title {
                 sessions[idx].title = tab.title
             }
         }
@@ -269,8 +268,7 @@ final class MediaController {
             if let tab = self.tabRefs[tabID]?.value,
                let idx = self.sessions.firstIndex(where: { $0.tabID == tabID }),
                !tab.title.isEmpty,
-               tab.title != self.sessions[idx].title
-            {
+               tab.title != self.sessions[idx].title {
                 self.sessions[idx].title = tab.title
             } else if attempts > 1 {
                 self.scheduleTitleSync(for: tabID, attempts: attempts - 1, delay: delay)

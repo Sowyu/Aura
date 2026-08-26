@@ -82,7 +82,7 @@ extension ExtensionCompatibility {
     /// real with nothing switched on.
     static let firefoxOnlyPermissions: Set<String> = [
         "webRequestBlocking", "proxy", "dns", "browserSettings", "contextualIdentities",
-        "pkcs11", "captivePortal", "networkStatus", "geckoProfiler", "theme", "urlbar",
+        "pkcs11", "captivePortal", "networkStatus", "geckoProfiler", "theme", "urlbar"
     ]
 
     /// Verdict for one AMO listing. Non-extension types are listed for completeness but
@@ -167,7 +167,7 @@ extension ExtensionCompatibility {
         "contextMenus": "Add items to the right-click menu",
         "menus": "Add items to the right-click menu",
         "alarms": "Run work on a schedule in the background",
-        "webNavigation": "See every page you navigate to",
+        "webNavigation": "See every page you navigate to"
     ]
 
     /// One permission in human form. Host access arrives as a URL match pattern rather

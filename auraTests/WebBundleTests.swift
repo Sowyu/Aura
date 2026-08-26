@@ -370,4 +370,3 @@ final class LocalHTTPServer {
         return Data(head.utf8) + body
     }
 }
-

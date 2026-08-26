@@ -118,8 +118,7 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
     /// The `layout`, `fraction`,  `hide` ,  `constraints`, and any custom `splitter` must be specified using the
     /// modifiers if they are not defaults
     public init(@ViewBuilder primary: @escaping () -> P, @ViewBuilder secondary: @escaping () -> S)
-        where D == Splitter
-    {
+        where D == Splitter {
         let layout = LayoutHolder()
         let fraction = FractionHolder()
         let hide = SideHolder()

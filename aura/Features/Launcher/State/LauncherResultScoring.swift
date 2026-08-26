@@ -59,8 +59,12 @@ enum LauncherScoring {
     }
 
     /// Prefix-only match, used where a match in the middle of the string means nothing.
-    private static func simpleBooster(prefix: String, base: String?, isURLLike: Bool,
-                                      hasBothTextAndInfo: Bool) -> Booster {
+    private static func simpleBooster(
+        prefix: String,
+        base: String?,
+        isURLLike: Bool,
+        hasBothTextAndInfo: Bool
+    ) -> Booster {
         guard let lowered = base?.lowercased(), !lowered.isEmpty, !prefix.isEmpty else {
             return Booster(score: 0, boostedScore: 0)
         }
@@ -71,14 +75,23 @@ enum LauncherScoring {
     }
 
     /// Match anywhere in the string, penalised by how far in the match starts.
-    private static func booster(prefix: String, base: String?, type: LauncherSuggestionType,
-                                isURL: Bool, hasBothTextAndInfo: Bool) -> Booster {
+    private static func booster(
+        prefix: String,
+        base: String?,
+        type: LauncherSuggestionType,
+        isURL: Bool,
+        hasBothTextAndInfo: Bool
+    ) -> Booster {
         // A URL is read left to right, so only its start counts. Search rows carry the
         // query itself, so a match inside them is noise.
         let canMatchInside = !isURL && type != .suggestedQuery && type != .aiChat
         guard canMatchInside else {
-            return simpleBooster(prefix: prefix, base: base, isURLLike: isURL,
-                                 hasBothTextAndInfo: hasBothTextAndInfo)
+            return simpleBooster(
+                prefix: prefix,
+                base: base,
+                isURLLike: isURL,
+                hasBothTextAndInfo: hasBothTextAndInfo
+            )
         }
         guard let base, !base.isEmpty, !prefix.isEmpty else { return Booster(score: 0, boostedScore: 0) }
 
@@ -96,10 +109,20 @@ enum LauncherScoring {
     static func prefixScore(query: String?, text: String, info: String?, type: LauncherSuggestionType) -> Float {
         guard let query, !query.isEmpty else { return 1 }
         let infoIsURL = type.isWebURLResult
-        let infoResult = booster(prefix: query, base: info, type: type, isURL: infoIsURL,
-                                 hasBothTextAndInfo: true)
-        let textResult = booster(prefix: query, base: text, type: type, isURL: false,
-                                 hasBothTextAndInfo: infoResult.boostedScore > 0)
+        let infoResult = booster(
+            prefix: query,
+            base: info,
+            type: type,
+            isURL: infoIsURL,
+            hasBothTextAndInfo: true
+        )
+        let textResult = booster(
+            prefix: query,
+            base: text,
+            type: type,
+            isURL: false,
+            hasBothTextAndInfo: infoResult.boostedScore > 0
+        )
         return 1 + textResult.boostedScore + infoResult.boostedScore
     }
 
@@ -184,8 +207,13 @@ enum LauncherResultMerger {
     /// The typed-text row always stays on top: it is what Enter does, and a row that
     /// moves under the cursor between keystrokes is how you navigate somewhere you
     /// did not mean to.
-    static func merge(typed: LauncherSuggestion?, links: [LauncherSuggestion], openTabs: [LauncherSuggestion],
-                      trailing: [LauncherSuggestion], limit: Int = resultsLimit) -> [LauncherSuggestion] {
+    static func merge(
+        typed: LauncherSuggestion?,
+        links: [LauncherSuggestion],
+        openTabs: [LauncherSuggestion],
+        trailing: [LauncherSuggestion],
+        limit: Int = resultsLimit
+    ) -> [LauncherSuggestion] {
         var sortable = mixOpenTabs(links: dedupeByURL(links), openTabs: openTabs)
         sortable.sort(by: ranksBefore)
         // Leave room for the search-engine rows that arrive a moment later, so they do
@@ -203,8 +231,12 @@ enum LauncherResultMerger {
     /// Beam's `insertSearchEngineResults`. The rows land below every better-ranked row,
     /// and never above the row the user has arrowed onto, so a late answer from the
     /// search engine cannot move the selection out from under the next Enter.
-    static func insertSearchResults(_ incoming: [LauncherSuggestion], into results: [LauncherSuggestion],
-                                    focused: UUID, limit: Int = resultsLimit) -> [LauncherSuggestion] {
+    static func insertSearchResults(
+        _ incoming: [LauncherSuggestion],
+        into results: [LauncherSuggestion],
+        focused: UUID,
+        limit: Int = resultsLimit
+    ) -> [LauncherSuggestion] {
         let existing = Set(results.map(\.title))
         let room = max(2, limit - results.count)
         let filtered = incoming.filter { !existing.contains($0.title) }.prefix(room)

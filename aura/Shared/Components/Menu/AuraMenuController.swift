@@ -334,7 +334,7 @@ extension AuraMenuController {
         guard items.contains(where: \.isSelectable) else { return }
 
         var index = levels[level].highlighted ?? (delta > 0 ? -1 : items.count)
-        for _ in 0..<items.count {
+        for _ in 0 ..< items.count {
             index = (index + delta + items.count) % items.count
             if items[index].isSelectable {
                 levels[level].highlighted = index
@@ -352,7 +352,7 @@ extension AuraMenuController {
         let needle = String(character).lowercased()
         let start = levels[level].highlighted ?? -1
 
-        for step in 1...items.count {
+        for step in 1 ... items.count {
             let index = (start + step + items.count) % items.count
             guard items[index].isSelectable, items[index].title.lowercased().hasPrefix(needle) else { continue }
             levels[level].highlighted = index

@@ -21,7 +21,7 @@ struct PageLoadBenchmark {
         "https://www.theverge.com/",
         "https://www.reddit.com/",
         "https://www.amazon.com/",
-        "https://www.youtube.com/",
+        "https://www.youtube.com/"
     ]
 
     private static let blockerID = BundledExtensions.folderID
@@ -99,12 +99,20 @@ struct PageLoadBenchmark {
             // The arms take turns so a background build starting halfway through the run
             // lands on both of them instead of taxing one.
             for round in 0 ..< Self.rounds {
-                if let sample = await measure(url: url, controller: engine.controller,
-                                              pool: pool, label: "\(host) ubo=on#\(round)") {
+                if let sample = await measure(
+                    url: url,
+                    controller: engine.controller,
+                    pool: pool,
+                    label: "\(host) ubo=on#\(round)"
+                ) {
                     on.append(sample)
                 }
-                if let sample = await measure(url: url, controller: nil,
-                                              pool: pool, label: "\(host) ubo=off#\(round)") {
+                if let sample = await measure(
+                    url: url,
+                    controller: nil,
+                    pool: pool,
+                    label: "\(host) ubo=off#\(round)"
+                ) {
                     off.append(sample)
                 }
             }

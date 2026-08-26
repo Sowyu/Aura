@@ -17,6 +17,7 @@ struct BlurEffectView: NSViewRepresentable {
         var holes: [CGRect] = [] {
             didSet { if holes != oldValue { rebuildMask() } }
         }
+
         private var maskedSize: CGSize = .zero
 
         override func hitTest(_ point: NSPoint) -> NSView? {

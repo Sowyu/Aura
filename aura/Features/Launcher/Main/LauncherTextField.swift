@@ -63,6 +63,7 @@ struct LauncherTextField: NSViewRepresentable {
             allowsFocus = true
             window.makeFirstResponder(self)
         }
+
         override var mouseDownCanMoveWindow: Bool { false }
 
         /// Holds first responder here while the field is being edited, so switching to
@@ -252,13 +253,11 @@ struct LauncherTextField: NSViewRepresentable {
                 onEscape()
                 return true
             } else if selector == #selector(NSResponder.moveUp(_:)) || selector ==
-                #selector(NSResponder.moveToBeginningOfParagraph(_:))
-            {
+                #selector(NSResponder.moveToBeginningOfParagraph(_:)) {
                 parent.onMoveUp()
                 return true
             } else if selector == #selector(NSResponder.moveDown(_:)) || selector ==
-                #selector(NSResponder.moveToEndOfParagraph(_:))
-            {
+                #selector(NSResponder.moveToEndOfParagraph(_:)) {
                 parent.onMoveDown()
                 return true
             }

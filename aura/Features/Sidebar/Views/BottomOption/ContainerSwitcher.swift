@@ -51,8 +51,7 @@ struct ContainerSwitcher: View {
 
     @ViewBuilder
     private func containerButton(for container: TabContainer, isCompact: Bool)
-        -> some View
-    {
+        -> some View {
         let isActive = tabManager.activeContainer?.id == container.id
         let isHovered = hoveredContainer == container.id
         // Collapsed, inactive spaces shrink to a dot until hovered.

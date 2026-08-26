@@ -357,4 +357,3 @@ private extension HTTPCookie {
         return url.path.hasPrefix(cookiePath) || cookiePath == "/"
     }
 }
-

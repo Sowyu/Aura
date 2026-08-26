@@ -553,8 +553,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     ) {
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
            let serverTrust = challenge.protectionSpace.serverTrust,
-           sslBypassedHosts.contains(challenge.protectionSpace.host)
-        {
+           sslBypassedHosts.contains(challenge.protectionSpace.host) {
             completionHandler(.useCredential, URLCredential(trust: serverTrust))
         } else {
             completionHandler(.performDefaultHandling, nil)

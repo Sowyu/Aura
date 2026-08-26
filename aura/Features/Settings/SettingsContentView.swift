@@ -118,38 +118,119 @@ enum SettingsTab: String, Hashable, CaseIterable {
     var searchKeywords: [String] {
         switch self {
         case .lookAndFeel:
-            return ["appearance", "light", "dark", "system theme", "accent colour", "accent color",
-                    "liquid glass", "glass tint", "colour"]
+            return [
+                "appearance",
+                "light",
+                "dark",
+                "system theme",
+                "accent colour",
+                "accent color",
+                "liquid glass",
+                "glass tint",
+                "colour"
+            ]
         case .window:
-            return ["window layout", "sidebar position", "left", "right", "toolbar", "show the toolbar",
-                    "full url", "address bar", "blur", "launcher blur", "compact mode", "chrome"]
+            return [
+                "window layout",
+                "sidebar position",
+                "left",
+                "right",
+                "toolbar",
+                "show the toolbar",
+                "full url",
+                "address bar",
+                "blur",
+                "launcher blur",
+                "compact mode",
+                "chrome"
+            ]
         case .browsing:
-            return ["tabs", "keeping tabs live", "hibernation", "unload idle tabs", "memory pressure",
-                    "new tabs and folders", "media", "picture in picture", "launcher", "home page",
-                    "links from other apps", "launch and quit", "reopen tabs", "ask before quitting",
-                    "default browser"]
+            return [
+                "tabs",
+                "keeping tabs live",
+                "hibernation",
+                "unload idle tabs",
+                "memory pressure",
+                "new tabs and folders",
+                "media",
+                "picture in picture",
+                "launcher",
+                "home page",
+                "links from other apps",
+                "launch and quit",
+                "reopen tabs",
+                "ask before quitting",
+                "default browser"
+            ]
         case .bookmarks:
-            return ["bookmarks", "bookmark", "bookmarks bar", "reading list", "unread",
-                    "saved pages", "folders"]
+            return [
+                "bookmarks",
+                "bookmark",
+                "bookmarks bar",
+                "reading list",
+                "unread",
+                "saved pages",
+                "folders"
+            ]
         case .search:
-            return ["search engine", "add new search engine", "default engines", "ai chat engine",
-                    "search shortcuts", "keyword"]
+            return [
+                "search engine",
+                "add new search engine",
+                "default engines",
+                "ai chat engine",
+                "search shortcuts",
+                "keyword"
+            ]
         case .privacy:
-            return ["content blocking", "fingerprinting", "third-party trackers", "javascript",
-                    "cookies", "clear browsing data", "history", "cache"]
+            return [
+                "content blocking",
+                "fingerprinting",
+                "third-party trackers",
+                "javascript",
+                "cookies",
+                "clear browsing data",
+                "history",
+                "cache"
+            ]
         case .passwords:
-            return ["password manager", "autofill", "saved credentials", "vault",
-                    "auto-submit", "prompt to save passwords"]
+            return [
+                "password manager",
+                "autofill",
+                "saved credentials",
+                "vault",
+                "auto-submit",
+                "prompt to save passwords"
+            ]
         case .downloads:
-            return ["save files to", "download folder", "ask where to save", "after downloading",
-                    "open safe files"]
+            return [
+                "save files to",
+                "download folder",
+                "ask where to save",
+                "after downloading",
+                "open safe files"
+            ]
         case .spaces:
-            return ["space defaults", "search engine per space", "auto clear tabs",
-                    "sites pinned to a space", "clear data", "containers"]
+            return [
+                "space defaults",
+                "search engine per space",
+                "auto clear tabs",
+                "sites pinned to a space",
+                "clear data",
+                "containers"
+            ]
         case .containers:
-            return ["containers", "container", "cookie jar", "separate cookies", "separate logins",
-                    "new container", "container colour", "container color", "container icon",
-                    "multi-account"]
+            return [
+                "containers",
+                "container",
+                "cookie jar",
+                "separate cookies",
+                "separate logins",
+                "new container",
+                "container colour",
+                "container color",
+                "container icon",
+                "multi-account"
+            ]
         case .accessibility:
             return ["motion", "reduce motion", "minimum font size", "text size", "scroll bars"]
         case .languages:
@@ -159,8 +240,15 @@ enum SettingsTab: String, Hashable, CaseIterable {
         case .permissions:
             return ["javascript rules", "sites pinned to a space", "site data", "cookies and storage"]
         case .about:
-            return ["version", "updates", "check for updates", "licence", "license", "credits",
-                    "third-party notices"]
+            return [
+                "version",
+                "updates",
+                "check for updates",
+                "licence",
+                "license",
+                "credits",
+                "third-party notices"
+            ]
         case .extensions:
             return ["extensions", "web extensions", "unpacked"]
         }
@@ -183,8 +271,18 @@ struct SettingsContentView: View {
     /// the system-level ones. Extensions is not in here; it is a link out to
     /// `aura://extensions`.
     private static let dividedGroups: [[SettingsTab]] = [
-        [.lookAndFeel, .window, .browsing, .bookmarks, .search, .privacy,
-         .passwords, .downloads, .spaces, .containers],
+        [
+            .lookAndFeel,
+            .window,
+            .browsing,
+            .bookmarks,
+            .search,
+            .privacy,
+            .passwords,
+            .downloads,
+            .spaces,
+            .containers
+        ],
         [.accessibility, .languages, .shortcuts, .permissions, .about]
     ]
 

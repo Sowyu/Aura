@@ -273,7 +273,6 @@ struct HistoryPanelTests {
     }
 }
 
-
 @Suite("History visit gate")
 struct HistoryVisitGateTests {
     @Test("A title tick with nothing new is no work at all")

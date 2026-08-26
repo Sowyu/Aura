@@ -112,8 +112,12 @@ struct PageContextMenu {
             AuraMenuItem.item("Reader", icon: "doc.plaintext", shortcut: "⌥⌘R", isDisabled: !isPageToolAvailable) {
                 PageTools.reader(for: tab)
             }
-            AuraMenuItem.item("View Source", icon: "chevron.left.forwardslash.chevron.right",
-                              shortcut: "⌥⌘U", isDisabled: !isPageToolAvailable) {
+            AuraMenuItem.item(
+                "View Source",
+                icon: "chevron.left.forwardslash.chevron.right",
+                shortcut: "⌥⌘U",
+                isDisabled: !isPageToolAvailable
+            ) {
                 PageTools.viewSource(for: tab)
             }
             AuraMenuItem.separator

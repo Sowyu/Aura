@@ -237,9 +237,9 @@ enum ExtensionShim {
         // extension root or in a subfolder.
         let tag = scripts.map { "<script src=\"/\($0)\"></script>" }.joined(separator: "\n")
         if let range = html.range(of: "<script", options: .caseInsensitive) {
-            html.replaceSubrange(range.lowerBound..<range.lowerBound, with: tag + "\n")
+            html.replaceSubrange(range.lowerBound ..< range.lowerBound, with: tag + "\n")
         } else if let range = html.range(of: "</head>", options: .caseInsensitive) {
-            html.replaceSubrange(range.lowerBound..<range.lowerBound, with: tag + "\n")
+            html.replaceSubrange(range.lowerBound ..< range.lowerBound, with: tag + "\n")
         } else {
             html = tag + "\n" + html
         }

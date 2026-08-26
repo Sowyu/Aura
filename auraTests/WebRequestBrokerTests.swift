@@ -219,8 +219,11 @@ struct WebRequestBrokerTests {
             WebRequestBroker.shared.medianLatencyMilliseconds,
             "no round trip was measured, so nothing was actually asked"
         )
-        print(String(format: "BENCH webrequest-roundtrip samples=%d median_ms=%.2f",
-                     WebRequestBroker.shared.latencies.count, median))
+        print(String(
+            format: "BENCH webrequest-roundtrip samples=%d median_ms=%.2f",
+            WebRequestBroker.shared.latencies.count,
+            median
+        ))
         #expect(median < WebRequestBroker.timeout * 1000, "round trip should beat the timeout")
     }
 
@@ -434,12 +437,19 @@ struct WebRequestBrokerTests {
 
         let latenciesBefore = WebRequestBroker.shared.latencies.count
         let started = Date()
-        let loaded = await load(try #require(URL(string: "http://127.0.0.1:\(port)/index.html")),
-                                in: webView, timeout: 40)
+        let loaded = await load(
+            try #require(URL(string: "http://127.0.0.1:\(port)/index.html")),
+            in: webView,
+            timeout: 40
+        )
         let penalty = Date().timeIntervalSince(started) * 1000
-        print(String(format: "BENCH deadlistener page_load_ms=%.0f muted=%@ answered=%d requests=%d",
-                     penalty, WebRequestBroker.shared.isMuted(id) ? "yes" : "no",
-                     WebRequestBroker.shared.latencies.count - latenciesBefore, server.servedPaths.count))
+        print(String(
+            format: "BENCH deadlistener page_load_ms=%.0f muted=%@ answered=%d requests=%d",
+            penalty,
+            WebRequestBroker.shared.isMuted(id) ? "yes" : "no",
+            WebRequestBroker.shared.latencies.count - latenciesBefore,
+            server.servedPaths.count
+        ))
 
         #expect(loaded, "a wedged listener must not stop the page loading")
         #expect(WebRequestBroker.shared.isMuted(id), "the broker kept asking an extension that never answers")
@@ -851,7 +861,7 @@ struct WebRequestBrokerTests {
             "name": "Aura webRequest fixture",
             "version": "1.0",
             "permissions": permissions,
-            "background": background,
+            "background": background
         ]
         try JSONSerialization.data(withJSONObject: manifest)
             .write(to: directory.appendingPathComponent("manifest.json"))

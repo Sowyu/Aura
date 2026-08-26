@@ -49,8 +49,7 @@ struct LauncherView: View {
         if engineToUse == nil,
            let defaultEngine = viewModel.searchEngineService.getDefaultSearchEngine(
                for: tabManager.activeContainer?.id
-           )
-        {
+           ) {
             let customEngine = viewModel.searchEngineService.settings.customSearchEngines
                 .first { $0.searchURL == defaultEngine.searchURL }
             engineToUse = defaultEngine.toLauncherMatch(
@@ -60,8 +59,7 @@ struct LauncherView: View {
         }
 
         if let engine = engineToUse,
-           let url = viewModel.searchEngineService.createSearchURL(for: engine, query: correctInput)
-        {
+           let url = viewModel.searchEngineService.createSearchURL(for: engine, query: correctInput) {
             // Captured now: unmounting the panel clears the view's state, and the
             // environment objects outlive it.
             let tabManager = self.tabManager

@@ -28,8 +28,7 @@ struct ImportDataButton: View {
                 for tab in result.cleanTabs where space.containerIDs
                     .contains(
                         tab.parentID
-                    )
-                {
+                    ) {
                     if let url = URL(
                         string: tab.urlString
                     ) {

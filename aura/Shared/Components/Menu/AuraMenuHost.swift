@@ -257,8 +257,7 @@ struct AuraMenuHost: View {
             controller.moveHighlight(by: -1)
         case kVK_RightArrow:
             if let row = controller.levels[level].highlighted,
-               controller.item(atLevel: level, row: row)?.kind == .submenu
-            {
+               controller.item(atLevel: level, row: row)?.kind == .submenu {
                 controller.activate(level: level, row: row)
             }
         case kVK_LeftArrow:

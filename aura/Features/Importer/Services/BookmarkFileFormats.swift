@@ -362,8 +362,7 @@ private struct TagScanner {
             while index < text.endIndex,
                   !text[index].isWhitespace,
                   text[index] != "=",
-                  text[index] != ">"
-            {
+                  text[index] != ">" {
                 key.append(text[index])
                 index = text.index(after: index)
             }

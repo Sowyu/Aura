@@ -352,14 +352,12 @@ final class PasswordAutofillCoordinator {
 
     private func updateOverlayRect(for fieldID: String, rect: PasswordBridgeRect) {
         if let triggerOverlay = tab?.passwordTriggerOverlayState,
-           triggerOverlay.focus.fieldID == fieldID
-        {
+           triggerOverlay.focus.fieldID == fieldID {
             tab?.passwordTriggerOverlayState = overlayState(triggerOverlay, updatingRectTo: rect)
         }
 
         if let overlay = tab?.passwordOverlayState,
-           overlay.focus.fieldID == fieldID
-        {
+           overlay.focus.fieldID == fieldID {
             tab?.passwordOverlayState = overlayState(overlay, updatingRectTo: rect)
         }
     }
@@ -401,8 +399,7 @@ final class PasswordAutofillCoordinator {
            SubmitComparison.matchesSavedPassword(
                typedPassword: trimmedPassword,
                savedFingerprint: matchingEntry.passwordFingerprint
-           )
-        {
+           ) {
             return
         }
 
@@ -569,14 +566,12 @@ final class PasswordAutofillCoordinator {
 
     private func applySelectionIndex(_ selectionIndex: Int, forFieldID fieldID: String) {
         if let overlay = tab?.passwordOverlayState,
-           overlay.focus.fieldID == fieldID
-        {
+           overlay.focus.fieldID == fieldID {
             tab?.passwordOverlayState = overlayState(overlay, updatingSelectionIndexTo: selectionIndex)
         }
 
         if let triggerOverlay = tab?.passwordTriggerOverlayState,
-           triggerOverlay.focus.fieldID == fieldID
-        {
+           triggerOverlay.focus.fieldID == fieldID {
             tab?.passwordTriggerOverlayState = overlayState(triggerOverlay, updatingSelectionIndexTo: selectionIndex)
         }
     }

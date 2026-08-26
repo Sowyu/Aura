@@ -41,27 +41,49 @@ final class TabDragGhostTests: XCTestCase {
     }
 }
 
-
 /// A press in another window (an extension popup over the sidebar, a popover, a
 /// sheet) must never start a row drag in the browser window beneath it.
 @MainActor
 final class TabDragPressWindowTests: XCTestCase {
     func testAPressInAnotherWindowPressesNoRow() throws {
-        let rowWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 80), styleMask: [.borderless], backing: .buffered, defer: false)
+        let rowWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: 80),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         rowWindow.isReleasedWhenClosed = false
-        let other = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 80), styleMask: [.borderless], backing: .buffered, defer: false)
+        let other = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: 80),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         other.isReleasedWhenClosed = false
-        defer { rowWindow.close(); other.close() }
+        defer { rowWindow.close()
+            other.close()
+        }
         let zone = TabDragZone.normal(UUID())
         let row = TabDragSourceNSView(frame: NSRect(x: 0, y: 0, width: 200, height: 40))
-        row.rowID = UUID(); row.zone = zone
+        row.rowID = UUID()
+        row.zone = zone
         rowWindow.contentView?.addSubview(row)
         row.register()
         defer { row.unregister() }
         rowWindow.orderFront(nil)
         let point = NSPoint(x: 20, y: 20)
         func press(in window: NSWindow) -> TabDragSourceNSView? {
-            let event = NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            let event = NSEvent.mouseEvent(
+                with: .leftMouseDown,
+                location: point,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+            )!
             return TabDragSourceRegistry.shared.pressedSource(for: event)
         }
         XCTAssertTrue(press(in: rowWindow) === row, "a press in the row's own window finds it")

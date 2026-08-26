@@ -42,8 +42,7 @@ extension TabManager {
     ) -> Tab? {
         if reusingHost,
            let domain = registrableDomain(from: url),
-           let existing = container.tabs.first(where: { registrableDomain(from: $0.url) == domain })
-        {
+           let existing = container.tabs.first(where: { registrableDomain(from: $0.url) == domain }) {
             existing.loadURL(url.absoluteString)
             if focusAfterOpening {
                 activateTab(existing)

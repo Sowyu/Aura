@@ -36,8 +36,7 @@ enum DropPayloadReader {
         if !files.isEmpty { return .files(files) }
 
         if let urlString, let url = URL(string: urlString.trimmingCharacters(in: .whitespacesAndNewlines)),
-           url.scheme != nil
-        {
+           url.scheme != nil {
             return url.isFileURL ? .files([url]) : .url(url)
         }
 

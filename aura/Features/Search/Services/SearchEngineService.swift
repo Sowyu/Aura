@@ -254,15 +254,13 @@ class SearchEngineService: ObservableObject {
         // First check per-container setting
         if let containerId,
            let defaultId = settingsStore.defaultSearchEngineId(for: containerId),
-           let engine = searchEngines.first(where: { $0.name == defaultId })
-        {
+           let engine = searchEngines.first(where: { $0.name == defaultId }) {
             return engine
         }
 
         // Then check global default setting
         if let globalDefaultId = settingsStore.globalDefaultSearchEngine,
-           let engine = searchEngines.first(where: { $0.name == globalDefaultId })
-        {
+           let engine = searchEngines.first(where: { $0.name == globalDefaultId }) {
             return engine
         }
 
@@ -273,8 +271,7 @@ class SearchEngineService: ObservableObject {
     func getDefaultAIChat(for containerId: UUID? = nil) -> SearchEngine? {
         if let containerId,
            let defaultId = settingsStore.defaultAIEngineId(for: containerId),
-           let engine = searchEngines.first(where: { $0.name == defaultId && $0.isAIChat })
-        {
+           let engine = searchEngines.first(where: { $0.name == defaultId && $0.isAIChat }) {
             return engine
         }
 

@@ -199,8 +199,7 @@ class LauncherViewModel: ObservableObject {
     // MARK: - Private Helpers
 
     private func createAISuggestion(engineName: SearchEngineID, query: String? = nil)
-        -> LauncherSuggestion
-    {
+        -> LauncherSuggestion {
         guard let engine = searchEngineService.getSearchEngine(engineName) else {
             return LauncherSuggestion(
                 type: .aiChat,

@@ -8,16 +8,36 @@ import Testing
 @Suite("Launcher sorting")
 @MainActor
 struct LauncherSortingTests {
-    private func link(_ title: String, url: String, completing: String? = nil,
-                      score: Float? = nil) -> LauncherSuggestion {
-        LauncherSuggestion(type: .suggestedLink, title: title, url: URL(string: url),
-                           score: score, completingText: completing, action: {})
+    private func link(
+        _ title: String,
+        url: String,
+        completing: String? = nil,
+        score: Float? = nil
+    ) -> LauncherSuggestion {
+        LauncherSuggestion(
+            type: .suggestedLink,
+            title: title,
+            url: URL(string: url),
+            score: score,
+            completingText: completing,
+            action: {}
+        )
     }
 
-    private func tab(_ title: String, url: String, completing: String? = nil,
-                     score: Float? = nil) -> LauncherSuggestion {
-        LauncherSuggestion(type: .openedTab, title: title, url: URL(string: url),
-                           score: score, completingText: completing, action: {})
+    private func tab(
+        _ title: String,
+        url: String,
+        completing: String? = nil,
+        score: Float? = nil
+    ) -> LauncherSuggestion {
+        LauncherSuggestion(
+            type: .openedTab,
+            title: title,
+            url: URL(string: url),
+            score: score,
+            completingText: completing,
+            action: {}
+        )
     }
 
     private func query(_ title: String, completing: String? = nil) -> LauncherSuggestion {
