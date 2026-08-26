@@ -259,13 +259,22 @@ struct HeaderColorSnapshotTests {
 
     @Test func theStripIsCutFromTheScaledBitmap() {
         // 1440x900 view scaled to 32x20: 24pt of 900 is 2.67% of 20px, rounded up to 1px.
-        let strip = HeaderColorSnapshot.stripRect(imageSize: CGSize(width: 32, height: 20), viewSize: CGSize(width: 1440, height: 900))
+        let strip = HeaderColorSnapshot.stripRect(
+            imageSize: CGSize(width: 32, height: 20),
+            viewSize: CGSize(width: 1440, height: 900)
+        )
         #expect(strip == CGRect(x: 0, y: 0, width: 32, height: 1))
         // A view shorter than the strip uses the whole bitmap.
-        let whole = HeaderColorSnapshot.stripRect(imageSize: CGSize(width: 32, height: 2), viewSize: CGSize(width: 300, height: 10))
+        let whole = HeaderColorSnapshot.stripRect(
+            imageSize: CGSize(width: 32, height: 2),
+            viewSize: CGSize(width: 300, height: 10)
+        )
         #expect(whole == CGRect(x: 0, y: 0, width: 32, height: 2))
         // Before layout the height is unknown; the whole bitmap stands in.
-        let unlaidOut = HeaderColorSnapshot.stripRect(imageSize: CGSize(width: 32, height: 20), viewSize: CGSize(width: 300, height: 0))
+        let unlaidOut = HeaderColorSnapshot.stripRect(
+            imageSize: CGSize(width: 32, height: 20),
+            viewSize: CGSize(width: 300, height: 0)
+        )
         #expect(unlaidOut.height == 20)
     }
 

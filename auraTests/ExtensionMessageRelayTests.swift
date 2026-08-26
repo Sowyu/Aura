@@ -85,7 +85,7 @@ struct ExtensionPagePatchTests {
             "name": "Aura relay fixture",
             "version": "1.0",
             "permissions": ["storage"],
-            "background": ["scripts": ["bg.js"]],
+            "background": ["scripts": ["bg.js"]]
         ]
         if includePages {
             manifest["browser_action"] = ["default_popup": "popup.html"]

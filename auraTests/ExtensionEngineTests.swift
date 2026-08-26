@@ -20,8 +20,8 @@ struct ExtensionEngineTests {
             "permissions": ["storage"],
             "host_permissions": ["*://example.com/*"],
             "content_scripts": [
-                ["matches": ["*://example.com/*"], "js": ["content.js"]],
-            ],
+                ["matches": ["*://example.com/*"], "js": ["content.js"]]
+            ]
         ]
         let manifestData = try JSONSerialization.data(withJSONObject: manifest, options: .prettyPrinted)
         try manifestData.write(to: dir.appendingPathComponent("manifest.json"))

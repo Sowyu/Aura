@@ -415,21 +415,23 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
         pendingHeaderColor = false
 
-        page.takeSnapshot(configuration: HeaderColorSnapshot.configuration(for: bounds.size)) { [weak self] image, error in
-            guard let self, let image, error == nil else { return }
-            guard let full = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-            let strip = HeaderColorSnapshot.stripRect(
-                imageSize: CGSize(width: full.width, height: full.height),
-                viewSize: bounds.size
-            )
-            let cgImage = full.cropping(to: strip) ?? full
+        page
+            .takeSnapshot(configuration: HeaderColorSnapshot
+                .configuration(for: bounds.size)) { [weak self] image, error in
+                    guard let self, let image, error == nil else { return }
+                    guard let full = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+                    let strip = HeaderColorSnapshot.stripRect(
+                        imageSize: CGSize(width: full.width, height: full.height),
+                        viewSize: bounds.size
+                    )
+                    let cgImage = full.cropping(to: strip) ?? full
 
-            DispatchQueue.main.async {
-                let color = Self.extractDominantColor(from: cgImage) ?? .black
-                self.tab?.updateBackgroundColor(Color(nsColor: color))
-                self.tab?.colorUpdated = true
+                    DispatchQueue.main.async {
+                        let color = Self.extractDominantColor(from: cgImage) ?? .black
+                        self.tab?.updateBackgroundColor(Color(nsColor: color))
+                        self.tab?.colorUpdated = true
+                    }
             }
-        }
 
         return true
     }
