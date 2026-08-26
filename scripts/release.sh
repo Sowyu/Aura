@@ -6,7 +6,9 @@
 # usage: scripts/release.sh <version> [--notes notes.md]
 #
 # Needs: a clean tree on the branch to release, xcodegen, gh (logged in), an
-# "Apple Development" identity, and the Sparkle EdDSA key in the login keychain
+# "Apple Development" identity (any team: the build runs unsigned and codesign does
+# all the signing, because xcodebuild refuses a cert whose team it cannot resolve),
+# and the Sparkle EdDSA key in the login keychain
 # (Sparkle's generate_keys put it there; the matching public key is SUPublicEDKey).
 # The DMG is signed but not notarized: a first launch from the DMG needs a right-click
 # and Open. Sparkle clears quarantine on the updates it installs itself.
@@ -27,7 +29,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 REPO="Sowyu/Aura"
 IDENTITY="Apple Development"
-TEAM="${AURA_TEAM_ID:-8Q677AYRU7}"
 ENTITLEMENTS="$ROOT/aura/Info/aura.entitlements"
 DD="$ROOT/build/dd-release"
 DMG="$ROOT/build/Aura-$VERSION.dmg"
@@ -58,13 +59,19 @@ git tag "v$VERSION"
 step "Building Release"
 rm -rf "$DD" "$ROOT/build/dmg" "$ROOT/build/sparkle"
 xcodebuild -project Aura.xcodeproj -scheme aura -configuration Release -destination 'platform=macOS' \
-    -derivedDataPath "$DD" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$IDENTITY" DEVELOPMENT_TEAM="$TEAM" \
-    PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS="$ENTITLEMENTS" build > build/release-build.log 2>&1 \
+    -derivedDataPath "$DD" CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= build > build/release-build.log 2>&1 \
     || { tail -40 build/release-build.log; die "build failed, see build/release-build.log"; }
 APP="$DD/Build/Products/Release/Aura.app"
 [[ -d "$APP" ]] || die "no app at $APP"
 # The scheme also builds the unit-test bundle into the app. It has no place in a release.
 rm -rf "$APP/Contents/PlugIns/auraTests.xctest"
+# The build ran unsigned, so everything is signed here, innermost first: the injected
+# bundle, any frameworks beside Sparkle (which gets its own pass below), and stray dylibs.
+find "$APP/Contents/PlugIns" "$APP/Contents/Frameworks" "$APP/Contents/MacOS" -mindepth 1 -maxdepth 1 \
+    \( -name '*.wkbundle' -o -name '*.dylib' -o \( -name '*.framework' ! -name 'Sparkle.framework' \) \) \
+    -print0 2>/dev/null | while IFS= read -r -d '' nested; do
+    codesign --force --sign "$IDENTITY" --options runtime "$nested"
+done
 # Xcode re-signs Sparkle.framework on copy but not the XPC services and helpers inside
 # it, which a plain build leaves ad-hoc signed (Archive and Export would do this). The
 # sandboxed installer path needs them signed like the app, innermost first, as Sparkle's
