@@ -48,11 +48,19 @@ struct URLBarMenuButton: View {
 
     private func menuItems() -> [AuraMenuItem] {
         let hostWindow = anchor?.window
-        return newItemsSection()
-            + [.separator] + librarySection(hostWindow: hostWindow)
-            + [.separator] + pageSection()
-            + [.separator] + zoomSection()
-            + [.separator] + appSection(hostWindow: hostWindow)
+        // Sequential appends rather than one `+` chain: nine overloaded
+        // concatenations in a single expression is a type-check the pinned CI
+        // compiler cannot finish in reasonable time.
+        var items = newItemsSection()
+        items.append(.separator)
+        items += librarySection(hostWindow: hostWindow)
+        items.append(.separator)
+        items += pageSection()
+        items.append(.separator)
+        items += zoomSection()
+        items.append(.separator)
+        items += appSection(hostWindow: hostWindow)
+        return items
     }
 
     private func newItemsSection() -> [AuraMenuItem] {
