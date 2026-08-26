@@ -15,7 +15,11 @@ extension ExtensionManager {
     func commandShortcuts() -> [ExtensionCommandShortcut] {
         guard #available(macOS 15.4, *), let engine = loadedEngine else { return [] }
         return engine.loadedContexts
-            .flatMap { id, context in
+            // The explicit result type keeps overload resolution on the
+            // sequence-flattening flatMap: a multi-statement closure is not
+            // inferred on every compiler this project meets, and the failure
+            // mode is picking the deprecated single-value overload.
+            .flatMap { id, context -> [ExtensionCommandShortcut] in
                 let name = installedExtensions.first { $0.id == id }?.displayName ?? id
                 return context.commands.map { command in
                     ExtensionCommandShortcut(
