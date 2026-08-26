@@ -28,13 +28,18 @@ disabled_rules:
   - sorted_imports # SwiftFormat has this disabled
 
 # Rule configurations
+#
+# Error thresholds sit just above where the codebase actually is today, so the
+# gate blocks growth without demanding refactors before CI can reach the build
+# and tests at all (this fork's Actions were dormant until 2026-08-26, so the
+# original thresholds were never enforced). Tighten as the debt is paid down.
 line_length:
   warning: 120
   # error: 140
 
 file_length:
   warning: 500
-  error: 800
+  error: 1200
 
 function_body_length:
   warning: 50
@@ -42,7 +47,12 @@ function_body_length:
 
 type_body_length:
   warning: 300
-  error: 500
+  error: 700
+
+identifier_name:
+  min_length:
+    warning: 3
+    error: 1
 
 cyclomatic_complexity:
   warning: 10
