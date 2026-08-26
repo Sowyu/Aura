@@ -300,34 +300,39 @@ struct OraCommands: Commands {
             .keyboardShortcut(KeyboardShortcuts.Bookmarks.toggleBar.keyboardShortcut)
         }
 
-        CommandMenu("History") {
-            Button("Show All History") {
-                NotificationCenter.default.post(name: .showHistoryPanel, object: NSApp.keyWindow)
+        // Grouped so `body` stays within CommandsBuilder's ten-child buildBlock:
+        // twelve top-level entries compile on SDKs with variadic builders and fail
+        // on ones without, and CI's pinned Xcode is one of the latter.
+        Group {
+            CommandMenu("History") {
+                Button("Show All History") {
+                    NotificationCenter.default.post(name: .showHistoryPanel, object: NSApp.keyWindow)
+                }
+                .keyboardShortcut(KeyboardShortcuts.History.show.keyboardShortcut)
             }
-            .keyboardShortcut(KeyboardShortcuts.History.show.keyboardShortcut)
-        }
 
-        CommandMenu("Passwords") {
-            Button("Manage Passwords") {
-                openPasswordsWindow()
+            CommandMenu("Passwords") {
+                Button("Manage Passwords") {
+                    openPasswordsWindow()
+                }
             }
-        }
 
-        CommandGroup(replacing: .appInfo) {
-            Button("About Aura") { showAboutWindow() }
-            Button("Check for Updates") {
-                NotificationCenter.default.post(
-                    name: .checkForUpdates,
-                    object: NSApp.keyWindow
-                )
+            CommandGroup(replacing: .appInfo) {
+                Button("About Aura") { showAboutWindow() }
+                Button("Check for Updates") {
+                    NotificationCenter.default.post(
+                        name: .checkForUpdates,
+                        object: NSApp.keyWindow
+                    )
+                }
             }
-        }
 
-        CommandGroup(replacing: .appSettings) {
-            Button("Settings…") {
-                NotificationCenter.default.post(name: .openSettingsTab, object: nil)
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    NotificationCenter.default.post(name: .openSettingsTab, object: nil)
+                }
+                .keyboardShortcut(",", modifiers: .command)
             }
-            .keyboardShortcut(",", modifiers: .command)
         }
     }
 
