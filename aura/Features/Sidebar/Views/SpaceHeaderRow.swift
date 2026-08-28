@@ -17,6 +17,8 @@ struct SpaceHeaderRow: View {
     @Environment(DialogManager.self) private var dialogManager
     @Environment(ContainerManager.self) private var containerManager
 
+    @ObservedObject private var dragSession = TabDragSession.shared
+
     @State private var isHovering = false
     @State private var isRenaming = false
     @State private var draftName = ""
@@ -42,15 +44,25 @@ struct SpaceHeaderRow: View {
         HStack(spacing: 0) {
             label(container)
             Spacer(minLength: 4)
-            menuButton(container)
+            // While a tab is in flight the row is a drop target that pins, and the
+            // action slot says so instead of offering a menu nobody can open mid-drag.
+            if dragSession.isDraggingTab {
+                pinBadge(container)
+            } else {
+                menuButton(container)
+            }
         }
         .padding(.leading, 8)
         .padding(.trailing, Self.trailingInset)
         .frame(height: Self.height)
-        .background(background, in: .rect(cornerRadius: Self.radius, style: .continuous))
+        .background(background(container), in: .rect(cornerRadius: Self.radius, style: .continuous))
         .contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
+        // The same zone as the pinned list below, so a drop on the space name inserts
+        // at the top of the pinned section — Zen's "drop on the workspace name to pin".
+        .tabDropZone(.pinned(container.id))
         .onHover { isHovering = $0 }
         .animation(AnimationSettings.easeOut(0.15), value: isHovering)
+        .animation(AnimationSettings.easeOut(0.1), value: isPinTarget(container))
         .onChange(of: isRenaming) { _, renaming in
             if renaming {
                 draftName = container.name
@@ -123,9 +135,22 @@ struct SpaceHeaderRow: View {
         .accessibilityLabel(Text("Space Actions"))
     }
 
+    private func pinBadge(_ container: TabContainer) -> some View {
+        Image(systemName: "pin")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(isPinTarget(container) ? theme.accent : theme.foreground.opacity(0.5))
+            .frame(width: 24, height: 24)
+    }
+
+    /// The drag is over the pinned tier — this row or the section under it.
+    private func isPinTarget(_ container: TabContainer) -> Bool {
+        dragSession.isDraggingTab && dragSession.activeZone == .pinned(container.id)
+    }
+
     /// Clear at rest like a tab row; a resting fill read as a permanent hover.
-    private var background: Color {
-        isHovering || isRenaming ? theme.foreground.opacity(0.06) : .clear
+    private func background(_ container: TabContainer) -> Color {
+        if isPinTarget(container) { return theme.accent.opacity(0.18) }
+        return isHovering || isRenaming ? theme.foreground.opacity(0.06) : .clear
     }
 
     // MARK: - Menus

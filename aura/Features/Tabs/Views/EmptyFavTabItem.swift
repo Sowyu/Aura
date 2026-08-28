@@ -1,30 +1,41 @@
 import SwiftUI
 
+/// The favourites drop target while the grid is empty: a slim bar in the small space
+/// above the space name, shown only while a dragged tab is over it. Deliberately the
+/// same shape as `EmptyPinnedTabs` and not a tall promo card — it appears under a
+/// pointer mid-drag, so it must not rearrange the sidebar it is being aimed at.
 struct EmptyFavTabItem: View {
+    /// True while the drag is over the favourites zone. The bar only mounts hovered
+    /// today; the parameter keeps the resting style around for any future caller.
+    var isTargeted: Bool = false
+
     @Environment(\.theme) var theme
 
-    let cornerRadius: CGFloat = AuraRadius.row
-
     var body: some View {
-        VStack(spacing: 8) {
+        HStack(spacing: 8) {
             Image(systemName: "star")
-                .font(.system(size: 16))
-                .foregroundColor(theme.mutedForeground)
+                .font(.system(size: 12))
+                .foregroundColor(isTargeted ? theme.accent : theme.mutedForeground)
 
-            Text("Drag a tab here to \n add it to your favorites")
+            Text("Drop here to add to favorites")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(theme.mutedForeground)
-                .multilineTextAlignment(.center)
+                .foregroundColor(isTargeted ? theme.foreground : theme.mutedForeground)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .frame(height: 96)
-        .background(theme.invertedSolidWindowBackgroundColor.opacity(0.07))
-        .cornerRadius(cornerRadius)
+        .frame(maxWidth: .infinity)
+        .padding(8)
+        .background(
+            isTargeted
+                ? theme.accent.opacity(0.22)
+                : theme.invertedSolidWindowBackgroundColor.opacity(0.07)
+        )
+        .cornerRadius(AuraRadius.row)
         .overlay(
-            ConditionallyConcentricRectangle(cornerRadius: cornerRadius)
+            RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
                 .stroke(
-                    theme.invertedSolidWindowBackgroundColor.opacity(0.25),
-                    style: StrokeStyle(lineWidth: 1, dash: [5, 5])
+                    isTargeted
+                        ? theme.accent.opacity(0.9)
+                        : theme.invertedSolidWindowBackgroundColor.opacity(0.25),
+                    style: StrokeStyle(lineWidth: 1, dash: isTargeted ? [] : [5, 5])
                 )
         )
     }

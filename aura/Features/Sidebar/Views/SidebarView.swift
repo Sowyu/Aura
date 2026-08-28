@@ -22,6 +22,9 @@ struct SidebarView: View {
 
     private let columns = Array(repeating: GridItem(spacing: 10), count: 3)
 
+    @ObservedObject private var dragSession = TabDragSession.shared
+    @Environment(ToastManager.self) private var toastManager
+
     @ObserveInjection var inject
 
     @State private var isHoveringSidebarToggle = false
@@ -258,6 +261,25 @@ struct SidebarView: View {
             if toolbarManager.isToolbarHidden, !toolbarManager.isFloatingToolbarVisible {
                 SidebarHeader()
             }
+            // Zen's stack, top to bottom: favourites above the space name, so a drag
+            // dropped on the name row pins and a drag dropped above it favourites.
+            // The grid tracks the active space rather than paging with `NSPageView`;
+            // essentials sitting still while spaces slide underneath is the point.
+            if !privacyMode.isPrivate, let active = tabManager.activeContainer,
+               !favoriteTabs(in: active).isEmpty || dragSession.isDraggingTab {
+                FavTabsGrid(
+                    tabs: favoriteTabs(in: active),
+                    zone: .fav(active.id),
+                    onSelect: { tabManager.activateTab($0) },
+                    onFavoriteToggle: { tabManager.toggleFavTab($0) },
+                    onClose: { tabManager.closeTab(tab: $0) },
+                    onDuplicate: { tabManager.duplicateTab($0) },
+                    onMoveToContainer: moveFavTab,
+                    containers: containers
+                )
+                .padding(gutter)
+                .padding(.bottom, 8)
+            }
             // One gutter for every row so they share edges. 8pt on the window edge, to
             // match the pane's inset on the other side, and 0 on the pane side because
             // the pane's own 8pt inset already is the gap.
@@ -273,7 +295,6 @@ struct SidebarView: View {
             ) { container in
                 ContainerView(
                     container: container,
-                    selectedContainer: container.name,
                     containers: containers
                 )
                 .padding(gutter)
@@ -326,6 +347,22 @@ struct SidebarView: View {
     private var gutter: EdgeInsets {
         let paneSide = sidebarManager.sidebarPosition == .secondary
         return EdgeInsets(top: 0, leading: paneSide ? 0 : 8, bottom: 0, trailing: paneSide ? 8 : 0)
+    }
+
+    private func favoriteTabs(in container: TabContainer) -> [Tab] {
+        container.tabs
+            .filter { $0.type == .fav }
+            .sorted { $0.order > $1.order }
+    }
+
+    /// Same move-with-toast the tab rows use; the grid lives here now, so it needs
+    /// its own copy of `ContainerView`'s.
+    private func moveFavTab(_ tab: Tab, _ space: TabContainer) {
+        tabManager.moveTabToContainer(tab, toContainer: space)
+        toastManager.show(
+            "Moved to \(space.emoji) \(space.name)",
+            icon: .system("arrow.right.arrow.left")
+        )
     }
 
     private func onContainerSelected(container: TabContainer) {

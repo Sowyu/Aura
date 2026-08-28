@@ -23,7 +23,7 @@ struct PinnedTabsList: View {
                 .padding(.leading, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if tabs.isEmpty {
-                EmptyPinnedTabs()
+                EmptyPinnedTabs(isTargeted: dragSession.activeZone == zone)
             } else {
                 ForEach(tabs) { tab in
                     TabItem(
@@ -40,10 +40,7 @@ struct PinnedTabsList: View {
                     )
                     .overlay(alignment: indicatorEdge(tab)) {
                         if dragSession.indicator(for: tab.id, in: zone) != nil {
-                            Capsule()
-                                .fill(theme.accent)
-                                .frame(height: 2)
-                                .padding(.horizontal, 6)
+                            TabDropIndicatorLine(axis: zone.axis)
                         }
                     }
                     .tabDragSource(

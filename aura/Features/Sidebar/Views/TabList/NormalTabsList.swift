@@ -21,7 +21,6 @@ struct NormalTabsList: View {
     /// re-ran, and rebuilt every row, on any change to any space.
     let containers: [TabContainer]
     @Environment(TabManager.self) private var tabManager
-    @Environment(\.theme) private var theme
     @ObservedObject private var dragSession = TabDragSession.shared
     @State private var previousTabIds: [UUID] = []
 
@@ -98,10 +97,7 @@ struct NormalTabsList: View {
         )
         .overlay(alignment: dragSession.indicator(for: tab.id, in: zone)?.below == true ? .bottom : .top) {
             if dragSession.indicator(for: tab.id, in: zone) != nil {
-                Capsule()
-                    .fill(theme.accent)
-                    .frame(height: 2)
-                    .padding(.horizontal, 6)
+                TabDropIndicatorLine(axis: zone.axis)
             }
         }
         .tabDragSource(
@@ -134,10 +130,7 @@ struct NormalTabsList: View {
             .tabDragSource(id: folder.id, isFolder: true, in: zone)
             .overlay(alignment: dragSession.indicator(for: folder.id, in: zone)?.below == true ? .bottom : .top) {
                 if dragSession.indicator(for: folder.id, in: zone) != nil {
-                    Capsule()
-                        .fill(theme.accent)
-                        .frame(height: 2)
-                        .padding(.horizontal, 6)
+                    TabDropIndicatorLine(axis: zone.axis)
                 }
             }
 

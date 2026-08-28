@@ -2,12 +2,10 @@ import AppKit
 import SwiftUI
 
 struct FavTabsGrid: View {
-    @Environment(\.theme) var theme
     @Environment(TabManager.self) private var tabManager
     let tabs: [Tab]
     let zone: TabDragZone
     @ObservedObject private var dragSession = TabDragSession.shared
-    let selectedContainerId: String
     let onSelect: (Tab) -> Void
     let onFavoriteToggle: (Tab) -> Void
     let onClose: (Tab) -> Void
@@ -25,12 +23,26 @@ struct FavTabsGrid: View {
         return Array(repeating: GridItem(spacing: 10), count: columnCount)
     }
 
+    /// The invisible strip matches the drop bar's height, so the bar appearing under
+    /// the pointer replaces blank space one for one and the sidebar never shifts.
+    private static let emptyHotStrip: CGFloat = 31
+
     var body: some View {
         LazyVGrid(columns: adaptiveColumns, spacing: 10) {
             if tabs.isEmpty {
-                // Only a live tab drag reveals the drop zone; otherwise it is sidebar clutter.
-                if dragSession.isDragging {
-                    EmptyFavTabItem()
+                // The empty drop target reveals itself only under the pointer. A drag
+                // in flight mounts an invisible strip above the space name — a zone
+                // has to have area before it can be hovered — and the "drop here" bar
+                // shows for as long as the tab is over it. Folder drags mount nothing:
+                // a folder cannot become a favourite.
+                if dragSession.isDraggingTab {
+                    if dragSession.activeZone == zone {
+                        EmptyFavTabItem(isTargeted: true)
+                    } else {
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .frame(height: Self.emptyHotStrip)
+                    }
                 }
             } else {
                 ForEach(tabs) { tab in
@@ -48,10 +60,7 @@ struct FavTabsGrid: View {
                     .overlay(alignment: indicatorEdge(tab)) {
                         // The grid runs left to right, so the line stands on a side edge.
                         if dragSession.indicator(for: tab.id, in: zone) != nil {
-                            Capsule()
-                                .fill(theme.accent)
-                                .frame(width: 2)
-                                .padding(.vertical, 4)
+                            TabDropIndicatorLine(axis: zone.axis)
                         }
                     }
                     .tabDragSource(

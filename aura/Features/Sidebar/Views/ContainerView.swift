@@ -3,7 +3,6 @@ import SwiftUI
 
 struct ContainerView: View {
     let container: TabContainer
-    let selectedContainer: String
     let containers: [TabContainer]
 
     @Environment(\.window) private var window
@@ -24,23 +23,9 @@ struct ContainerView: View {
             if toolbarManager.isToolbarHidden, !toolbarManager.isFloatingToolbarVisible {
                 SidebarURLDisplay()
             }
-            if !privacyMode.isPrivate {
-                // An empty grid still paid the VStack 16pt spacing, leaving a gap under
-                // the toolbar, so it only exists while there is something to drop in it.
-                if !favoriteTabs.isEmpty || dragSession.isDragging {
-                    FavTabsGrid(
-                        tabs: favoriteTabs,
-                        zone: .fav(container.id),
-                        selectedContainerId: selectedContainer,
-                        onSelect: selectTab,
-                        onFavoriteToggle: toggleFavorite,
-                        onClose: removeTab,
-                        onDuplicate: duplicateTab,
-                        onMoveToContainer: moveTab,
-                        containers: containers
-                    )
-                }
-            } else {
+            // The favourites grid lives above the space name now, in `SidebarView`, the
+            // way Zen stacks essentials over the workspace indicator.
+            if privacyMode.isPrivate {
                 VStack(alignment: .center, spacing: 2) {
                     Text("Private Browsing")
                         .font(.system(size: 13, weight: .semibold))
@@ -60,7 +45,7 @@ struct ContainerView: View {
                     // An empty pinned section is pure clutter, so it only exists
                     // while a tab is being dragged. Not animated: the run loop is in
                     // drag-tracking mode and SwiftUI would freeze on the first frame.
-                    if !privacyMode.isPrivate, !pinnedTabs.isEmpty || dragSession.isDragging {
+                    if !privacyMode.isPrivate, !pinnedTabs.isEmpty || dragSession.isDraggingTab {
                         PinnedTabsList(
                             tabs: pinnedTabs,
                             zone: .pinned(container.id),
@@ -107,12 +92,6 @@ struct ContainerView: View {
             guard tabManager.activeContainer?.id == container.id else { return }
             tabManager.createFolderForRenaming()
         }
-    }
-
-    private var favoriteTabs: [Tab] {
-        return container.tabs
-            .filter { $0.type == .fav }
-            .sorted(by: { $0.order > $1.order })
     }
 
     private var pinnedTabs: [Tab] {

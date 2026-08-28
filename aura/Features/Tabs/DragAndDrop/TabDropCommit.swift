@@ -84,7 +84,9 @@ enum TabDropCommit {
             tab.type = type
             switch type {
             case .pinned, .fav:
-                tab.savedURL = tab.url
+                // Same rule as `switchSections`: an already-pinned tab carries its
+                // pinned URL across tiers, a normal tab adopts its current address.
+                if tab.savedURL == nil { tab.savedURL = tab.url }
                 // Only normal tabs live in folders.
                 tab.folder = nil
             case .normal:

@@ -101,6 +101,11 @@ final class TabDragSession: ObservableObject {
 
     var isDragging: Bool { draggedID != nil }
 
+    /// A drag the pinned tiers may advertise for: folders only reorder against other
+    /// folders and can never become pinned or favourite, so the favourites grid and
+    /// the pinned section must not light up while one is in flight.
+    var isDraggingTab: Bool { isDragging && !draggedIsFolder }
+
     // MARK: - Presentation
 
     /// The insertion line for one row, or nil when the line belongs elsewhere.
