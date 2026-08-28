@@ -40,6 +40,12 @@ struct AboutSettingsView: View {
             if let url = Self.repositoryURL {
                 Link("Aura on GitHub", destination: url)
             }
+
+            // Both browsers this tour borrows from lose it after the first run; a
+            // replay is one flag, so it gets a button.
+            OraButton(label: "Show the welcome tour again", variant: .secondary, size: .sm) {
+                settings.onboardingCompleted = false
+            }
         }
     }
 

@@ -161,6 +161,9 @@ struct OraRoot: View {
             // extension sits unloaded with a toolbar icon that does nothing, so the
             // browser window itself has to be able to put the sheet up.
             .extensionConsentPrompt()
+            // Inside the environment stack (it reads the managers) and under the
+            // dialog stack (its import errors and consent sheets answer through it).
+            .onboarding()
             .background(WindowReader(window: $window))
             .background(
                 WindowAccessor(

@@ -4,9 +4,7 @@ import SwiftUI
 /// How Aura looks: appearance, accent, glass. Where the chrome sits lives one section
 /// over, in `WindowSettingsView`.
 struct LookAndFeelSettingsView: View {
-    @Environment(\.theme) private var theme
     @EnvironmentObject var appearanceManager: AppearanceManager
-    @AppStorage(AuraAccent.key) private var accentHex = AuraAccent.systemDefault
 
     var body: some View {
         SettingsSection {
@@ -25,34 +23,8 @@ struct LookAndFeelSettingsView: View {
             header: "Accent colour",
             description: "Tints the active tab, the address bar highlight, and the launcher."
         ) {
-            HStack(spacing: 10) {
-                ForEach(AuraAccent.presets, id: \.name) { preset in
-                    accentSwatch(name: preset.name, hex: preset.hex)
-                }
-            }
+            AccentPresetRow()
         }
-    }
-
-    private func accentSwatch(name: String, hex: String) -> some View {
-        let isSelected = accentHex == hex
-        let swatch = hex.isEmpty ? Theme(colorScheme: .light).accent : Color(hex: hex)
-        return Button {
-            accentHex = hex
-        } label: {
-            VStack(spacing: 6) {
-                Circle()
-                    .fill(swatch)
-                    .frame(width: 24, height: 24)
-                    .overlay {
-                        Circle().stroke(theme.foreground.opacity(isSelected ? 0.8 : 0.15), lineWidth: 2)
-                    }
-                Text(name)
-                    .font(.system(size: 11))
-                    .fontWeight(isSelected ? .semibold : .regular)
-            }
-        }
-        .buttonStyle(.plain)
-        .help(name)
     }
 }
 

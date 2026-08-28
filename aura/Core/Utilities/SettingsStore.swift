@@ -106,6 +106,7 @@ class SettingsStore {
     private let showBookmarksBarKey = "ui.bookmarksBar.visible"
     private let siteZoomLevelsKey = "settings.zoom.siteLevels"
     private let firstRunCardDismissedKey = "browser.firstRunCard.dismissed"
+    private let onboardingCompletedKey = "browser.onboarding.completed"
 
     /// Read straight from `UserDefaults` off the main actor by `AnimationSettings`
     /// and `BrowserPage`, so both keys are public.
@@ -365,6 +366,13 @@ class SettingsStore {
         didSet { defaults.set(firstRunCardDismissed, forKey: firstRunCardDismissedKey) }
     }
 
+    /// Written when the welcome flow's last screen is dismissed, never at its start:
+    /// quitting halfway through brings it back, and Settings › About can clear it to
+    /// replay the tour. A profile that predates the flow is marked done on first sight.
+    var onboardingCompleted: Bool {
+        didSet { defaults.set(onboardingCompleted, forKey: onboardingCompletedKey) }
+    }
+
     // MARK: - Accessibility and languages
 
     /// `AnimationSettings` reads this from view bodies dozens of times a frame, so the
@@ -481,6 +489,7 @@ class SettingsStore {
         confirmBeforeQuit = defaults.object(forKey: confirmBeforeQuitKey) as? Bool ?? true
         showBookmarksBar = defaults.object(forKey: showBookmarksBarKey) as? Bool ?? true
         firstRunCardDismissed = defaults.bool(forKey: firstRunCardDismissedKey)
+        onboardingCompleted = defaults.bool(forKey: onboardingCompletedKey)
 
         reduceMotion = defaults.bool(forKey: Self.reduceMotionKey)
         minimumFontSize = defaults.double(forKey: Self.minimumFontSizeKey)
