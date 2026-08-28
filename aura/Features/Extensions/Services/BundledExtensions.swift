@@ -349,8 +349,7 @@ extension BundledExtensions {
             let enabled = ExtensionManager.shared.installedExtensions
                 .first { $0.id == id }?.isEnabled == true
             if SettingsStore.shared.extensionFullAdBlocking != enabled,
-               enabled || SettingsStore.shared.extensionConsent[id] != nil
-            {
+               enabled || SettingsStore.shared.extensionConsent[id] != nil {
                 setFullBlocking(enabled)
                 return
             }
