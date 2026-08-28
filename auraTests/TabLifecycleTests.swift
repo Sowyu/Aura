@@ -147,6 +147,103 @@ struct TabLifecycleTests {
         #expect(manager.activeTab == nil)
     }
 
+    // MARK: - Parking (pinned and favourite closes)
+
+    /// Closing a pinned tab is not a removal: the row stays, reset to the URL it was
+    /// pinned at, and the selection moves on.
+    @Test func closingAPinnedTabParksItAtItsPinnedURL() async throws {
+        let (manager, space) = try makeManager()
+        let neighbour = try makeTab(manager, space, order: 1)
+        let pinned = try makeTab(manager, space, order: 5, type: .pinned)
+        let home = try #require(URL(string: "https://example.com/5"))
+        pinned.savedURL = home
+        pinned.updateURL(try #require(URL(string: "https://example.com/wandered?q=away")))
+        manager.activateTab(pinned)
+
+        manager.closeTab(tab: pinned)
+        await settle()
+
+        #expect(space.tabs.contains { $0.id == pinned.id })
+        #expect(pinned.url == home)
+        #expect(manager.activeTab?.id == neighbour.id)
+        // Parking is not a close the user can undo, so it must not sit on the reopen stack.
+        #expect(manager.recentlyClosedTabs.isEmpty)
+    }
+
+    @Test func closingAFavouriteTabParksItToo() async throws {
+        let (manager, space) = try makeManager()
+        let fav = try makeTab(manager, space, order: 2, type: .fav)
+        fav.savedURL = fav.url
+        manager.activateTab(fav)
+
+        manager.closeTab(tab: fav)
+        await settle()
+
+        #expect(space.tabs.contains { $0.id == fav.id })
+        #expect(manager.activeTab == nil)
+    }
+
+    /// The context menu's close is the deliberate one: it really removes the row.
+    @Test func deleteTabRemovesAPinnedTabForReal() async throws {
+        let (manager, space) = try makeManager()
+        let pinned = try makeTab(manager, space, order: 2, type: .pinned)
+        pinned.savedURL = pinned.url
+
+        manager.deleteTab(tab: pinned)
+        await settle()
+
+        #expect(!space.tabs.contains { $0.id == pinned.id })
+    }
+
+    @Test func resetReturnsAWanderedPinnedTabAndDropsItsScroll() throws {
+        let (manager, space) = try makeManager()
+        let pinned = try makeTab(manager, space, order: 3, type: .pinned)
+        let home = try #require(URL(string: "https://example.com/3"))
+        pinned.savedURL = home
+        pinned.updateURL(try #require(URL(string: "https://example.com/elsewhere")))
+        pinned.hibernatedScrollOffset = CGPoint(x: 0, y: 400)
+        #expect(pinned.hasLeftPinnedURL)
+
+        manager.resetToPinnedURL(pinned)
+
+        #expect(pinned.url == home)
+        #expect(!pinned.hasLeftPinnedURL)
+        #expect(pinned.hibernatedScrollOffset == nil)
+    }
+
+    @Test func replacePinnedURLAdoptsTheCurrentAddress() throws {
+        let (manager, space) = try makeManager()
+        let pinned = try makeTab(manager, space, order: 3, type: .pinned)
+        pinned.savedURL = pinned.url
+        let elsewhere = try #require(URL(string: "https://example.com/new-home"))
+        pinned.updateURL(elsewhere)
+
+        manager.replacePinnedURL(pinned)
+
+        #expect(pinned.savedURL == elsewhere)
+        #expect(!pinned.hasLeftPinnedURL)
+    }
+
+    /// Query and fragment churn on every search and in-page jump; only host and path
+    /// say whether the tab left its pinned page.
+    @Test func leavingThePinnedURLIsAHostAndPathQuestion() throws {
+        let (manager, space) = try makeManager()
+        let pinned = try makeTab(manager, space, order: 4, type: .pinned)
+        pinned.savedURL = try #require(URL(string: "https://www.example.com/4"))
+
+        pinned.updateURL(try #require(URL(string: "https://example.com/4?q=hello#top")))
+        #expect(!pinned.hasLeftPinnedURL)
+
+        pinned.updateURL(try #require(URL(string: "https://example.com/4/")))
+        #expect(!pinned.hasLeftPinnedURL)
+
+        pinned.updateURL(try #require(URL(string: "https://example.com/other")))
+        #expect(pinned.hasLeftPinnedURL)
+
+        pinned.updateURL(try #require(URL(string: "https://other.example.com/4")))
+        #expect(pinned.hasLeftPinnedURL)
+    }
+
     // MARK: - Reopening
 
     @Test func reopeningRestoresURLFolderAndPosition() async throws {

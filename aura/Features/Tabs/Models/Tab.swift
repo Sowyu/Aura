@@ -176,7 +176,10 @@ class Tab: ObservableObject, Identifiable {
         from.type = to.type
         switch to.type {
         case .pinned, .fav:
-            from.savedURL = from.url
+            // Moving between the pinned tiers keeps the URL the tab was pinned at;
+            // only a normal tab adopts its current address on the way in. Overwriting
+            // here made promoting a wandered pinned tab silently re-pin the detour.
+            if from.savedURL == nil { from.savedURL = from.url }
             // Only normal tabs live in folders.
             from.folder = nil
         case .normal:
@@ -224,6 +227,24 @@ class Tab: ObservableObject, Identifiable {
     /// `savedURL` is for. Everything else reopens where it was.
     var launchURL: URL {
         type == .normal ? url : (savedURL ?? url)
+    }
+
+    /// Whether a pinned or favourite tab has navigated away from the URL it was pinned
+    /// at. Host and path decide; the query and fragment move on every search and
+    /// in-page jump without the tab having left its site's page.
+    var hasLeftPinnedURL: Bool {
+        guard type != .normal, let saved = savedURL else { return false }
+        return !Self.isSamePinnedLocation(url, saved)
+    }
+
+    static func isSamePinnedLocation(_ lhs: URL, _ rhs: URL) -> Bool {
+        func location(of url: URL) -> (host: String, path: String) {
+            let host = (url.host ?? "").lowercased()
+            let bareHost = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+            let path = url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path
+            return (bareHost, path)
+        }
+        return location(of: lhs) == location(of: rhs)
     }
 
     /// `loading` overrides `launchURL` for the one case where the tab is being sent

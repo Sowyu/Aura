@@ -109,6 +109,19 @@ final class TabSessionStore {
         return changed
     }
 
+    /// Forgets one tab's saved session now, ahead of the sweep: a pinned tab being
+    /// reset must not restore the back list of the detour it was just reset out of.
+    /// The pending capture is cancelled too, or the coalesced write would put the
+    /// session straight back.
+    func drop(_ tabID: UUID) {
+        guard isAvailable else { return }
+        pending[tabID]?.cancel()
+        pending[tabID] = nil
+        guard let row = session(for: tabID) else { return }
+        modelContext.delete(row)
+        save()
+    }
+
     func save() {
         guard isAvailable else { return }
         saveOrLog(modelContext)

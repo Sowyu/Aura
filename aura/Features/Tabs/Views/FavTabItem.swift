@@ -108,6 +108,16 @@ struct FavTabItem: View {
     private var contextMenuItems: [AuraMenuItem] {
         Array {
             AuraMenuItem.item("Remove from Favorites", icon: "star.slash", action: onFavoriteToggle)
+            AuraMenuItem.item(
+                "Reset to Pinned URL",
+                icon: "arrow.counterclockwise",
+                isDisabled: !tab.hasLeftPinnedURL
+            ) {
+                tabManager.resetToPinnedURL(tab)
+            }
+            AuraMenuItem.item("Set Pinned URL to This Page", icon: "pin") {
+                tabManager.replacePinnedURL(tab)
+            }
             AuraMenuItem.item("Duplicate Tab", icon: "doc.on.doc", action: onDuplicate)
             AuraMenuItem.item("Copy Link", icon: "link") {
                 ClipboardUtils.copyToClipboard(tab.url.absoluteString)
@@ -138,8 +148,9 @@ struct FavTabItem: View {
                     containers: containerManager.containers
                 ) { containerManager.move(tab, to: $0) }
             )
-            AuraMenuItem.separator
-            AuraMenuItem.item("Close Tab", icon: "xmark", isDestructive: true, action: onClose)
+            // No "Close Tab" here on purpose: a favourite is not closable, it is
+            // removable. ⌘W parks it (reset + unload); "Remove from Favorites" is the
+            // way out of the grid.
         }
     }
 

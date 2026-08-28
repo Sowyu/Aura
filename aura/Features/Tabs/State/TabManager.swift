@@ -227,7 +227,9 @@ final class TabManager {
             tab.savedURL = nil
         } else {
             tab.type = .pinned
-            tab.savedURL = tab.url
+            // A favourite moving to the pinned row keeps the URL it was pinned at;
+            // only a normal tab adopts its current address.
+            if tab.savedURL == nil { tab.savedURL = tab.url }
             // Only normal tabs live in folders.
             tab.folder = nil
         }
@@ -241,7 +243,7 @@ final class TabManager {
             tab.savedURL = nil
         } else {
             tab.type = .fav
-            tab.savedURL = tab.url
+            if tab.savedURL == nil { tab.savedURL = tab.url }
             tab.folder = nil
         }
 
@@ -634,6 +636,13 @@ final class TabManager {
     }
 
     func closeTab(tab: Tab, shouldTrackForRestore: Bool = true) {
+        // A close on a pinned or favourite tab parks it instead of removing it: back to
+        // its pinned URL, web view dropped, selection moved on. Removing the row is a
+        // deliberate act — `deleteTab` — not what ⌘W or the row's close button does.
+        guard tab.type == .normal else {
+            parkPinnedTab(tab)
+            return
+        }
         FindManager.shared.endSession(for: tab.id)
         ExtensionManager.shared.tabDidClose(tab)
         // An unpinned tray row is a record of what is open, so it goes with the tab, and
@@ -667,6 +676,65 @@ final class TabManager {
         }
         saveOrLog(modelContext)
         announceDeletedTabs(deleted)
+    }
+
+    /// What closing a pinned or favourite tab means: the row stays, the page goes. The
+    /// tab is reset to the URL it was pinned at, its web view is dropped, and the
+    /// selection moves to a neighbour — so the site is out of memory but one click away.
+    func parkPinnedTab(_ tab: Tab) {
+        FindManager.shared.endSession(for: tab.id)
+        if activeTab?.id == tab.id {
+            tab.maybeIsActive = false
+            if let nextTab = neighbour(after: tab) {
+                activateTab(nextTab, persist: false)
+            } else {
+                activeTab = nil
+            }
+        }
+        tab.stopMedia()
+        mediaController.removeSession(for: tab.id)
+        resetToPinnedURL(tab)
+        saveOrLog(modelContext)
+    }
+
+    /// Back to the URL the tab was pinned at. The saved session and scroll offset go
+    /// with the detour — a reset that resurrected the wandered-off back list on the
+    /// next activation would not be a reset.
+    func resetToPinnedURL(_ tab: Tab) {
+        guard tab.type != .normal, let saved = tab.savedURL else { return }
+        sessionStore.drop(tab.id)
+        tab.hibernatedScrollOffset = nil
+        tab.hibernatedScrollURL = nil
+        tab.didOfferSavedScroll = false
+        if let host = saved.host {
+            tab.title = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        }
+        if tab.isWebViewReady {
+            // Tearing the web view down drops WebKit's back list too, which is what a
+            // reset means: the pinned page with nothing behind it.
+            tab.rehost(saved)
+        } else {
+            tab.updateURL(saved)
+        }
+        saveOrLog(modelContext)
+    }
+
+    /// Adopts wherever the tab is now as the URL it resets and relaunches to.
+    func replacePinnedURL(_ tab: Tab) {
+        guard tab.type != .normal else { return }
+        tab.savedURL = tab.url
+        saveOrLog(modelContext)
+        ToastManager.shared.show("Pinned URL set to the current page", icon: .system("pin"))
+    }
+
+    /// Actually removes a pinned or favourite tab, where `closeTab` would park it.
+    /// Demoting first sends it down the ordinary close path, reopen stack included.
+    func deleteTab(tab: Tab) {
+        if tab.type != .normal {
+            tab.type = .normal
+            tab.savedURL = nil
+        }
+        closeTab(tab: tab)
     }
 
     func closeActiveTab() {

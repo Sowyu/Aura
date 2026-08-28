@@ -117,6 +117,18 @@ struct TabItem: View {
             )
             tabTitle
             Spacer(minLength: 4)
+            // A pinned row that navigated away from its pinned URL offers the way back
+            // on hover, next to the close button. Pinned only: a favourite tile has no
+            // room for it and its context menu carries the same reset.
+            if tab.type == .pinned, tab.hasLeftPinnedURL {
+                ActionButton(icon: "arrow.counterclockwise", color: textColor) {
+                    tabManager.resetToPinnedURL(tab)
+                }
+                .help("Back to Pinned URL")
+                .accessibilityLabel(Text("Back to Pinned URL"))
+                .frame(width: 20, height: 20)
+                .opacity(isHovering ? 1 : 0)
+            }
             // Always laid out, so hovering toggles opacity only: nothing moves or
             // reflows. Hit-testable even while invisible: after a close the next row
             // slides under a stationary pointer, `onHover` does not re-fire, and
@@ -205,6 +217,18 @@ struct TabItem: View {
                 icon: tab.type == .fav ? "star.slash" : "star",
                 action: onFavoriteToggle
             )
+            if tab.type != .normal {
+                AuraMenuItem.item(
+                    "Reset to Pinned URL",
+                    icon: "arrow.counterclockwise",
+                    isDisabled: !tab.hasLeftPinnedURL
+                ) {
+                    tabManager.resetToPinnedURL(tab)
+                }
+                AuraMenuItem.item("Set Pinned URL to This Page", icon: "pin") {
+                    tabManager.replacePinnedURL(tab)
+                }
+            }
             // Duplicating works without a live web view: a hibernated tab and an
             // aura:// page both copy fine.
             AuraMenuItem.item("Duplicate Tab", icon: "doc.on.doc", action: onDuplicate)
@@ -241,7 +265,15 @@ struct TabItem: View {
             )
             SpaceMenuItems.alwaysOpen(url: tab.url, in: tab.container)
             AuraMenuItem.separator
-            AuraMenuItem.item("Close Tab", icon: "xmark", isDestructive: true, action: onClose)
+            // On a pinned tab the menu's close is the deliberate one: `onClose` (the
+            // row button and ⌘W) parks a pinned tab, this genuinely removes it.
+            AuraMenuItem.item("Close Tab", icon: "xmark", isDestructive: true) {
+                if tab.type == .normal {
+                    onClose()
+                } else {
+                    tabManager.deleteTab(tab: tab)
+                }
+            }
         }
     }
 }
