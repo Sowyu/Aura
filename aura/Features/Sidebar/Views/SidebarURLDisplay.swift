@@ -4,7 +4,6 @@ import SwiftUI
 struct SidebarURLDisplay: View {
     @Environment(\.theme) private var theme
     @Environment(AppState.self) private var appState
-    @Environment(SidebarManager.self) private var sidebarManager
     @Environment(TabManager.self) private var tabManager
     @Environment(ToolbarManager.self) private var toolbarManager
     @Environment(ToastManager.self) private var toastManager
@@ -120,9 +119,9 @@ struct SidebarURLDisplay: View {
                 .allowsHitTesting(false)
                 // Unlabelled and unclickable: it exists only to own ⌘L.
                 .accessibilityHidden(true)
-                .disabled(
-                    !toolbarManager.isToolbarHidden || sidebarManager.sidebarPosition != .primary
-                )
+                // Only while the pill stands in for the toolbar; the sidebar's side is
+                // irrelevant — with tabs on the right this is still the only ⌘L owner.
+                .disabled(!toolbarManager.isToolbarHidden)
         )
         .overlay(
             ConditionallyConcentricRectangle(cornerRadius: 10, style: .continuous)
@@ -130,7 +129,7 @@ struct SidebarURLDisplay: View {
         )
         .animation(AnimationSettings.easeOut(0.1), value: isHovering)
         .onReceive(NotificationCenter.default.publisher(for: .copyAddressURL)) { _ in
-            guard toolbarManager.isToolbarHidden, sidebarManager.sidebarPosition == .primary else { return }
+            guard toolbarManager.isToolbarHidden else { return }
             if let activeTab = tabManager.activeTab {
                 ClipboardUtils.copyWithToast(
                     activeTab.url.absoluteString,
@@ -141,6 +140,9 @@ struct SidebarURLDisplay: View {
     }
 
     private func displayParts(for tab: Tab) -> URLDisplayParts {
-        URLDisplayUtils.displayParts(url: tab.url, title: tab.title, showFull: toolbarManager.showFullURL)
+        // "Show the full URL" is an address-bar preference. In the sidebar there is no
+        // room for a query string to be anything but noise, so this pill always shows
+        // host / title; the copy button still copies the full address.
+        URLDisplayUtils.displayParts(url: tab.url, title: tab.title, showFull: false)
     }
 }

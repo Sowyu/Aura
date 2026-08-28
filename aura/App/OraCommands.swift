@@ -5,7 +5,9 @@ struct OraCommands: Commands {
     @AppStorage("ui.sidebar.hidden") private var isSidebarHidden: Bool = false
     @AppStorage("ui.sidebar.position") private var sidebarPosition: SidebarPosition = .primary
     @AppStorage("ui.toolbar.hidden") private var isToolbarHidden: Bool = false
-    @AppStorage("ui.toolbar.showfullurl") private var showFullURL: Bool = false
+    // Read-only mirror for the menu title; the default must match `ToolbarManager`'s
+    // or a fresh profile's menu contradicts the address bar.
+    @AppStorage("ui.toolbar.showfullurl") private var showFullURL: Bool = true
     @AppStorage("ui.compact.enabled") private var isCompactEnabled: Bool = false
     /// Same key and same default as `SettingsStore.showBookmarksBar`; read here only
     /// so the menu item can say which way it goes.

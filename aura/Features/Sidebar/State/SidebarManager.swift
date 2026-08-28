@@ -104,6 +104,21 @@ final class SidebarManager {
         isCompactEnabled = defaults.object(forKey: Self.compactEnabledKey) as? Bool ?? false
         compactHides = defaults.string(forKey: Self.compactHidesKey)
             .flatMap(CompactModeHides.init(rawValue:)) ?? .both
+
+        // The split view writes the holder itself when the splitter is dragged to hide
+        // or unhide a pane, without coming through this class. `isSidebarHidden` gates
+        // the hover-revealed floating sidebar, so letting it drift put a docked sidebar
+        // and the floating one on screen together. Chain the holder's setter (which
+        // `usingUserDefaults` already uses for persistence) so every write re-syncs.
+        let persistSide = hiddenSidebar.setter
+        hiddenSidebar.setter = { [weak self] side in
+            persistSide?(side)
+            guard let self else { return }
+            MainActor.assumeIsolated { self.updateSidebarHidden() }
+        }
+        // The two persisted keys can disagree at launch (one write landed, the other
+        // did not); reconcile before the first body evaluation reads either.
+        updateSidebarHidden()
     }
 
     var currentFraction: FractionHolder {
@@ -116,7 +131,16 @@ final class SidebarManager {
     }
 
     func updateSidebarHidden() {
-        let hidden = hiddenSidebar.side == .primary || hiddenSidebar.side == .secondary
+        // A stored side can name the pane the sidebar occupied before it moved, which
+        // hides the content pane instead. Remap it onto the sidebar's pane; the write
+        // re-enters through the holder's setter and lands in the consistent branch.
+        let sidebarSide: SplitSide = sidebarPosition == .primary ? .primary : .secondary
+        if let side = hiddenSidebar.side,
+           side.isPrimary != sidebarSide.isPrimary {
+            hiddenSidebar.side = sidebarSide
+            return
+        }
+        let hidden = hiddenSidebar.side != nil
         guard isSidebarHidden != hidden else { return }
         isSidebarHidden = hidden
     }
