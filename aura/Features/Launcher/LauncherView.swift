@@ -105,14 +105,20 @@ struct LauncherView: View {
 
                 panel
                     .frame(width: width)
+                    // Measured inside the offset, not outside it. A modifier applied after
+                    // `.offset` is the offset's ancestor and is told the layout frame, which
+                    // sits at this ZStack's top-left corner; only a descendant sees where
+                    // the panel is drawn. Measured outside, the click-away test compared
+                    // clicks against a rect in the corner, and a click on the panel closed
+                    // the launcher whenever the two rects did not happen to overlap.
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                        panelFrame = $0
+                    }
                     .offset(x: origin.x, y: origin.y)
                     // The panel re-centres on every measured height change, so every
                     // keystroke that adds or drops a row moves it. Animated, that reads as
                     // the field sliding under the cursor; it has to snap.
                     .animation(nil, value: origin.y)
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
-                        panelFrame = $0
-                    }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -148,7 +154,9 @@ struct LauncherView: View {
             }
             let height = eventWindow.contentView?.bounds.height ?? eventWindow.frame.height
             let point = CGPoint(x: event.locationInWindow.x, y: height - event.locationInWindow.y)
-            guard !panelFrame.contains(point) else { return event }
+            // Unmeasured is not "outside": until the first geometry report lands, a click
+            // is left alone rather than guessed at.
+            guard panelFrame != .zero, !panelFrame.contains(point) else { return event }
             DispatchQueue.main.async { dismiss() }
             return nil
         }
