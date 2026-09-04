@@ -39,6 +39,11 @@ struct LauncherMain: View {
                 onEscape: onEscape,
                 placeholder: getPlaceholder(match: match),
                 isFocused: isFocused,
+                // Asks AppKit for first responder directly, the way the address bar and
+                // the home page do. SwiftUI's focus bridge onto the field, `isFocused`
+                // above, did not reliably land the caret on ⌘T. Constant while mounted:
+                // the launcher is modal and nothing else in it takes focus.
+                isEditing: true,
                 onTextChange: { newValue in
                     viewModel.currentText = newValue
                     viewModel.searchHandler(newValue)
