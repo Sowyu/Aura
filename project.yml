@@ -142,8 +142,8 @@ targets:
       base:
         SWIFT_VERSION: 5.9
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: 1.1.0
-        CURRENT_PROJECT_VERSION: 111
+        MARKETING_VERSION: 1.2.0
+        CURRENT_PROJECT_VERSION: 112
         PRODUCT_NAME: Aura
         PRODUCT_BUNDLE_IDENTIFIER: com.aurabrowser.app
         GENERATE_INFOPLIST_FILE: YES
