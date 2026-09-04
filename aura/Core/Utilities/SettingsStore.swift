@@ -60,6 +60,7 @@ class SettingsStore {
     private let autoUpdateKey = "settings.autoUpdateEnabled"
     private let trackingThirdPartyKey = "settings.tracking.blockThirdParty"
     private let fingerprintingKey = "settings.tracking.blockFingerprinting"
+    private let globalPrivacyControlKey = "settings.privacy.globalPrivacyControl"
     private let cookiesPolicyKey = "settings.cookies.policy"
     private let blockJavaScriptByDefaultKey = "privacy.javascript.blockedByDefault"
     private let extensionRequestBlockingKey = "privacy.extensionRequestBlocking"
@@ -132,6 +133,11 @@ class SettingsStore {
 
     var blockFingerprinting: Bool {
         didSet { defaults.set(blockFingerprinting, forKey: fingerprintingKey) }
+    }
+
+    /// Firefox's "Tell websites not to sell or share my data". See `SpacePrivacySettings`.
+    var globalPrivacyControl: Bool {
+        didSet { defaults.set(globalPrivacyControl, forKey: globalPrivacyControlKey) }
     }
 
     var cookiesPolicy: CookiesPolicy {
@@ -427,6 +433,7 @@ class SettingsStore {
         autoUpdateEnabled = defaults.object(forKey: autoUpdateKey) as? Bool ?? true
         blockThirdPartyTrackers = defaults.bool(forKey: trackingThirdPartyKey)
         blockFingerprinting = defaults.object(forKey: fingerprintingKey) as? Bool ?? true
+        globalPrivacyControl = defaults.object(forKey: globalPrivacyControlKey) as? Bool ?? true
         cookiesPolicy = defaults.string(forKey: cookiesPolicyKey)
             .flatMap(CookiesPolicy.init(rawValue:)) ?? .allowAll
         blockJavaScriptByDefault = defaults.bool(forKey: blockJavaScriptByDefaultKey)
@@ -517,6 +524,7 @@ class SettingsStore {
         SpacePrivacySettings(
             blockThirdPartyTrackers: blockThirdPartyTrackers,
             blockFingerprinting: blockFingerprinting,
+            globalPrivacyControl: globalPrivacyControl,
             cookiesPolicy: cookiesPolicy
         )
     }

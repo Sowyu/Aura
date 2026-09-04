@@ -159,6 +159,53 @@ struct BrowserPageTests {
         #expect(opener == "yes", "window.opener was severed, so the popup cannot talk back")
     }
 
+    // MARK: - Global Privacy Control
+
+    /// The header rides on a navigation that is cancelled and re-issued. Two things can
+    /// go wrong that no pure test sees: WebKit could drop the header from the re-issued
+    /// request, which would cancel every load forever, and the user script could fail to
+    /// define the page-side flag. A real load against a local server settles both.
+    @MainActor
+    @Test
+    func aPageSendsTheGlobalPrivacyControlSignalOnce() async throws {
+        let server = try LocalHTTPServer(html: "<!doctype html><meta charset=\"utf-8\"><body>gpc</body>")
+        let port = try await server.start()
+        defer { server.stop() }
+
+        let recorder = PolicyRecordingDelegate()
+        let page = Self.makePage(globalPrivacyControl: true, delegate: recorder)
+        defer { page.teardown() }
+        let hosted = Self.host(page)
+        defer { hosted.close() }
+
+        let url = try #require(URL(string: "http://127.0.0.1:\(port)/index.html"))
+        page.load(URLRequest(url: url))
+        #expect(await Self.waitForDocument(url, in: page), "fixture page never finished loading")
+
+        // The server saw the header, and saw the document once: the bare navigation was
+        // cancelled before it reached the network.
+        #expect(server.servedHeaders["/index.html"]?["sec-gpc"] == "1")
+        #expect(server.servedPaths.filter { $0 == "/index.html" }.count == 1)
+        // The delegate was asked twice, bare and then with the header, and no more.
+        #expect(recorder.requests.count == 2)
+        #expect(recorder.requests.first?.value(forHTTPHeaderField: "Sec-GPC") == nil)
+        #expect(recorder.requests.last?.value(forHTTPHeaderField: "Sec-GPC") == "1")
+        #expect(await Self.evaluate("navigator.globalPrivacyControl === true", in: page) as? Bool == true)
+
+        // Off: one decision, no header, no flag.
+        let quiet = PolicyRecordingDelegate()
+        let plainPage = Self.makePage(globalPrivacyControl: false, delegate: quiet)
+        defer { plainPage.teardown() }
+        let plainHost = Self.host(plainPage)
+        defer { plainHost.close() }
+        let plain = try #require(URL(string: "http://127.0.0.1:\(port)/plain.html"))
+        plainPage.load(URLRequest(url: plain))
+        #expect(await Self.waitForDocument(plain, in: plainPage), "plain page never finished loading")
+        #expect(server.servedHeaders["/plain.html"]?["sec-gpc"] == nil)
+        #expect(quiet.requests.count == 1)
+        #expect(await Self.evaluate("navigator.globalPrivacyControl === true", in: plainPage) as? Bool == false)
+    }
+
     // MARK: - Link clicks
 
     /// Middle-clicking or command-clicking a link has to leave the current page where it
@@ -183,14 +230,20 @@ struct BrowserPageTests {
     @MainActor
     private static func makePage(
         allowsPopups: Bool = false,
+        globalPrivacyControl: Bool = false,
         delegate: BrowserPageDelegate? = nil
     ) -> BrowserPage {
         // Private: no persistent data store, and no extension controller attached, so
         // building a page here cannot install the bundled extensions.
         let profile = BrowserEngineProfile(identifier: UUID(), isPrivate: true)
+        let privacySettings = SpacePrivacySettings(
+            blockThirdPartyTrackers: false,
+            blockFingerprinting: false,
+            globalPrivacyControl: globalPrivacyControl
+        )
         var configuration = BrowserPageConfiguration.oraDefault(
-            userScripts: [],
-            privacySettings: SpacePrivacySettings(blockThirdPartyTrackers: false, blockFingerprinting: false)
+            userScripts: BrowserPrivacyService.privacyScripts(for: privacySettings),
+            privacySettings: privacySettings
         )
         if allowsPopups {
             configuration = BrowserPageConfiguration(
@@ -287,6 +340,23 @@ private final class PopupAdoptingDelegate: BrowserPageDelegate {
             hosting.orderFront(nil)
             window = hosting
             return true
+        }
+    }
+}
+
+/// Records every navigation the page asks about, so a test can see the cancelled bare
+/// request and the re-issued one side by side.
+@MainActor
+private final class PolicyRecordingDelegate: BrowserPageDelegate {
+    private(set) var requests: [URLRequest] = []
+
+    nonisolated func browserPage(
+        _ page: BrowserPage,
+        decidePolicyFor navigationAction: BrowserNavigationAction
+    ) -> BrowserNavigationActionDisposition {
+        MainActor.assumeIsolated {
+            requests.append(navigationAction.request)
+            return .allow
         }
     }
 }

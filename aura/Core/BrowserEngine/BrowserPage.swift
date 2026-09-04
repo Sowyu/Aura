@@ -195,6 +195,12 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         webView
     }
 
+    /// What this page was built with. A user script cannot be swapped on a live page, so
+    /// this, not the store, is what the page is doing right now.
+    var privacySettings: SpacePrivacySettings {
+        pageConfiguration.privacySettings
+    }
+
     /// The concrete web view, so the actions split into BrowserPage+Actions.swift can
     /// reach it without opening `webView` up to the rest of the app.
     var auraWebView: AuraWebView {
@@ -446,6 +452,19 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
 
         switch delegate?.browserPage(self, decidePolicyFor: action) ?? .allow {
         case .allow:
+            // After the delegate, so a navigation it routes elsewhere is never re-issued
+            // here. `targetFrame == nil` is a window the page is about to open, and a
+            // load on this web view would put that page in this tab instead.
+            if let signalled = BrowserPrivacyService.requestSignallingGlobalPrivacyControl(
+                navigationAction.request,
+                privacySettings: pageConfiguration.privacySettings,
+                isMainFrame: navigationAction.targetFrame?.isMainFrame == true,
+                isBackForward: navigationAction.navigationType == .backForward
+            ) {
+                decisionHandler(.cancel, preferences)
+                webView.load(signalled)
+                return
+            }
             decisionHandler(.allow, preferences)
         case .cancel:
             decisionHandler(.cancel, preferences)

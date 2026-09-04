@@ -254,6 +254,10 @@ struct SpacesSettingsView: View {
                 + "It does not block cookies or other storage on its own.")
                 .font(.system(size: 11))
                 .foregroundStyle(theme.mutedForeground)
+            Toggle(
+                "Tell websites not to sell or share my data",
+                isOn: privacyBinding(for: container, keyPath: \.globalPrivacyControl)
+            )
 
             Divider()
 

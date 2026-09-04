@@ -10,6 +10,8 @@ struct SiteInfoSummary: Equatable {
     /// Scheme and host as the address bar has them, for example `https://news.bbc.co.uk`.
     let origin: String
     let isSecure: Bool
+    /// Whether the page is sending the Global Privacy Control signal.
+    let globalPrivacyControl: Bool
     let javaScriptAllowed: Bool
     /// nil when the site has no rule of its own and follows the global default.
     let javaScriptRule: Bool?
@@ -23,6 +25,7 @@ struct SiteInfoSummary: Equatable {
     /// `aura://` page. The panel has nothing to say about those.
     init?(
         url: URL,
+        globalPrivacyControl: Bool,
         javaScriptRule: Bool?,
         blocksJavaScriptByDefault: Bool,
         permissions: SitePermissionSettings?,
@@ -44,6 +47,7 @@ struct SiteInfoSummary: Equatable {
             origin = "\(scheme)://\(url.host ?? host)"
         }
         isSecure = scheme == "https"
+        self.globalPrivacyControl = globalPrivacyControl
         self.javaScriptRule = javaScriptRule
         javaScriptAllowed = javaScriptRule ?? !blocksJavaScriptByDefault
         camera = permissions?.decision(for: .camera)
@@ -58,6 +62,11 @@ struct SiteInfoSummary: Equatable {
 
     var zoomLabel: String {
         SiteZoom.percentLabel(zoom)
+    }
+
+    /// Firefox's wording for the same row.
+    var globalPrivacyControlLabel: String {
+        globalPrivacyControl ? "Applied" : "Off"
     }
 
     /// Right-aligned readout for a grant row: what the site may do without opening it.
@@ -87,6 +96,13 @@ enum SiteInfoMenu {
             .disabled(
                 summary.connectionSummary,
                 icon: summary.isSecure ? "lock.fill" : "exclamationmark.triangle"
+            ),
+            AuraMenuItem(
+                kind: .item,
+                title: "Global Privacy Control",
+                icon: "hand.raised",
+                shortcut: summary.globalPrivacyControlLabel,
+                isDisabled: true
             ),
             .separator,
             AuraMenuItem(
@@ -123,8 +139,13 @@ enum SiteInfoMenu {
         let spaceName = spaceID.flatMap { id in
             tabManager.fetchContainers().first { $0.id == id }?.name
         }
+        // The page's own value: a toggle flipped after the tab was built reaches only
+        // tabs built later, and the row must say what this one is sending.
+        let globalPrivacyControl = tab.browserPage?.privacySettings.globalPrivacyControl
+            ?? SettingsStore.shared.privacySettings(for: tab.container.id).globalPrivacyControl
         return SiteInfoSummary(
             url: tab.url,
+            globalPrivacyControl: globalPrivacyControl,
             javaScriptRule: JavaScriptPolicyService.shared.rule(for: tab.url),
             blocksJavaScriptByDefault: JavaScriptPolicyService.shared.blocksByDefault,
             permissions: SettingsStore.shared.sitePermissions(forHost: tab.url.host ?? ""),

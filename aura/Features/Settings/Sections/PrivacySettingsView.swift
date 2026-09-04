@@ -28,6 +28,7 @@ struct PrivacySettingsView: View {
         SettingsSection {
             blockingCard
             fingerprintingCard
+            websitePrivacyCard
             javaScriptCard
             cookiesCard
             clearDataCard
@@ -171,6 +172,20 @@ struct PrivacySettingsView: View {
         ) {
             Toggle("Block fingerprinting", isOn: $settings.blockFingerprinting)
             Toggle("Block third-party trackers", isOn: $settings.blockThirdPartyTrackers)
+        }
+    }
+
+    private var websitePrivacyCard: some View {
+        SettingsCard(
+            header: "Website privacy preferences",
+            description: "The default for new spaces. Each space can override it."
+        ) {
+            Toggle("Tell websites not to sell or share my data", isOn: $settings.globalPrivacyControl)
+            Text("Sends the Global Privacy Control signal: a Sec-GPC header on every page "
+                + "request and navigator.globalPrivacyControl in every page. Sites that honour it "
+                + "treat it as an opt-out under laws such as the CCPA. Reaches tabs opened from now on.")
+                .font(.system(size: 11))
+                .foregroundStyle(theme.mutedForeground)
         }
     }
 

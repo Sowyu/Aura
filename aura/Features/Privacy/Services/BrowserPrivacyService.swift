@@ -426,16 +426,72 @@ final class BrowserPrivacyService {
     /// after it is rebuilt: the Spaces section reloads the space's open tabs for exactly
     /// this reason, and tabs in other spaces keep the profile they were created with.
     static func privacyScripts(for privacySettings: SpacePrivacySettings) -> [BrowserUserScript] {
-        guard privacySettings.blockFingerprinting else { return [] }
-
-        return [
-            BrowserUserScript(
+        var scripts: [BrowserUserScript] = []
+        if privacySettings.blockFingerprinting {
+            scripts.append(BrowserUserScript(
                 name: "ora-fingerprinting-protection",
                 source: fingerprintingProtectionScriptSource(),
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: false
-            )
-        ]
+            ))
+        }
+        if privacySettings.globalPrivacyControl {
+            scripts.append(BrowserUserScript(
+                name: "ora-global-privacy-control",
+                source: globalPrivacyControlScriptSource,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: false
+            ))
+        }
+        return scripts
+    }
+
+    // MARK: - Global Privacy Control
+
+    /// The header the GPC spec names. Sent as `Sec-GPC: 1`; absent means no signal.
+    static let globalPrivacyControlHeader = "Sec-GPC"
+
+    /// The page-side half of the signal. Every frame, because a third-party script reads
+    /// it from the frame it runs in, not from the top document.
+    static let globalPrivacyControlScriptSource = """
+    (function () {
+        try {
+            Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', {
+                configurable: true,
+                enumerable: true,
+                get: function () { return true; }
+            });
+        } catch (error) {}
+    })();
+    """
+
+    /// `request` with `Sec-GPC: 1` added, or nil when there is nothing to add: the page
+    /// has the signal off, the request already carries it, it is not a main-frame http(s)
+    /// GET, or it is a back/forward step.
+    ///
+    /// WebKit gives the app no hook on subresource requests, so the header rides on the
+    /// document request only, the way DuckDuckGo's WebKit browser sends it: the navigation
+    /// is cancelled and re-issued with the header, and the re-issued one passes through
+    /// because it already carries it. A POST cannot be re-issued, its body never reaches
+    /// the UI process. A back/forward step re-issued as a load would push a history entry.
+    static func requestSignallingGlobalPrivacyControl(
+        _ request: URLRequest,
+        privacySettings: SpacePrivacySettings,
+        isMainFrame: Bool,
+        isBackForward: Bool
+    ) -> URLRequest? {
+        guard privacySettings.globalPrivacyControl,
+              isMainFrame,
+              !isBackForward,
+              (request.httpMethod ?? "GET").uppercased() == "GET",
+              let scheme = request.url?.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              request.value(forHTTPHeaderField: globalPrivacyControlHeader) == nil
+        else { return nil }
+
+        var signalled = request
+        signalled.setValue("1", forHTTPHeaderField: globalPrivacyControlHeader)
+        return signalled
     }
 
     /// The balanced profile is constant, so serialise it once instead of per web view.

@@ -7,6 +7,7 @@ import Testing
 struct SiteInfoSummaryTests {
     private func summary(
         _ address: String,
+        globalPrivacyControl: Bool = true,
         javaScriptRule: Bool? = nil,
         blocksByDefault: Bool = false,
         permissions: SitePermissionSettings? = nil,
@@ -16,6 +17,7 @@ struct SiteInfoSummaryTests {
         guard let url = URL(string: address) else { return nil }
         return SiteInfoSummary(
             url: url,
+            globalPrivacyControl: globalPrivacyControl,
             javaScriptRule: javaScriptRule,
             blocksJavaScriptByDefault: blocksByDefault,
             permissions: permissions,
@@ -82,6 +84,12 @@ struct SiteInfoSummaryTests {
         info = try #require(summary("https://example.com", zoom: 42))
         #expect(info.zoom == SiteZoom.maximum)
         #expect(info.zoomLabel == "300%")
+    }
+
+    @Test func globalPrivacyControlIsLabelledTheWayFirefoxDoes() throws {
+        #expect(try #require(summary("https://example.com")).globalPrivacyControlLabel == "Applied")
+        #expect(try #require(summary("https://example.com", globalPrivacyControl: false))
+            .globalPrivacyControlLabel == "Off")
     }
 
     @Test func theSpaceRuleOnlyShowsWhenOneExists() throws {

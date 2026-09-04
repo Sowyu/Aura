@@ -186,6 +186,8 @@ enum SettingsTab: String, Hashable, CaseIterable {
                 "content blocking",
                 "fingerprinting",
                 "third-party trackers",
+                "global privacy control",
+                "sell or share my data",
                 "javascript",
                 "cookies",
                 "clear browsing data",
