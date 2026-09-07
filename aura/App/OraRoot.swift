@@ -241,15 +241,14 @@ struct OraRoot: View {
         keyModifierListener.removeAllKeyDownHandlers()
     }
 
-    /// Everything the first frame does not need. Runs after the window is on screen so
-    /// none of it sits between `applicationDidFinishLaunching` and first paint.
+    /// Queue setup after `onAppear` returns. The next main-queue turn is not a
+    /// presentation guarantee; the Release launch metric includes responsiveness.
     private func scheduleDeferredWork() {
         DispatchQueue.main.async {
             StartupProfiler.measure("builtInBlockingMigration") {
                 BuiltInBlockingMigration.runIfNeeded()
             }
-            // After first paint: the first real tab should not pay for WebKit's XPC
-            // services spinning up inside the keystroke.
+            // Prepare WebKit's XPC services before the first navigation.
             BrowserEngine.shared.warmUp()
         }
         guard SettingsStore.shared.autoUpdateEnabled else { return }

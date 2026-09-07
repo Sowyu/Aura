@@ -95,3 +95,41 @@ bash scripts/xctest-debug.sh
 The next optimization should come from those traces. The custom extension bridge's
 synchronous waits and native favicon disk activity are candidates for measurement;
 no further scheduling or cache changes are justified by these operation counts alone.
+
+## Launch and Dock reopening
+
+The startup cleanup reuses the normal window's model container for bookmarks and
+passes one shared model context through the view tree. Selecting the last active
+tab now scans once instead of sorting the whole tab array. Space switching uses
+the same selection rule. These reduce work but do not establish a measured launch
+speedup by themselves.
+
+Dock reopening selects a browser window, restores it if minimized and brings it
+forward. Settings and utility windows cannot take its place. An app that has quit
+still needs to launch a new process; reopening a running app is a different workload.
+
+`StartupProfiler` reports **first appearance**, the first root `onAppear` callback.
+That callback does not prove a frame reached the display or that input works. The
+Release UI test uses Apple's
+[XCTApplicationLaunchMetric](https://developer.apple.com/documentation/xctest/xctapplicationlaunchmetric/init%28waituntilresponsive%3A%29?language=objc)
+with `waitUntilResponsive: true` and checks keyboard text entry afterward.
+
+Run the `AuraLaunch` scheme as described in [CONTRIBUTING.md](CONTRIBUTING.md).
+Manual runs of the Build and test workflow also run it on a separate macOS runner.
+Supply `launch-baseline` to compare another commit on that same runner:
+
+```bash
+gh workflow run build-and-test.yml --ref YOUR_BRANCH -f launch-baseline=BASELINE_COMMIT
+```
+
+Both revisions use the same test and project configuration. Each gets an unmeasured
+launch followed by five measured launches. Setup is marked completed through a
+launch argument; other production defaults remain enabled. This measures fresh
+processes with warm filesystem caches and an empty returning-user profile in CI.
+It does not measure cold-boot launch, a populated session, website readiness,
+whole-browser memory or reopening through the Dock.
+
+The `macos-launch-measurements` artifact includes the hardware and OS, raw logs and
+XCTest result bundles. Runner contention and test instrumentation affect timings.
+The target machine is the user's M5 Pro MacBook on macOS 27; CI hardware and OS are
+recorded separately and cannot predict its launch time.

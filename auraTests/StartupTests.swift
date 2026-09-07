@@ -51,11 +51,20 @@ struct StartupTests {
             space.tabs.append(tab)
         }
         try context.save()
-        let originalOrder = space.tabs.map(\.id)
+        let originalOrder = Dictionary(uniqueKeysWithValues: space.tabs.map { ($0.id, $0.order) })
         let newest = try #require(space.tabs.first { $0.order == 1 })
         let reopened = TabManager(modelContainer: store, modelContext: context, mediaController: MediaController())
         #expect(reopened.activeTab === newest)
         #expect(newest.maybeIsActive)
-        #expect(space.tabs.map(\.id) == originalOrder)
+        #expect(space.tabs.allSatisfy { originalOrder[$0.id] == $0.order })
+
+        // SwiftData relationships are unordered. Equal or missing timestamps may
+        // select any tied tab, but must preserve the sidebar's explicit order.
+        for date in [nil, Date(timeIntervalSince1970: 30)] as [Date?] {
+            for tab in space.tabs { tab.lastAccessedAt = date }
+            let tied = TabManager(modelContainer: store, modelContext: context, mediaController: MediaController())
+            #expect(tied.activeTab != nil)
+            #expect(space.tabs.allSatisfy { originalOrder[$0.id] == $0.order })
+        }
     }
 }

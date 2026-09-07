@@ -71,9 +71,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        guard let window = getWindow() else { return true }
-        if window.isMiniaturized { window.deminiaturize(nil) }
-        window.makeKeyAndOrderFront(nil)
+        guard getWindow() != nil else { return true }
         sender.activate()
         return false
     }
@@ -88,9 +86,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func getWindow() -> NSWindow? {
-        if let window = Self.browserWindow(in: NSApp.orderedWindows) { return window }
-        if let window = Self.browserWindow(in: NSApp.windows) { return window }
-        return WindowFactory.makeMainWindow(rootView: OraRoot())
+        guard let window = Self.browserWindow(in: NSApp.orderedWindows)
+            ?? Self.browserWindow(in: NSApp.windows) else {
+            return WindowFactory.makeMainWindow(rootView: OraRoot())
+        }
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        return window
     }
 
     func handleIncomingURLs(_ urls: [URL]) {
