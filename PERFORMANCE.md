@@ -1,6 +1,7 @@
 # Performance work, 7 September 2026
 
-Ten portable bridge tests pass. Native changes still need a macOS build and profiling.
+Ten portable bridge tests pass. Native compilation and the favicon and media
+regression tests passed on macOS CI. Full validation is still in progress.
 There is no measured whole-browser CPU, memory or startup improvement yet.
 
 ## Work removed
@@ -31,7 +32,7 @@ Animation-frame scheduling follows the browser's repaint cycle, documented by
 [MDN](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame).
 The tests count work; actual display latency still needs WebKit verification.
 
-## Native changes awaiting verification
+## Native changes
 
 - MediaController only runs its two-second fallback title timer while a live session
   is playing. Pause, removal and released tabs stop it. Playing sessions keep the same
@@ -45,7 +46,9 @@ The tests count work; actual display latency still needs WebKit verification.
 
 Native tests cover timer start/stop and title freshness, plus 20 display requests
 concurrent with 20 saves sharing one download. They also check recovery after original
-bytes leave the cache. These tests have not run in this Debian environment.
+bytes leave the cache. Both regression tests passed on the Apple Silicon macOS
+runner with Xcode 26.0.1 in [run 34094144077](https://github.com/Sowyu/Aura/actions/runs/34094144077).
+That run failed a separate password isolation test, so it is not a passing release gate.
 
 ## Reproduce the checks
 

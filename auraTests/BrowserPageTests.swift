@@ -216,6 +216,7 @@ struct BrowserPageTests {
     private static func host(_ page: BrowserPage) -> NSWindow {
         let frame = NSRect(x: 0, y: 0, width: 400, height: 300)
         let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         page.contentView.frame = frame
         window.contentView = page.contentView
         window.makeKeyAndOrderFront(nil)
@@ -282,6 +283,7 @@ private final class PopupAdoptingDelegate: BrowserPageDelegate {
             adopted = popup
             let frame = NSRect(x: 0, y: 0, width: 400, height: 300)
             let hosting = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            hosting.isReleasedWhenClosed = false
             popup.contentView.frame = frame
             hosting.contentView = popup.contentView
             hosting.orderFront(nil)

@@ -194,6 +194,7 @@ struct WebRequestBrokerTests {
 
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), configuration: configuration)
         let window = NSWindow(contentRect: webView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         window.contentView = webView
         window.makeKeyAndOrderFront(nil)
         defer { window.close() }
@@ -251,8 +252,8 @@ struct WebRequestBrokerTests {
         defer { server.stop() }
         let port = try await server.start()
 
-        let webView = try loopbackWebView(engine: engine)
-        defer { webView.window?.close() }
+        let (webView, window) = try loopbackWebView(engine: engine)
+        defer { window.close() }
 
         let id = "aura-type-probe"
         _ = try await engine.load(directory: directory, id: id)
@@ -308,8 +309,8 @@ struct WebRequestBrokerTests {
         defer { server.stop() }
         let port = try await server.start()
 
-        let webView = try loopbackWebView(engine: engine)
-        defer { webView.window?.close() }
+        let (webView, window) = try loopbackWebView(engine: engine)
+        defer { window.close() }
 
         let id = "aura-cancel-everything"
         _ = try await engine.load(directory: directory, id: id)
@@ -352,8 +353,8 @@ struct WebRequestBrokerTests {
         #expect(try ExtensionShim.apply(at: directory))
 
         let engine = ExtensionEngine()
-        let webView = try loopbackWebView(engine: engine)
-        defer { webView.window?.close() }
+        let (webView, window) = try loopbackWebView(engine: engine)
+        defer { window.close() }
 
         let id = "aura-redirect-test"
         _ = try await engine.load(directory: directory, id: id)
@@ -387,6 +388,11 @@ struct WebRequestBrokerTests {
         let engine = ExtensionEngine()
         let id = "aura-unload-test"
         _ = try await engine.load(directory: directory, id: id)
+        defer { engine.unload(id: id) }
+        let otherID = "aura-unload-survivor"
+        _ = try await engine.load(directory: directory, id: otherID)
+        defer { engine.unload(id: otherID) }
+        #expect(await waitForBroker(otherID))
         let ready = await waitForBroker(id)
         #expect(ready)
         guard ready else {
@@ -397,7 +403,8 @@ struct WebRequestBrokerTests {
 
         engine.unload(id: id)
         #expect(!WebRequestBroker.shared.hasBlockingListener(for: id), "the listener outlived its extension")
-        #expect(!WebRequestBroker.shared.isActive, "the bundle would keep asking after an unload")
+        #expect(WebRequestBroker.shared.hasBlockingListener(for: otherID), "unloading one extension removed another")
+        #expect(WebRequestBroker.shared.isActive, "the surviving extension still needs the bundle")
         #expect(!ExtensionMessageRelay.shared.hasBackground(for: id))
     }
 
@@ -422,8 +429,8 @@ struct WebRequestBrokerTests {
         defer { server.stop() }
         let port = try await server.start()
 
-        let webView = try loopbackWebView(engine: engine)
-        defer { webView.window?.close() }
+        let (webView, window) = try loopbackWebView(engine: engine)
+        defer { window.close() }
 
         let id = "aura-wedged-test"
         _ = try await engine.load(directory: directory, id: id)
@@ -484,23 +491,23 @@ struct WebRequestBrokerTests {
         let optionsPage = try #require(context.optionsPageURL)
         var peak = before
         for _ in 0 ..< 50 {
-            let page = try extensionPageWebView(for: context)
+            let (page, window) = try extensionPageWebView(for: context)
             page.load(URLRequest(url: optionsPage))
             _ = await poll(timeout: 10) {
                 (try? await page.evaluateJavaScript("window.__auraDone === true")) as? Bool == true
             }
             peak = max(peak, ExtensionMessageRelay.shared.openPortCount(for: id))
-            page.window?.close()
+            window.close()
             page.removeFromSuperview()
         }
         // A closed port is reaped either by its own handler or by the next page
         // attaching, so one more open is what settles the count.
-        let settle = try extensionPageWebView(for: context)
+        let (settle, settleWindow) = try extensionPageWebView(for: context)
         settle.load(URLRequest(url: optionsPage))
         _ = await poll(timeout: 10) {
             ExtensionMessageRelay.shared.openPortCount(for: id) <= 2
         }
-        settle.window?.close()
+        settleWindow.close()
         let after = ExtensionMessageRelay.shared.openPortCount(for: id)
 
         print("RELAY ports before=\(before) peak=\(peak) after=\(after) over 50 opens")
@@ -556,8 +563,8 @@ struct WebRequestBrokerTests {
         #expect(attached, "the background shim never opened its relay port")
         guard attached else { return }
 
-        let webView = try extensionPageWebView(for: context)
-        defer { webView.window?.close() }
+        let (webView, window) = try extensionPageWebView(for: context)
+        defer { window.close() }
         webView.load(URLRequest(url: try #require(context.optionsPageURL)))
 
         let done = await poll(timeout: 30) {
@@ -639,8 +646,8 @@ struct WebRequestBrokerTests {
 
         // The dashboard is the harder case: a page in a tab that frames another
         // page, each one connecting on its own.
-        let dashboard = try extensionPageWebView(for: context)
-        defer { dashboard.window?.close() }
+        let (dashboard, dashboardWindow) = try extensionPageWebView(for: context)
+        defer { dashboardWindow.close() }
         let options = try #require(context.optionsPageURL, "the blocker has to declare an options page")
         dashboard.load(URLRequest(url: options))
 
@@ -670,16 +677,18 @@ struct WebRequestBrokerTests {
 
     @available(macOS 15.4, *)
     @MainActor
-    private func extensionPageWebView(for context: WKWebExtensionContext) throws -> WKWebView {
+    private func extensionPageWebView(for context: WKWebExtensionContext) throws -> (WKWebView, NSWindow) {
         let configuration = try #require(context.webViewConfiguration, "the context has to be loaded first")
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 400), configuration: configuration)
         webView.isInspectable = true
         let window = NSWindow(
             contentRect: webView.frame, styleMask: [.borderless], backing: .buffered, defer: false
         )
+        // The caller owns the window. AppKit must not add a release on close.
+        window.isReleasedWhenClosed = false
         window.contentView = webView
         window.makeKeyAndOrderFront(nil)
-        return webView
+        return (webView, window)
     }
 
     private func poll(timeout: TimeInterval, _ condition: () async -> Bool) async -> Bool {
@@ -816,7 +825,7 @@ struct WebRequestBrokerTests {
     /// attached, in a real window so WebKit does not throttle it.
     @available(macOS 15.4, *)
     @MainActor
-    private func loopbackWebView(engine: ExtensionEngine) throws -> WKWebView {
+    private func loopbackWebView(engine: ExtensionEngine) throws -> (WKWebView, NSWindow) {
         let configuration = WKWebViewConfiguration()
         configuration.processPool = try #require(AuraWebBundle.processPool)
         configuration.webExtensionController = engine.controller
@@ -824,9 +833,10 @@ struct WebRequestBrokerTests {
 
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), configuration: configuration)
         let window = NSWindow(contentRect: webView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         window.contentView = webView
         window.makeKeyAndOrderFront(nil)
-        return webView
+        return (webView, window)
     }
 
     /// Loads `url` and waits for that document, not the empty one the web view

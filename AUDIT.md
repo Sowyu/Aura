@@ -1,10 +1,13 @@
 # Code audit, 7 September 2026
 
-Status: fixes implemented, portable checks passing, macOS verification pending.
-Baseline commit: `73f9b86`. No commits, releases or deployments were made.
+Status: fixes implemented, portable checks passing, macOS CI validation in progress.
+Baseline commit: `73f9b86`. Changes are committed on `audit/native-validation-20260907`.
+No release or deployment was made.
 
 The subsequent [performance pass](PERFORMANCE.md) records reduced bridge work and
 native changes awaiting profiling. The portable suite now contains ten tests.
+The first macOS runs caught a generic static-property compile error, formatting
+failures and an unhosted WebKit test fixture. Those fixes are included on the branch.
 
 The largest problems were trust boundaries and lifecycle handling. Page JavaScript
 could influence trusted browser state, optional extension permissions were granted
@@ -26,9 +29,10 @@ implementations. It was not an exhaustive manual reading of every source line.
 | Architecture and tooling | Duplicate origin logic, dead flags/types, cache keys, port ownership, dependencies, CI and release scripts | Xcode build, SwiftLint, SwiftFormat, dependency resolution and vulnerability review |
 | Interface | Sidebar accessibility actions and motion helpers, reviewed in source | VoiceOver, keyboard navigation, system Reduce Motion, visual and performance checks in the running app |
 
-This Debian environment has no Swift compiler, Xcode or macOS frameworks. Syntax
-parsing cannot establish Swift type correctness or native runtime behavior. No visual
-quality score or native performance result is claimed.
+This Debian environment has no Swift compiler, Xcode or macOS frameworks. Native
+validation runs on GitHub's Apple Silicon macOS runner with Xcode 26.0.1. Syntax
+parsing alone cannot establish Swift type correctness or native runtime behavior.
+No visual quality score or whole-browser performance result is claimed.
 
 ## Security and privacy fixes
 
@@ -93,7 +97,7 @@ and regression coverage; reducing total line count was not the acceptance criter
 ## Checks performed
 
 1. `bash scripts/check-local.sh` passes. It checks shell syntax, parses shipped page
-   scripts, runs four dependency-free Node tests against the actual password script,
+   scripts, runs ten dependency-free Node tests against the shipped bridge scripts,
    and runs `git diff --check`.
 2. All four bridge regressions fail against the original script from `73f9b86`.
    They cover document replacement, missing document IDs, synthetic Enter events and
@@ -107,7 +111,7 @@ and regression coverage; reducing total line count was not the acceptance criter
 5. Added or extended native tests for content-world isolation, origin-scoped
    permissions, stale permission answers, private capture/favicons, import validation,
    extension resource boundaries, file grants, motion synchronization and bridge
-   encoding. These tests have not run here.
+   encoding. The macOS CI suite now executes these checks.
 
 ## Open findings
 
@@ -115,7 +119,7 @@ These are remaining work, not claims that the affected paths are safe.
 
 | Priority | Finding | Required follow-up |
 | --- | --- | --- |
-| Release gate | Native compilation, lint, formatting and runtime checks are unavailable on Linux. | Run the commands below on macOS; fix any failures before release. |
+| Release gate | macOS CI validation is in progress. | Require native tests, injected-bundle tests, Release compilation, lint and formatting before release. |
 | High | [XPIUnpacker](aura/Features/Extensions/Services/FirefoxAddonStore.swift) delegates extraction to ditto without application-level entry/size limits. Local CRX signatures are explicitly not verified. | Test traversal, symlinks and oversized archives on macOS; define and enforce the supported trust and size limits. Do not treat HTTPS status checks as signature verification. |
 | Medium | [BookmarkPortability.apply](aura/Features/Importer/Services/BookmarkPortability.swift) returns an added-count summary after `saveOrLog`, even if saving failed. [HistoryManager](aura/Features/History/Services/HistoryManager.swift) also discards some save errors. | Add persistence failure tests and propagate save failures without rolling back unrelated edits in the shared context. |
 | Medium | [ExtensionVersion](aura/Features/Extensions/Services/ExtensionUpdates.swift) compares suffixes lexically. For example, `1.0` is not considered newer than `1.0b2`. | Adopt the supported Firefox version ordering and test prerelease-to-release updates. |

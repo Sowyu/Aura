@@ -14,8 +14,8 @@
 ## Review status
 
 Aura is experimental. The [code audit](AUDIT.md) records security and correctness
-fixes, checks that ran, and remaining work. The audit changes still need a macOS
-build and native tests before release.
+fixes, checks that ran, and remaining work. macOS CI validation of the audit changes
+is in progress before release.
 
 ## Install
 

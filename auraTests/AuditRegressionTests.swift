@@ -147,17 +147,27 @@ struct FileGrantLifetimeTests {
 @MainActor
 struct PasswordWorldTests {
     @Test func websitesCannotReplaceThePasswordBridge() async throws {
-        let scripts = OraBrowserScripts.userScripts().filter { $0.name == "ora-password-manager" }
-        #expect(scripts.count == 1)
+        let script = try #require(OraBrowserScripts.userScripts().first { $0.name == "ora-password-manager" })
+        let diagnosticScript = BrowserUserScript(
+            name: script.name,
+            source: "try {\n\(script.source)\n} catch (error) { window.__passwordError = String(error.stack || error); }",
+            injectionTime: script.injectionTime,
+            forMainFrameOnly: script.forMainFrameOnly,
+            usesPasswordWorld: script.usesPasswordWorld
+        )
+        let server = try LocalHTTPServer(html: "<html><title>audit fixture</title><input type='password'></html>")
+        let port = try await server.start()
+        defer { server.stop() }
         let page = BrowserPage(
             profile: BrowserEngineProfile(identifier: UUID(), isPrivate: true),
-            configuration: .oraDefault(userScripts: scripts, privacySettings: SpacePrivacySettings()),
+            configuration: .oraDefault(userScripts: [diagnosticScript], privacySettings: SpacePrivacySettings()),
             delegate: nil
         )
         let view = page.auraWebView
         // WebKit throttles views without a window, including document-end scripts.
         let frame = NSRect(x: 0, y: 0, width: 400, height: 300)
         let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         view.frame = frame
         window.contentView = view
         window.makeKeyAndOrderFront(nil)
@@ -165,7 +175,8 @@ struct PasswordWorldTests {
             window.orderOut(nil)
             page.teardown()
         }
-        view.loadHTMLString("<html><title>audit fixture</title><input type='password'></html>", baseURL: nil)
+        let url = try #require(URL(string: "http://127.0.0.1:\(port)/index.html"))
+        page.load(URLRequest(url: url))
         var ready = false
         for _ in 0 ..< 100 {
             let value = try? await view.evaluateJavaScript(
@@ -176,7 +187,15 @@ struct PasswordWorldTests {
             }
             try await Task.sleep(for: .milliseconds(100))
         }
-        try #require(ready, "Password script did not load")
+        let diagnostic = try await view.evaluateJavaScript(
+            """
+            JSON.stringify({url: location.href, state: document.readyState,
+                installed: window.__oraPasswordManagerInstalled,
+                handler: typeof window.webkit?.messageHandlers?.passwordManager,
+                error: window.__passwordError})
+            """, in: nil, in: BrowserPage.passwordWorld
+        )
+        try #require(ready, "Password script did not load: \(diagnostic)")
         let exposed = try await view.evaluateJavaScript(
             "typeof window.__oraPasswordManager + ':' + typeof window.webkit.messageHandlers.passwordManager"
         )

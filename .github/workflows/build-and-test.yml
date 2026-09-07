@@ -104,9 +104,11 @@ jobs:
           -project Aura.xcodeproj -scheme aura -destination "platform=macOS" \
           -derivedDataPath DerivedData -resultBundlePath WebBundleResults.xcresult \
           -only-testing:auraTests/WebBundleTests -only-testing:auraTests/WebRequestBrokerTests \
+          -only-testing:auraTests/BrowserPageTests \
           CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee webbundle.log | xcbeautify
 
     - name: Build Release
+      if: ${{ steps.tests.outcome == 'success' && steps.webbundle.outcome == 'success' }}
       run: |
         set -o pipefail
         xcodebuild build -project Aura.xcodeproj -scheme aura \
@@ -128,6 +130,7 @@ jobs:
           *.log
           *.xcresult
           format.patch
+          ~/Library/Logs/DiagnosticReports/Aura*
         if-no-files-found: ignore
         retention-days: 7
 
