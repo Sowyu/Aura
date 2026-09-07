@@ -31,7 +31,8 @@ class Tab: ObservableObject, Identifiable {
     @Transient @Published var backgroundColor: Color = .black
     @Transient var historyManager: HistoryManager?
     @Transient var downloadManager: DownloadManager?
-    @Transient var tabManager: TabManager?
+    // The window owns the manager. A tab must not retain its owner through activeTab.
+    @Transient weak var tabManager: TabManager?
     @Transient var browserPage: BrowserPage?
     @Transient var pageDelegate: TabBrowserPageDelegate?
     @Transient @Published var isWebViewReady: Bool = false

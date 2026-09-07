@@ -53,6 +53,22 @@ struct TabLifecycleTests {
         }
     }
 
+    @Test func anActiveTabDoesNotRetainItsWindowsManager() throws {
+        weak var releasedManager: TabManager?
+        var retainedTab: Tab?
+        do {
+            let (manager, space) = try makeManager()
+            let tab = try makeTab(manager, space, order: 1)
+            manager.activeTab = tab
+            releasedManager = manager
+            retainedTab = tab
+            #expect(tab.tabManager === manager)
+        }
+        #expect(releasedManager == nil)
+        #expect(retainedTab != nil)
+        #expect(retainedTab?.tabManager == nil)
+    }
+
     @Test func privateTabsDoNotFetchOrPersistFavicons() throws {
         let (manager, space) = try makeManager()
         let tab = try makeTab(manager, space, order: 1)

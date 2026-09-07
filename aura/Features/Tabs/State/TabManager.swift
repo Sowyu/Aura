@@ -55,9 +55,6 @@ final class TabManager {
     /// purpose: a closed window's manager drops out on its own.
     @ObservationIgnored private static var registry: [WeakTabManager] = []
 
-    // ponytail: a manager only leaves the registry when it deallocates, and `Tab` holds
-    // its manager strongly, so a closed window's last active tab stays warm. Unregister
-    // explicitly if closing windows is ever shown to hold memory.
     /// Ids of the tabs shown in any open window. Hibernation consults this instead of
     /// its own `activeTab`, so a tab on screen in another window is never evicted.
     static var activeTabIDsAcrossWindows: Set<UUID> {

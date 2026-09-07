@@ -104,6 +104,12 @@ tab now scans once instead of sorting the whole tab array. Space switching uses
 the same selection rule. These reduce work but do not establish a measured launch
 speedup by themselves.
 
+Tabs now hold a weak reference to their window's tab manager. The old strong
+reference formed a cycle through the manager's active tab, preventing manager
+cleanup. A native regression keeps a tab alive while releasing its manager and
+checks that the manager deallocates. This establishes ownership behavior, not a
+whole-browser memory reduction in bytes.
+
 Dock reopening selects a browser window, restores it if minimized and brings it
 forward. Settings and utility windows cannot take its place. An app that has quit
 still needs to launch a new process; reopening a running app is a different workload.
