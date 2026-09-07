@@ -9,7 +9,7 @@ struct WindowDragHandle: NSViewRepresentable {
         override var mouseDownCanMoveWindow: Bool { false }
         override func mouseDown(with event: NSEvent) {
             if event.clickCount == 2 {
-                window?.performZoom(nil)
+                window?.performTitlebarDoubleClick()
             } else {
                 window?.performDrag(with: event)
             }

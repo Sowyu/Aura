@@ -10,8 +10,9 @@ final class DialogManager {
     var dialogs: [Dialog] = []
 
     @discardableResult
-    func show(@ViewBuilder content: @escaping (String) -> some View) -> String {
-        let dialog = Dialog { id in content(id) }
+    func show(onConfirm: (() -> Void)? = nil, @ViewBuilder content: @escaping (String) -> some View) -> String {
+        var dialog = Dialog { id in content(id) }
+        dialog.onConfirm = onConfirm
         withAnimation(AnimationSettings.easeOut(0.15)) {
             dialogs.append(dialog)
         }

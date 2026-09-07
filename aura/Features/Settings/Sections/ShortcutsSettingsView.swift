@@ -172,7 +172,8 @@ struct ShortcutRowView: View {
                     )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(isEditing ? "Recording shortcut for \(item.name)" : "\(item.name) shortcut, \(item.currentChord.display)"))
+            .accessibilityLabel(Text(isEditing ? "Recording shortcut for \(item.name)" :
+                    "\(item.name) shortcut, \(item.currentChord.display)"))
             // The chip already switches to an accent fill and a heavier stroke while it
             // waits for a chord; growing it as well broke the no-scale rule.
             .animation(AnimationSettings.easeOut(0.1), value: isEditing)

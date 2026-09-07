@@ -71,46 +71,36 @@ class EmojiViewModel: ObservableObject {
 
     private var allEmojis: [EmojiItem] = []
 
-    init() {
-        loadEmojis()
-    }
-
-    private func loadEmojis() {
+    private static let catalog: (categories: [EmojiCategory], error: String?) = {
         guard let url = Bundle.main.url(forResource: "emoji-set", withExtension: "json") else {
-            error = "JSON file not found."
-            isLoading = false
-            return
+            return ([], "The emoji catalog is missing from the app")
         }
-
         do {
             let data = try Data(contentsOf: url)
             guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let emojisDict = root["emojis"] as? [String: Any]
-            else {
-                throw NSError(domain: "Invalid JSON structure", code: 0)
+                  let emojisDict = root["emojis"] as? [String: Any] else {
+                return ([], "The emoji catalog could not be read")
             }
-
             var result: [EmojiCategory] = []
-            for category in Self.categoryOrder {
+            for category in categoryOrder {
                 guard let subcategories = emojisDict[category] as? [String: Any] else { continue }
-                let subcategoryOrder = getSubcategoryOrder(for: category)
-                let flat: [EmojiItem] =
-                    subcategoryOrder.isEmpty
-                        ? extractEmojis(from: subcategories)
-                        : subcategoryOrder.flatMap { subcat -> [EmojiItem] in
-                            guard let items = subcategories[subcat] as? [[String: Any]] else { return [] }
-                            return items.compactMap(EmojiItem.init(from:))
-                        }
+                let order = getSubcategoryOrder(for: category)
+                let flat: [EmojiItem] = order.isEmpty ? extractEmojis(from: subcategories) : order.flatMap { subcat in
+                    (subcategories[subcat] as? [[String: Any]] ?? []).compactMap(EmojiItem.init(from:))
+                }
                 result.append(EmojiCategory(category: category, emojis: EmojiVariants.group(flat)))
             }
-
-            categories = result
-            allEmojis = result.flatMap(\.emojis)
-            selectedCategory = categories.first?.category
+            return (result, nil)
         } catch {
-            self.error = error.localizedDescription
+            return ([], error.localizedDescription)
         }
+    }()
 
+    init() {
+        categories = Self.catalog.categories
+        error = Self.catalog.error
+        allEmojis = categories.flatMap(\.emojis)
+        selectedCategory = categories.first?.category
         isLoading = false
     }
 
@@ -124,12 +114,12 @@ class EmojiViewModel: ObservableObject {
         "Flags"
     ]
 
-    private func extractEmojis(from subcategories: [String: Any]) -> [EmojiItem] {
+    private static func extractEmojis(from subcategories: [String: Any]) -> [EmojiItem] {
         subcategories.values.compactMap { $0 as? [[String: Any]] }
             .flatMap { $0.compactMap(EmojiItem.init(from:)) }
     }
 
-    private func getSubcategoryOrder(for category: String) -> [String] {
+    private static func getSubcategoryOrder(for category: String) -> [String] {
         switch category {
         case "Smileys, Emotion, People & Body":
             return [

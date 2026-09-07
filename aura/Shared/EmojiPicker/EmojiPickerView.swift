@@ -12,6 +12,9 @@ struct EmojiGridView: View {
 
     var body: some View {
         ScrollView {
+            if viewModel.filteredEmojis.isEmpty {
+                Text("No emoji match your search").foregroundStyle(theme.mutedForeground)
+            }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 32), spacing: 4)], spacing: 4) {
                 ForEach(viewModel.filteredEmojis) { item in
                     cell(for: item)
@@ -23,16 +26,18 @@ struct EmojiGridView: View {
 
     private func cell(for item: EmojiItem) -> some View {
         emojiTile(item.emoji, size: 16)
-            .onTapGesture {
-                if item.variants.isEmpty {
-                    onSelect(item.emoji)
-                } else {
-                    variantItemID = item.id
-                }
-            }
+            .onTapGesture { select(item) }
+            .accessibilityLabel(Text(item.name))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(Text(item.variants.isEmpty ? "" : "Opens skin tone options"))
+            .accessibilityAction { select(item) }
             .popover(isPresented: variantBinding(for: item), arrowEdge: .bottom) {
                 variantStrip(for: item)
             }
+    }
+
+    private func select(_ item: EmojiItem) {
+        if item.variants.isEmpty { onSelect(item.emoji) } else { variantItemID = item.id }
     }
 
     private func variantBinding(for item: EmojiItem) -> Binding<Bool> {
@@ -47,6 +52,12 @@ struct EmojiGridView: View {
         return LazyVGrid(columns: Array(repeating: GridItem(.fixed(32), spacing: 4), count: 6), spacing: 4) {
             ForEach(forms) { form in
                 emojiTile(form.emoji, size: 18)
+                    .accessibilityLabel(Text(form.name))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction {
+                        variantItemID = nil
+                        onSelect(form.emoji)
+                    }
                     .onTapGesture {
                         variantItemID = nil
                         onSelect(form.emoji)
@@ -65,29 +76,5 @@ struct EmojiGridView: View {
             .cornerRadius(AuraRadius.button)
             .contentShape(Rectangle())
             .onHover { hoveredEmoji = $0 ? emoji : nil }
-    }
-}
-
-/// Custom Search Bar
-struct SearchBar: View {
-    @Binding var text: String
-
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(theme.mutedForeground)
-            TextField("Search", text: $text)
-                .textFieldStyle(PlainTextFieldStyle())
-                .frame(maxWidth: .infinity)
-        }
-        .padding(8)
-        .background(theme.mutedBackground)
-        .cornerRadius(AuraRadius.row)
-        .overlay(
-            RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
-                .stroke(theme.border, lineWidth: 1)
-        )
     }
 }

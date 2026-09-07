@@ -453,7 +453,7 @@ struct ExtensionConsentSheet: View {
         HStack {
             OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: cancel)
             Spacer()
-            OraButton(label: "Install", keyboardShortcut: "return", action: { install(allowsPrivateWindows) })
+            OraButton(label: "Install", action: { install(allowsPrivateWindows) })
         }
     }
 }

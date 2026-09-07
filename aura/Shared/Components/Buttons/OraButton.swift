@@ -59,13 +59,7 @@ struct OraButton: View {
         }
     }
 
-    private var cornerRadius: CGFloat {
-        switch size {
-        case .sm: 8
-        case .md: 10
-        case .lg: 12
-        }
-    }
+    private var cornerRadius: CGFloat { AuraRadius.button }
 
     private var iconSpacing: CGFloat {
         switch size {
@@ -123,6 +117,7 @@ struct OraButton: View {
                 if let icon = leadingIcon {
                     Image(systemName: icon)
                         .font(.system(size: fontSize - 1, weight: .medium))
+                        .foregroundColor(labelColor)
                 }
 
                 Text(label)
@@ -133,27 +128,30 @@ struct OraButton: View {
                     Image(systemName: icon)
                         .font(.system(size: fontSize - 1, weight: .medium))
                         .foregroundColor(labelColor)
+                        .accessibilityHidden(true)
                 }
 
                 if let shortcut = keyboardShortcut {
                     Spacer().frame(width: 3)
 
                     let systemIcons = ["return", "command", "shift", "control", "option", "escape", "delete.left"]
-                    let isSystemIcon = systemIcons.contains(shortcut)
+                    let symbolName = shortcut == "esc" ? "escape" : shortcut
+                    let isSystemIcon = systemIcons.contains(symbolName)
 
                     Group {
                         if isSystemIcon {
-                            Image(systemName: shortcut)
+                            Image(systemName: symbolName)
                         } else {
-                            Text(shortcut.lowercased()).opacity(0.5)
+                            Text(shortcut.lowercased())
                         }
                     }
                     .font(.system(size: fontSize - 3, weight: .semibold))
                     .frame(minWidth: shortcutSize, minHeight: shortcutSize)
                     .padding(.horizontal, isSystemIcon || shortcut.count == 1 ? 0 : 4)
                     .background(labelColor.opacity(variant == .default || variant == .destructive ? 0.15 : 0.07))
-                    .cornerRadius(4)
+                    .cornerRadius(AuraRadius.button)
                     .foregroundColor(labelColor)
+                    .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, hPadding)

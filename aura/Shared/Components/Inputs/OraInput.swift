@@ -49,13 +49,7 @@ struct OraInput: View {
         }
     }
 
-    private var cornerRadius: CGFloat {
-        switch size {
-        case .sm: 8
-        case .md: 10
-        case .lg: 12
-        }
-    }
+    private var cornerRadius: CGFloat { AuraRadius.row }
 
     // MARK: - Variant colors
 
@@ -99,7 +93,7 @@ struct OraInput: View {
         VStack(alignment: .leading, spacing: 5) {
             if let label {
                 Text(label)
-                    .font(.system(size: fontSize - 0.5, weight: .medium))
+                    .font(.system(size: fontSize - 1, weight: .medium))
                     .foregroundColor(isDisabled ? theme.disabledForeground : theme.foreground)
             }
 

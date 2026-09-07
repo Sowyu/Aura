@@ -34,7 +34,13 @@ enum WindowFactory {
         // it still centres, which is what every window did before.
         let unplaced = window.frame
         window.setFrameAutosaveName("AuraBrowserWindow")
-        if window.frame == unplaced { window.center() }
+        if window.frame == unplaced {
+            if let front = AppDelegate.browserWindow(in: NSApp.orderedWindows) {
+                window.cascadeTopLeft(from: NSPoint(x: front.frame.minX, y: front.frame.maxY))
+            } else {
+                window.center()
+            }
+        }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         return window

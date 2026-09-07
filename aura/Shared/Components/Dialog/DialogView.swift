@@ -101,7 +101,7 @@ private struct DialogsOverlay: View {
     let dialogs: [Dialog]
     let dismiss: (String) -> Void
 
-    private static let transition: AnyTransition = .offset(y: -12).combined(with: .opacity)
+    private static let transition: AnyTransition = .opacity
 
     @State private var quitMonitor: Any?
 
@@ -112,11 +112,13 @@ private struct DialogsOverlay: View {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
                     .onTapGesture { dismiss(dialog.id) }
+                    .accessibilityHidden(true)
                     .transition(.opacity)
 
                 // Dialog content — wrapped so SwiftUI sees a concrete type
                 DialogContentView(content: dialog.content)
                     .id(dialog.id)
+                    .accessibilityAddTraits(.isModal)
                     .transition(Self.transition)
             }
         }

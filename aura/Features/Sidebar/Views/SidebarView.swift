@@ -372,7 +372,7 @@ struct SidebarView: View {
     }
 
     private func toggleMaximizeWindow() {
-        window?.toggleMaximized()
+        window?.performTitlebarDoubleClick()
     }
 }
 

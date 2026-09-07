@@ -48,7 +48,7 @@ struct SpaceIconPicker: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            SearchBar(text: $search)
+            OraInput(text: $search, placeholder: "Search…", size: .sm, leadingIcon: "magnifyingglass")
                 .frame(height: 36)
                 .onChange(of: search) { _, newValue in emojiModel.searchText = newValue }
 
@@ -64,7 +64,7 @@ struct SpaceIconPicker: View {
         .padding(8)
         .overlay {
             if mode == .emoji, let error = emojiModel.error {
-                Text("Error: \(error)").foregroundColor(.red)
+                Text(error).foregroundColor(theme.destructive)
             }
         }
     }
@@ -90,6 +90,12 @@ struct SpaceIconPicker: View {
             )
             .contentShape(Circle())
             .help(hex ?? "Auto")
+            .accessibilityLabel(Text(hex ?? "Auto"))
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction {
+                colorHex = hex
+                if selectedSymbol != nil { onSelect(.color(hex)) }
+            }
             .onTapGesture {
                 colorHex = hex
                 if selectedSymbol != nil { onSelect(.color(hex)) }
@@ -100,9 +106,11 @@ struct SpaceIconPicker: View {
     private static let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 6)
 
     private var symbolGrid: some View {
-        ScrollView {
+        let results = SpaceIconCatalog.search(search)
+        return ScrollView {
+            if results.isEmpty { Text("No icons match your search").foregroundStyle(theme.mutedForeground) }
             LazyVGrid(columns: Self.gridColumns, spacing: 4) {
-                ForEach(SpaceIconCatalog.search(search)) { symbol in
+                ForEach(results) { symbol in
                     SpaceIconView(symbol: symbol.name, colorHex: colorHex, emoji: "", size: 20)
                         .frame(height: 36)
                         .frame(maxWidth: .infinity)
@@ -110,6 +118,12 @@ struct SpaceIconPicker: View {
                         .cornerRadius(AuraRadius.button)
                         .contentShape(Rectangle())
                         .onHover { hoveredSymbol = $0 ? symbol.name : nil }
+                        .accessibilityLabel(Text(symbol.name))
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction {
+                            selectedSymbol = symbol.name
+                            onSelect(.symbol(name: symbol.name, colorHex: colorHex))
+                        }
                         .onTapGesture {
                             selectedSymbol = symbol.name
                             onSelect(.symbol(name: symbol.name, colorHex: colorHex))
@@ -136,6 +150,7 @@ struct SpaceIconPicker: View {
                         )
                 }
                 .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
+                .accessibilityLabel(Text(category.category))
                 .padding(4)
                 Spacer()
             }

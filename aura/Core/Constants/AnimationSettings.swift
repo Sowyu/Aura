@@ -5,13 +5,15 @@ import os
 /// readers and writers share a lock because they can run on different threads.
 enum AnimationSettings {
     private static let cachedReduceMotion = OSAllocatedUnfairLock(
-        initialState: UserDefaults.standard.bool(forKey: SettingsStore.reduceMotionKey)
+        initialState: UserDefaults.standard.bool(forKey: SettingsStore.reduceMotionKey) || NSWorkspace.shared
+            .accessibilityDisplayShouldReduceMotion
     )
 
     static var reduceMotion: Bool { cachedReduceMotion.withLock { $0 } }
 
     static func reduceMotionDidChange(to value: Bool) {
-        cachedReduceMotion.withLock { $0 = value }
+        let effective = value || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        cachedReduceMotion.withLock { $0 = effective }
     }
 
     static func duration(_ seconds: Double) -> Double {

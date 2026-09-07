@@ -26,6 +26,7 @@ final class ToastManager {
             toasts.append(toast)
         }
 
+        AccessibilityNotification.Announcement(message).post()
         scheduleDismiss(for: toast.id, after: duration ?? defaultDuration)
 
         return toast.id

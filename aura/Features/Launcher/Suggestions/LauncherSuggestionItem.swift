@@ -166,7 +166,7 @@ struct LauncherSuggestionItem: View {
         .onTapGesture(perform: activate)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isFocused ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction(perform: activate)
+        .accessibilityAction { activate() }
         .onHover { hover in
             if hover, mouseHasMoved {
                 focusedElement = suggestion.id

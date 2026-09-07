@@ -181,6 +181,7 @@ struct LauncherView: View {
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private var panel: some View {
@@ -192,6 +193,7 @@ struct LauncherView: View {
             viewModel: viewModel,
             focusToken: appState.launcherFocusToken
         )
+        .accessibilityAddTraits(.isModal)
         .onAppear {
             if !appState.launcherSearchText.isEmpty {
                 input = appState.launcherSearchText

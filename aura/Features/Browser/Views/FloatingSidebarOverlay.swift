@@ -89,6 +89,7 @@ struct FloatingSidebarOverlay: View {
 }
 
 private struct ResizeHandle: View {
+    @State private var dragStartWidth: CGFloat?
     @Binding var dragFraction: CGFloat?
     var sidebarFraction: FractionHolder
     let sidebarPosition: SidebarPosition
@@ -108,10 +109,12 @@ private struct ResizeHandle: View {
             .gesture(
                 DragGesture()
                     .onChanged { value in
+                        let base = dragStartWidth ?? floatingWidth
+                        dragStartWidth = base
                         let proposedWidth: CGFloat = if sidebarPosition == .primary {
-                            max(0, min(floatingWidth + value.translation.width, totalWidth))
+                            max(0, min(base + value.translation.width, totalWidth))
                         } else {
-                            max(0, min(floatingWidth - value.translation.width, totalWidth))
+                            max(0, min(base - value.translation.width, totalWidth))
                         }
 
                         let newFraction = proposedWidth / max(totalWidth, 1)
@@ -122,6 +125,7 @@ private struct ResizeHandle: View {
                             sidebarFraction.value = fraction
                         }
                         dragFraction = nil
+                        dragStartWidth = nil
                     }
             )
     }

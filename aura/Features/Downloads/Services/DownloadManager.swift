@@ -332,7 +332,7 @@ final class DownloadManager {
         final class Answer { var value: DownloadCollisionChoice? }
         let answer = Answer()
 
-        dialogManager.show { id in
+        dialogManager.show(onConfirm: { answer.value = .keepBoth }) { id in
             DownloadCollisionDialog(
                 fileName: fileName,
                 folderName: folder.lastPathComponent

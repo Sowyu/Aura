@@ -6,11 +6,11 @@ struct WindowAccessor: NSViewRepresentable {
 
     /// Mirrors `ToolbarManager.isToolbarHidden` so the native window buttons can
     /// move into the top toolbar row when it is visible.
-    @AppStorage("ui.toolbar.hidden") private var isToolbarHidden: Bool = false
 
     /// Compact mode hides the row but hover-reveals it; the buttons ride along so the
     /// revealed row is identical to the pinned one.
     @Environment(ToolbarManager.self) private var toolbarManager
+    @Environment(SidebarManager.self) private var sidebarManager
 
     /// Windows SwiftUI made itself never went through `WindowFactory`, so the glass
     /// setting is applied from here and reverted the moment it is switched off.
@@ -165,11 +165,11 @@ struct WindowAccessor: NSViewRepresentable {
 
         // The toolbar hosts the real window buttons; without it the sidebar/URL bar
         // draws its own controls and the native ones stay hidden.
-        let rowIsUp = !isToolbarHidden || toolbarManager.isFloatingToolbarVisible
+        let rowIsUp = !toolbarManager.isToolbarHidden || toolbarManager.isFloatingToolbarVisible
         let showInToolbar = rowIsUp && !isFullscreen
 
         for (_, button) in buttons {
-            button.isHidden = !(isFullscreen || showInToolbar)
+            button.isHidden = !(isFullscreen || showInToolbar || sidebarManager.sidebarPosition == .secondary)
         }
 
         for (type, button) in buttons where coordinator.defaultOrigins[type] == nil {

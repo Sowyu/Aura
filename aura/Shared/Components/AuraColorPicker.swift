@@ -77,6 +77,7 @@ struct AuraColorPicker: View {
 
     private var hueBar: some View {
         bar(
+            label: "Hue",
             fill: LinearGradient(
                 colors: stride(from: 0.0, through: 1.0, by: 1.0 / 6.0)
                     .map { Color(hue: $0, saturation: 1, brightness: 1) },
@@ -93,6 +94,7 @@ struct AuraColorPicker: View {
 
     private var intensityBar: some View {
         bar(
+            label: "Opacity",
             fill: LinearGradient(
                 colors: [
                     Color(hue: hue, saturation: saturation, brightness: value, opacity: 0),
@@ -110,6 +112,7 @@ struct AuraColorPicker: View {
     }
 
     private func bar<Fill: ShapeStyle>(
+        label: String,
         fill: Fill,
         knobColor: Color,
         fraction: Double,
@@ -129,6 +132,16 @@ struct AuraColorPicker: View {
             )
         }
         .frame(height: Self.barHeight)
+        .accessibilityElement()
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(Text("\(Int(fraction * 100))%"))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: onChange(clamped(fraction + 0.02))
+            case .decrement: onChange(clamped(fraction - 0.02))
+            @unknown default: break
+            }
+        }
     }
 
     private func knob(filledWith color: Color) -> some View {
@@ -160,6 +173,8 @@ struct AuraColorPicker: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text(preset))
+                .help(preset)
             }
         }
     }
@@ -174,8 +189,12 @@ struct AuraColorPicker: View {
                         .stroke(theme.border, lineWidth: 1)
                 )
             TextField("#RRGGBB", text: $hexField)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(.body, design: .monospaced))
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, design: .monospaced))
+                .padding(6)
+                .background(theme.mutedBackground, in: .rect(cornerRadius: AuraRadius.button))
+                .overlay(RoundedRectangle(cornerRadius: AuraRadius.button).stroke(theme.border, lineWidth: 1))
+                .accessibilityLabel(Text("Hex color"))
                 .onSubmit(applyHexField)
         }
     }

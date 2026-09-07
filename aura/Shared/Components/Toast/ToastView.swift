@@ -63,7 +63,6 @@ private struct ToastsContainerView: View {
                         ? CGFloat(depth) * (estimatedToastHeight + expandedGap) * stackDirection
                         : CGFloat(depth) * collapsedOffset * stackDirection
                 )
-                .opacity(depth >= maxVisible ? 0 : 1)
                 .zIndex(Double(index))
                 .gesture(swipeToDismiss(toast: toast))
                 .transition(.slide(isTop: isTop))
@@ -150,6 +149,8 @@ struct ToastItemView: View {
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
+            .accessibilityLabel(Text("Dismiss"))
+            .help("Dismiss")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

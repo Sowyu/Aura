@@ -69,17 +69,7 @@ struct FavTabItem: View {
                 .padding(2)
             }
         }
-        .onAppear {
-            if tabManager.isActive(tab) {
-                tab
-                    .restoreTransientState(
-                        historyManager: historyManager,
-                        downloadManager: downloadManager,
-                        tabManager: tabManager,
-                        isPrivate: privacyMode.isPrivate
-                    )
-            }
-        }
+
         .foregroundColor(textColor)
         .frame(height: 48)
         .frame(maxWidth: .infinity)

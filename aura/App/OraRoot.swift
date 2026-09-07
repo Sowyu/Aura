@@ -283,9 +283,14 @@ struct OraRoot: View {
         keyModifierListener.registerKeyDownHandler { event in
             guard !appState.isFloatingTabSwitchVisible else { return false }
             guard let chord = KeyChord(fromEvent: event),
-                  chord == KeyboardShortcuts.Tabs.next.currentChord || chord == KeyboardShortcuts.Tabs.previous.currentChord
+                  chord == KeyboardShortcuts.Tabs.next.currentChord || chord == KeyboardShortcuts.Tabs.previous
+                  .currentChord
             else { return false }
-            DispatchQueue.main.async { appState.isFloatingTabSwitchVisible = true }
+            DispatchQueue.main.async {
+                appState.switcherStartsBackward = chord == KeyboardShortcuts.Tabs.previous.currentChord
+                appState.switcherCommitsOnControlRelease = event.modifierFlags.contains(.control)
+                appState.isFloatingTabSwitchVisible = true
+            }
             return true
         }
     }

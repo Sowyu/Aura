@@ -36,7 +36,7 @@ struct FloatingTabSwitcher: View {
         .onAppear {
             preloadSnapshots()
             if !recentTabs.isEmpty {
-                let to = keyModifierListener.modifierFlags.contains(.shift) ? recentTabs.count - 1 : min(1, recentTabs.count - 1)
+                let to = appState.switcherStartsBackward ? recentTabs.count - 1 : min(1, recentTabs.count - 1)
                 focusedTab = recentTabs[to].id
             }
             startMouseMonitor()
@@ -48,7 +48,7 @@ struct FloatingTabSwitcher: View {
             if isVisible {
                 preloadSnapshots()
                 if !recentTabs.isEmpty {
-                    let to = keyModifierListener.modifierFlags.contains(.shift) ? recentTabs.count - 1 : min(1, recentTabs.count - 1)
+                    let to = appState.switcherStartsBackward ? recentTabs.count - 1 : min(1, recentTabs.count - 1)
                     focusedTab = recentTabs[to].id
                 }
                 startMouseMonitor()
@@ -248,7 +248,7 @@ struct FloatingTabSwitcher: View {
     }
 
     private func handleModifierChange(_ newFlags: NSEvent.ModifierFlags) {
-        guard !newFlags.contains(.control) else { return }
+        guard appState.switcherCommitsOnControlRelease, !newFlags.contains(.control) else { return }
 
         if let focusedTabId = focusedTab,
            let tab = recentTabs.first(where: { $0.id == focusedTabId }) {

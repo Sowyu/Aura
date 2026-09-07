@@ -57,7 +57,6 @@ struct OraCommands: Commands {
 
             Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
                 .keyboardShortcut(KeyboardShortcuts.Window.close.keyboardShortcut)
-
         }
 
         CommandGroup(after: .undoRedo) {

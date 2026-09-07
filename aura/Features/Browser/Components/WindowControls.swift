@@ -22,8 +22,6 @@ struct WindowControls: View {
                     isHovered = hovering
                 }
             }
-        } else {
-            EmptyView()
         }
     }
 }
@@ -60,28 +58,38 @@ struct WindowControlButton: View {
         isWindowFocused ? 1.0 : 0.25
     }
 
+    private var label: String {
+        switch type {
+        case .close: return "Close window"
+        case .minimize: return "Minimize window"
+        case .zoom: return "Toggle full screen"
+        }
+    }
+
     var body: some View {
-        Image(imageName)
-            .resizable()
-            .frame(width: buttonSize, height: buttonSize)
-            .opacity(imageOpacity)
-            .onAppear {
-                syncWindowFocus()
-            }
-            .onChange(of: window) { _, _ in
-                syncWindowFocus()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
-                guard notification.object as? NSWindow === window else { return }
-                isWindowFocused = true
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { notification in
-                guard notification.object as? NSWindow === window else { return }
-                isWindowFocused = false
-            }
-            .onTapGesture {
-                performAction()
-            }
+        Button(action: performAction) {
+            Image(imageName)
+                .resizable()
+                .frame(width: buttonSize, height: buttonSize)
+                .opacity(imageOpacity)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
+        .help(label)
+        .onAppear {
+            syncWindowFocus()
+        }
+        .onChange(of: window) { _, _ in
+            syncWindowFocus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
+            guard notification.object as? NSWindow === window else { return }
+            isWindowFocused = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { notification in
+            guard notification.object as? NSWindow === window else { return }
+            isWindowFocused = false
+        }
     }
 
     private func performAction() {

@@ -138,17 +138,7 @@ struct TabItem: View {
                 .frame(width: 20, height: 20)
                 .opacity(isHovering ? 1 : 0)
         }
-        .onAppear {
-            if tabManager.isActive(tab) {
-                tab
-                    .restoreTransientState(
-                        historyManager: historyManager,
-                        downloadManager: downloadManager,
-                        tabManager: tabManager,
-                        isPrivate: privacyMode.isPrivate
-                    )
-            }
-        }
+
         .padding(8)
         .opacity(isDragging ? 0.45 : 1.0)
         .background(backgroundColor, in: .rect(cornerRadius: AuraRadius.row))

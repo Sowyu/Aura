@@ -15,6 +15,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // folder that already has files in it, and the marker is a file.
         _ = TabManager.previousRunCrashed
         AppearanceManager.shared.updateAppearance()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(accessibilityOptionsChanged),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil
+        )
         StartupProfiler.mark("didFinishLaunching")
         #if DEBUG
             // Two dylibs off disk, only ever used after the app is up. Loading them
@@ -27,6 +31,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         #endif
+    }
+
+    @objc private func accessibilityOptionsChanged() {
+        AnimationSettings.reduceMotionDidChange(to: SettingsStore.shared.reduceMotion)
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -127,6 +135,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @Observable
 @MainActor
 final class AppState {
+    var switcherStartsBackward = false
+    var switcherCommitsOnControlRelease = true
     var showLauncher: Bool = false
     /// Bumped by every request to open the launcher, including one made while it is
     /// already up, so the field asks for first responder again instead of the panel

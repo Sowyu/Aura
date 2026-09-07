@@ -109,7 +109,7 @@ struct Theme: Equatable {
     }
 
     var mutedForeground: Color {
-        .secondary
+        forcedForeground?.opacity(0.65) ?? .secondary
     }
 
     var disabledBackground: Color {
@@ -117,7 +117,8 @@ struct Theme: Equatable {
     }
 
     var disabledForeground: Color {
-        colorScheme == .dark ? .white.opacity(0.3) : Color(.disabledControlTextColor)
+        forcedForeground?
+            .opacity(0.35) ?? (colorScheme == .dark ? .white.opacity(0.3) : Color(.disabledControlTextColor))
     }
 
     var launcherMainBackground: Color {
@@ -125,11 +126,11 @@ struct Theme: Equatable {
     }
 
     var placeholder: Color {
-        Color(.placeholderTextColor)
+        forcedForeground?.opacity(0.45) ?? Color(.placeholderTextColor)
     }
 
     var border: Color {
-        Color(.separatorColor)
+        forcedForeground?.opacity(0.18) ?? Color(.separatorColor)
     }
 
     var destructive: Color {
@@ -146,48 +147,6 @@ struct Theme: Equatable {
 
     var info: Color {
         Color(hex: "#799EFF")
-    }
-
-    /// Search engine colors
-    var grok: Color {
-        colorScheme == .dark ? .white : .black
-    }
-
-    var claude: Color {
-        Color(hex: "#d97757")
-    }
-
-    var openai: Color {
-        colorScheme == .dark ? .white : .black
-    }
-
-    var t3chat: Color {
-        Color(hex: "#960971")
-    }
-
-    var perplexity: Color {
-        Color(hex: "#20808D")
-    }
-
-    var reddit: Color {
-        Color(hex: "#FF4500")
-    }
-
-    // swiftlint:disable:next identifier_name
-    var x: Color {
-        colorScheme == .dark ? .white : .black
-    }
-
-    var google: Color {
-        .blue
-    }
-
-    var youtube: Color {
-        Color(hex: "#FC0D1B")
-    }
-
-    var github: Color {
-        colorScheme == .dark ? .white : Color(hex: "#181717")
     }
 }
 

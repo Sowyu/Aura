@@ -223,8 +223,12 @@ enum WindowMouseMonitor {
             listeners.removeAll()
         }
 
+        private var lastLocation: NSPoint?
+
         private func broadcast() {
             let location = NSEvent.mouseLocation
+            guard location != lastLocation else { return }
+            lastLocation = location
             for handler in listeners.values { handler(location) }
         }
     }

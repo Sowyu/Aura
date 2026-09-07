@@ -256,12 +256,11 @@ struct BrowserView: View {
                 }
             }
         }
-        .onChange(of: tabManager.activeTab) { oldTab, newTab in
+        .onChange(of: tabManager.activeTab) { oldTab, _ in
             if showFloatingSidebar {
                 oldTab?.evaluateJavaScript(Self.removeShieldJS)
                 injectSidebarMouseShield(visible: true)
             }
-
         }
         .onAppear {
             // Compact mode's hidden flags live in their own defaults keys, so a fresh
