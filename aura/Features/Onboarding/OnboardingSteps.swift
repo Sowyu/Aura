@@ -34,7 +34,7 @@ private struct OnboardingPage<Content: View>: View {
 
     @Environment(\.theme) private var theme
 
-    private static var copyWidth: CGFloat { 300 }
+    private let copyWidth: CGFloat = 300
 
     var body: some View {
         HStack(spacing: 0) {
@@ -62,7 +62,7 @@ private struct OnboardingPage<Content: View>: View {
                 }
             }
             .padding(36)
-            .frame(width: Self.copyWidth, alignment: .topLeading)
+            .frame(width: copyWidth, alignment: .topLeading)
 
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

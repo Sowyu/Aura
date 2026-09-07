@@ -1,7 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-trash_command=$(command -v trash-put || true)
+trash_command=/usr/bin/trash
+if [[ ! -x "$trash_command" ]]; then
+    trash_command=$(command -v trash-put || true)
+fi
 if [[ -z "$trash_command" ]] && command -v brew >/dev/null; then
     trash_command="$(brew --prefix trash-cli)/bin/trash-put"
 fi

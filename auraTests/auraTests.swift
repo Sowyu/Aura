@@ -189,11 +189,12 @@ struct OraTests {
     }
 
     @Test func fingerprintingEnabledSpacesGenerateProtectionScripts() {
+        // Global Privacy Control has a script of its own; off, so only fingerprinting counts.
         let disabledScripts = BrowserPrivacyService.privacyScripts(
-            for: SpacePrivacySettings(blockFingerprinting: false)
+            for: SpacePrivacySettings(blockFingerprinting: false, globalPrivacyControl: false)
         )
         let enabledScripts = BrowserPrivacyService.privacyScripts(
-            for: SpacePrivacySettings(blockFingerprinting: true)
+            for: SpacePrivacySettings(blockFingerprinting: true, globalPrivacyControl: false)
         )
 
         #expect(disabledScripts.isEmpty)
