@@ -63,7 +63,7 @@ struct LauncherSuggestionItem: View {
                 .resizable()
                 .frame(width: 14, height: 14)
                 .foregroundStyle(isFocused ? theme.foreground : .secondary)
-        } else if suggestion.faviconURL != nil {
+        } else if suggestion.faviconURL != nil || suggestion.faviconLocalFile != nil {
             FavIcon(
                 isWebViewReady: true,
                 favicon: suggestion.faviconURL,
@@ -100,7 +100,7 @@ struct LauncherSuggestionItem: View {
                 .foregroundStyle(isFocused ? theme.foreground.opacity(0.6) : .secondary)
         } else if suggestion.type == .openedTab {
             HStack(alignment: .center, spacing: 8) {
-                Text("Switch to tab ")
+                Text("Switch to tab")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(
                         isFocused ? theme.foreground : .secondary
@@ -122,6 +122,15 @@ struct LauncherSuggestionItem: View {
                     )
             }
             .clipShape(ConditionallyConcentricRectangle(cornerRadius: AuraRadius.button, style: .continuous))
+        }
+    }
+
+    private func activate() {
+        suggestion.action()
+        // Row actions queue navigation, so dismissal must precede that next turn.
+        withTransaction(Transaction(animation: nil)) {
+            appState.showLauncher = false
+            appState.isURLBarEditing = false
         }
     }
 
@@ -153,13 +162,11 @@ struct LauncherSuggestionItem: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(backgroundColor)
         .clipShape(ConditionallyConcentricRectangle(cornerRadius: AuraRadius.button, style: .continuous))
-        .onTapGesture {
-            suggestion.action()
-            DispatchQueue.main.async {
-                appState.showLauncher = false
-                appState.isURLBarEditing = false
-            }
-        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: activate)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isFocused ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(perform: activate)
         .onHover { hover in
             if hover, mouseHasMoved {
                 focusedElement = suggestion.id

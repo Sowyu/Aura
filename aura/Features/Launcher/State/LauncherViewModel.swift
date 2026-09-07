@@ -55,9 +55,10 @@ class LauncherViewModel: ObservableObject {
     func searchHandler(_ text: String) {
         guard tabManager != nil, historyManager != nil else { return }
 
-        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else {
+        localSearchTask?.cancel()
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             invalidateAutoSuggestionRequests()
-            suggestions = defaultSuggestions()
+            suggestions = []
             focusedElement = suggestions.first?.id ?? UUID()
             return
         }
@@ -66,7 +67,6 @@ class LauncherViewModel: ObservableObject {
 
         // The history fetch and the tab scan used to run on every keystroke, on the main
         // thread, between the key going down and the character appearing.
-        localSearchTask?.cancel()
         let now = Date()
         if Self.runsLocalSearchNow(lastRunAt: lastLocalSearchAt, now: now) {
             lastLocalSearchAt = now

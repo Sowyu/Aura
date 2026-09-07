@@ -16,9 +16,6 @@ struct LauncherField: View {
     /// swallows the key, so SwiftUI's `onExitCommand` never runs and nothing closes.
     var onEscape: (() -> Void)?
     let placeholder: String
-    /// The floating launcher drives focus through SwiftUI's `FocusState`; the home page
-    /// pulses `isEditing` instead, because it must not hold first responder forever.
-    var isFocused: FocusState<Bool>.Binding?
     var isEditing: Bool?
     /// See `LauncherTextField.focusToken`.
     var focusToken = 0
@@ -32,7 +29,7 @@ struct LauncherField: View {
     /// Row height, fill and corner are the whole point of this type: change them here and
     /// both call sites move together.
     static let height: CGFloat = 56
-    static let cornerRadius: CGFloat = 8
+    static let cornerRadius: CGFloat = AuraRadius.row
     static let hairline: CGFloat = 0.08
     /// Leading padding, icon slot and the gap after it: where the field's text starts.
     /// Suggestion rows are inset to match, so the two columns line up.
@@ -59,7 +56,7 @@ struct LauncherField: View {
                     .frame(width: Self.iconWidth, height: Self.iconWidth)
             }
 
-            field
+            textField
         }
         .padding(.horizontal, Self.horizontalPadding)
         .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height, alignment: .leading)
@@ -70,15 +67,6 @@ struct LauncherField: View {
                 .stroke((match?.color ?? theme.foreground).opacity(showsChrome ? Self.hairline : 0), lineWidth: 1)
                 .padding(0.25)
         )
-    }
-
-    @ViewBuilder
-    private var field: some View {
-        if let isFocused {
-            textField.focused(isFocused)
-        } else {
-            textField
-        }
     }
 
     private var textField: some View {

@@ -3,6 +3,7 @@ import Inject
 import SwiftUI
 
 struct BrowserView: View {
+    @Environment(\.window) private var window
     @Environment(TabManager.self) private var tabManager
     @Environment(AppState.self) private var appState
     @Environment(DownloadManager.self) private var downloadManager
@@ -200,6 +201,7 @@ struct BrowserView: View {
             // it floats over the start page.
             if appState.showLauncher {
                 LauncherView()
+                    .transition(.opacity)
             }
 
             // Last in the stack so every menu draws over the chrome and the page. Renders
@@ -208,31 +210,39 @@ struct BrowserView: View {
         }
         .edgesIgnoringSafeArea(.all)
         .enableInjection()
+        .animation(AnimationSettings.easeOut(0.12), value: appState.showLauncher)
         .animation(AnimationSettings.easeOut(0.15), value: showFloatingSidebar)
         .onChange(of: showFloatingSidebar) { _, visible in
             injectSidebarMouseShield(visible: visible)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .findNext)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .findNext)) { note in
+            guard WindowEventScope.windowOrKey.accepts(note, window: window) else { return }
             stepFind(forward: true)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .findPrevious)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .findPrevious)) { note in
+            guard WindowEventScope.windowOrKey.accepts(note, window: window) else { return }
             stepFind(forward: false)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { note in
+            guard WindowEventScope.windowOrKey.accepts(note, window: window) else { return }
             sidebarManager.toggleSidebar()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebarPosition)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebarPosition)) { note in
+            guard WindowEventScope.windowOrKey.accepts(note, window: window) else { return }
             sidebarManager.toggleSidebarPosition()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleCompactMode)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .toggleCompactMode)) { note in
+            guard WindowEventScope.windowOrKey.accepts(note, window: window) else { return }
             sidebarManager.setCompactEnabled(!sidebarManager.isCompactEnabled, toolbar: toolbarManager)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .showHistoryPanel)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .showHistoryPanel)) { note in
+            guard WindowEventScope.windowOrKey.accepts(note, window: window) else { return }
             withAnimation(AnimationSettings.easeOut(0.15)) {
                 sidebarManager.togglePanel(.history)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .showDownloadsPanel)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .showDownloadsPanel)) { note in
+            guard WindowEventScope.windowOrKey.accepts(note, window: window) else { return }
             withAnimation(AnimationSettings.easeOut(0.15)) {
                 sidebarManager.panel = .downloads
             }
@@ -251,23 +261,14 @@ struct BrowserView: View {
                 oldTab?.evaluateJavaScript(Self.removeShieldJS)
                 injectSidebarMouseShield(visible: true)
             }
-            if let tab = newTab, !tab.isWebViewReady {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                    tab.restoreTransientState(
-                        historyManager: historyManager,
-                        downloadManager: downloadManager,
-                        tabManager: tabManager,
-                        isPrivate: privacyMode.isPrivate
-                    )
-                }
-            }
+
         }
         .onAppear {
             // Compact mode's hidden flags live in their own defaults keys, so a fresh
             // window reconciles them with the persisted compact settings.
             sidebarManager.applyCompactModeIfEnabled(toolbar: toolbarManager)
             if let tab = tabManager.activeTab, !tab.isWebViewReady {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                DispatchQueue.main.async {
                     tab.restoreTransientState(
                         historyManager: historyManager,
                         downloadManager: downloadManager,

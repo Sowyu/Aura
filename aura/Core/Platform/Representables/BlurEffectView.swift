@@ -15,10 +15,11 @@ struct BlurEffectView: NSViewRepresentable {
         var isClickThrough = false
         var holeRadius: CGFloat = 15
         var holes: [CGRect] = [] {
-            didSet { if holes != oldValue { rebuildMask() } }
+            didSet { if holes != oldValue { needsLayout = true } }
         }
 
         private var maskedSize: CGSize = .zero
+        private var maskedHoles: [CGRect] = []
 
         override func hitTest(_ point: NSPoint) -> NSView? {
             isClickThrough ? nil : super.hitTest(point)
@@ -26,13 +27,14 @@ struct BlurEffectView: NSViewRepresentable {
 
         override func layout() {
             super.layout()
-            if bounds.size != maskedSize { rebuildMask() }
+            if bounds.size != maskedSize || holes != maskedHoles { rebuildMask() }
         }
 
         /// `maskImage` is stretched over the bounds, so the image is rebuilt at the exact
         /// bounds size and the holes map 1:1. `flipped: true` puts the origin top-left.
         private func rebuildMask() {
             maskedSize = bounds.size
+            maskedHoles = holes
             guard !holes.isEmpty, bounds.width > 0, bounds.height > 0 else {
                 maskImage = nil
                 return

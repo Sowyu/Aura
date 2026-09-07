@@ -161,14 +161,6 @@ struct URLBarField: View {
                     dismissEditing()
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .copyAddressURL)) { _ in
-                if let activeTab = tabManager.activeTab {
-                    ClipboardUtils.copyWithToast(
-                        activeTab.url.absoluteString,
-                        toastManager: toastManager
-                    )
-                }
-            }
     }
 
     // MARK: - Field
@@ -316,9 +308,9 @@ struct URLBarField: View {
 
     private var suggestionRows: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(launcherViewModel.suggestions) { suggestion in
+            ForEach(launcherViewModel.suggestions.indices, id: \.self) { index in
                 LauncherSuggestionItem(
-                    suggestion: suggestion,
+                    suggestion: launcherViewModel.suggestions[index],
                     focusedElement: $launcherViewModel.focusedElement,
                     leadingInset: LauncherRowMetrics.leadingInset(
                         textInset: Self.textInset,

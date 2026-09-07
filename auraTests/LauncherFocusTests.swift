@@ -13,19 +13,16 @@ struct LauncherFocusTests {
     private struct Probe: View {
         @State private var text = ""
         @State private var match: LauncherMatch?
-        @FocusState private var focused: Bool
         @StateObject private var viewModel = LauncherViewModel()
 
         var body: some View {
             LauncherMain(
                 text: $text,
                 match: $match,
-                isFocused: $focused,
                 onTabPress: {},
                 onEscape: {},
                 viewModel: viewModel
             )
-            .onAppear { focused = true }
         }
     }
 

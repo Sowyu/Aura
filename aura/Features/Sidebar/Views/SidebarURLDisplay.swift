@@ -129,15 +129,6 @@ struct SidebarURLDisplay: View {
                 .stroke(theme.invertedSolidWindowBackgroundColor.opacity(0.05), lineWidth: 1)
         )
         .animation(AnimationSettings.easeOut(0.1), value: isHovering)
-        .onReceive(NotificationCenter.default.publisher(for: .copyAddressURL)) { _ in
-            guard toolbarManager.isToolbarHidden else { return }
-            if let activeTab = tabManager.activeTab {
-                ClipboardUtils.copyWithToast(
-                    activeTab.url.absoluteString,
-                    toastManager: toastManager
-                )
-            }
-        }
     }
 
     private func displayParts(for tab: Tab) -> URLDisplayParts {

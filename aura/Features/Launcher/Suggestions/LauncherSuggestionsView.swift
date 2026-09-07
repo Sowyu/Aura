@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LauncherSuggestionsView: View {
-    @Binding var suggestions: [LauncherSuggestion]
+    let suggestions: [LauncherSuggestion]
     @Binding var focusedElement: UUID
     /// Row inset and icon column, so titles sit under the field's text. See
     /// `LauncherRowMetrics`.
@@ -10,9 +10,9 @@ struct LauncherSuggestionsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(suggestions) { suggestion in
+            ForEach(suggestions.indices, id: \.self) { index in
                 LauncherSuggestionItem(
-                    suggestion: suggestion,
+                    suggestion: suggestions[index],
                     focusedElement: $focusedElement,
                     leadingInset: leadingInset,
                     iconWidth: iconWidth

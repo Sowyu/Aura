@@ -53,6 +53,15 @@ struct LauncherSortingTests {
         #expect(LauncherResultMerger.ranksBefore(matching, other))
     }
 
+    @Test func typedURLDoesNotRepeatItsHistoryRow() {
+        let typed = link("news.com", url: "https://news.com")
+        let rows = LauncherResultMerger.merge(
+            typed: typed, links: [link("News", url: "https://news.com/")],
+            openTabs: [], trailing: []
+        )
+        #expect(rows.map(\.id) == [typed.id])
+    }
+
     @Test("No query means no boost")
     func noQueryNoBoost() {
         #expect(link("Red Panda", url: "https://a.com").prefixScore == 1)

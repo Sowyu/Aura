@@ -40,7 +40,7 @@ struct HomePageView: View {
     var body: some View {
         GeometryReader { geo in
             let width = min(Self.fieldMaxWidth, max(geo.size.width - Self.horizontalInset, 220))
-            column
+            column(width: width)
                 .frame(width: width)
                 .position(x: geo.size.width / 2, y: geo.size.height * Self.verticalFraction)
         }
@@ -52,6 +52,9 @@ struct HomePageView: View {
         .environment(\.launcherMouseHasMoved, mouseHasMoved)
         .onAppear(perform: start)
         .onDisappear(perform: stop)
+        .onChange(of: settings.onboardingCompleted) { _, done in
+            if done { focusField() }
+        }
         .onChange(of: tabManager.activeTab?.id) { _, id in
             if let tab, id == tab.id { focusField() }
         }
@@ -59,9 +62,9 @@ struct HomePageView: View {
 
     // MARK: - Column
 
-    private var column: some View {
+    private func column(width: CGFloat) -> some View {
         VStack(spacing: 18) {
-            Image("ora-logo-plain")
+            Image(decorative: "ora-logo-plain")
                 .resizable()
                 .renderingMode(.template)
                 .frame(width: 64, height: 64)
@@ -76,7 +79,7 @@ struct HomePageView: View {
                 // so the field never moves while typing.
                 .zIndex(1)
 
-            shortcutsRow
+            shortcutsRow(width: width)
 
             firstRunCard
         }
@@ -181,7 +184,7 @@ struct HomePageView: View {
     private var suggestions: some View {
         if !viewModel.suggestions.isEmpty {
             LauncherSuggestionsView(
-                suggestions: $viewModel.suggestions,
+                suggestions: viewModel.suggestions,
                 focusedElement: $viewModel.focusedElement,
                 leadingInset: LauncherRowMetrics.leadingInset(
                     textInset: LauncherField.textInset,
@@ -225,8 +228,8 @@ struct HomePageView: View {
     }
 
     @ViewBuilder
-    private var shortcutsRow: some View {
-        let items = shortcuts
+    private func shortcutsRow(width: CGFloat) -> some View {
+        let items = shortcuts.prefix(max(0, Int((width + 10) / (Self.tileSize + 10))))
         if !items.isEmpty {
             HStack(spacing: 10) {
                 ForEach(items) { item in
@@ -332,6 +335,7 @@ struct HomePageView: View {
     /// One-shot focus: raised for a beat so `LauncherTextField` picks it up, then dropped
     /// so a later click elsewhere on the page keeps first responder.
     private func focusField() {
+        guard settings.onboardingCompleted, !appState.showLauncher else { return }
         focusRequest = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             focusRequest = false

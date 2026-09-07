@@ -36,7 +36,7 @@ struct FloatingTabSwitcher: View {
         .onAppear {
             preloadSnapshots()
             if !recentTabs.isEmpty {
-                let to = recentTabs.count == 1 ? 0 : 1
+                let to = keyModifierListener.modifierFlags.contains(.shift) ? recentTabs.count - 1 : min(1, recentTabs.count - 1)
                 focusedTab = recentTabs[to].id
             }
             startMouseMonitor()
@@ -48,7 +48,7 @@ struct FloatingTabSwitcher: View {
             if isVisible {
                 preloadSnapshots()
                 if !recentTabs.isEmpty {
-                    let to = recentTabs.count == 1 ? 0 : 1
+                    let to = keyModifierListener.modifierFlags.contains(.shift) ? recentTabs.count - 1 : min(1, recentTabs.count - 1)
                     focusedTab = recentTabs[to].id
                 }
                 startMouseMonitor()
@@ -179,13 +179,20 @@ struct FloatingTabSwitcher: View {
     }
 
     private var keyboardHandler: some View {
-        KeyCaptureView(onKeyDown: { event in
-            if event.modifierFlags.contains([.control, .shift]) {
+        KeyCaptureView(onKeyDownResult: { event in
+            if event.keyCode == 53 {
+                closeFloatingTabSwitch()
+            } else if event.keyCode == 36 {
+                if let tab = recentTabs.first(where: { $0.id == focusedTab }) { activateTab(tab) }
+            } else if let chord = KeyChord(fromEvent: event), chord == KeyboardShortcuts.Tabs.previous.currentChord {
                 focusPreviousTab()
-            } else if event.modifierFlags.contains(.control) {
+            } else if let chord = KeyChord(fromEvent: event), chord == KeyboardShortcuts.Tabs.next.currentChord {
                 focusNextTab()
                 preWarmSnapshotsIfNeeded()
+            } else {
+                return event
             }
+            return nil
         })
     }
 

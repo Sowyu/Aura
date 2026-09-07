@@ -108,7 +108,7 @@ final class TabManager {
         modelContainer: modelContainer,
         modelContext: modelContext
     )
-    @ObservationIgnored private lazy var fallbackDownloadManager = DownloadManager(
+    @ObservationIgnored lazy var fallbackDownloadManager = DownloadManager(
         modelContainer: modelContainer,
         modelContext: modelContext
     )
@@ -817,34 +817,31 @@ final class TabManager {
         }
     }
 
+    var orderedTabs: [Tab] {
+        guard let container = activeContainer else { return [] }
+        let favorites = container.tabs.filter { $0.type == .fav }.sorted { $0.order > $1.order }
+        let pinned = container.tabs.filter { $0.type == .pinned }.sorted { $0.order > $1.order }
+        let normal = container.tabs.filter { $0.type == .normal && $0.folder == nil }
+            .map { (order: $0.order, tabs: [$0]) }
+        let folders = container.folders.map { folder in
+            (order: folder.order, tabs: folder.tabs.filter { $0.type == .normal }.sorted { $0.order > $1.order })
+        }
+        return favorites + pinned + (normal + folders).sorted { $0.order > $1.order }.flatMap(\.tabs)
+    }
+
     func selectTabAtIndex(_ index: Int) {
-        guard let container = activeContainer else { return }
+        let tabs = orderedTabs
+        let target = index == 9 ? tabs.count - 1 : index - 1
+        guard tabs.indices.contains(target) else { return }
+        activateTab(tabs[target])
+    }
 
-        // Match the sidebar ordering: favorites, then pinned, then normal tabs
-        // All sorted by order in descending order
-        let favoriteTabs = container.tabs
-            .filter { $0.type == .fav }
-            .sorted(by: { $0.order > $1.order })
-
-        let pinnedTabs = container.tabs
-            .filter { $0.type == .pinned }
-            .sorted(by: { $0.order > $1.order })
-
-        let normalTabs = container.tabs
-            .filter { $0.type == .normal }
-            .sorted(by: { $0.order > $1.order })
-
-        // Combine all tabs in the same order as the sidebar
-        let allTabs = favoriteTabs + pinnedTabs + normalTabs
-
-        // Handle special case: Command+9 selects the last tab
-        let targetIndex = (index == 9) ? allTabs.count - 1 : index - 1
-
-        // Validate index is within bounds
-        guard targetIndex >= 0, targetIndex < allTabs.count else { return }
-
-        let targetTab = allTabs[targetIndex]
-        activateTab(targetTab)
+    func selectAdjacentTab(forward: Bool) {
+        let tabs = orderedTabs
+        guard !tabs.isEmpty else { return }
+        let current = tabs.firstIndex { $0.id == activeTab?.id } ?? 0
+        let next = (current + (forward ? 1 : tabs.count - 1)) % tabs.count
+        activateTab(tabs[next])
     }
 
     func fetchContainers() -> [TabContainer] {

@@ -16,6 +16,7 @@ class AppearanceManager: ObservableObject {
     static let shared = AppearanceManager()
     @AppStorage("ui.app.appearance") var appearance: AppAppearance = .system {
         didSet {
+            objectWillChange.send()
             updateAppearance()
         }
     }

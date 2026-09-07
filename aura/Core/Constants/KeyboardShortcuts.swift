@@ -35,18 +35,6 @@ enum KeyboardShortcuts {
             category: "Tabs",
             defaultChord: KeyChord(keyEquivalent: .tab, modifiers: [.control, .shift])
         )
-        static let moveRight = KeyboardShortcutDefinition(
-            id: "tabs.moveRight",
-            name: "Move Tab Right",
-            category: "Tabs",
-            defaultChord: KeyChord(keyEquivalent: .rightArrow, modifiers: [.option, .command])
-        )
-        static let moveLeft = KeyboardShortcutDefinition(
-            id: "tabs.moveLeft",
-            name: "Move Tab Left",
-            category: "Tabs",
-            defaultChord: KeyChord(keyEquivalent: .leftArrow, modifiers: [.option, .command])
-        )
         /// Was ⌘D until bookmarks existed. Every browser spends ⌘D on "save this page",
         /// and two menu items sharing a key equivalent means AppKit picks one by menu
         /// order. A custom binding already stored under this id still wins.
@@ -281,12 +269,6 @@ enum KeyboardShortcuts {
     // MARK: - Developer
 
     enum Developer {
-        static let toggleDevTools = KeyboardShortcutDefinition(
-            id: "developer.toggleDevTools",
-            name: "Toggle DevTools",
-            category: "Developer",
-            defaultChord: KeyChord(keyEquivalent: .init("i"), modifiers: [.command, .option])
-        )
         // `developer.reloadIgnoringCache` was here on ⇧⌘R, the same chord as
         // `navigation.hardReload` and doing the same thing. Nothing referenced it, and
         // two commands on one chord means AppKit picks between them by menu order, so it
@@ -297,18 +279,6 @@ enum KeyboardShortcuts {
     // MARK: - App
 
     enum App {
-        static let quit = KeyboardShortcutDefinition(
-            id: "app.quit",
-            name: "Quit",
-            category: "App",
-            defaultChord: KeyChord(keyEquivalent: .init("q"), modifiers: [.command])
-        )
-        static let hide = KeyboardShortcutDefinition(
-            id: "app.hide",
-            name: "Hide",
-            category: "App",
-            defaultChord: KeyChord(keyEquivalent: .init("h"), modifiers: [.command])
-        )
         static let preferences = KeyboardShortcutDefinition(
             id: "app.preferences",
             name: "Preferences",
@@ -374,7 +344,7 @@ extension KeyboardShortcuts {
     static let allShortcuts: [KeyboardShortcutDefinition] = [
         // Tabs
         Tabs.new, Tabs.close, Tabs.restore, Tabs.next, Tabs.previous,
-        Tabs.moveRight, Tabs.moveLeft, Tabs.pin,
+        Tabs.pin,
         Tabs.tab1, Tabs.tab2, Tabs.tab3, Tabs.tab4, Tabs.tab5,
         Tabs.tab6, Tabs.tab7, Tabs.tab8, Tabs.tab9,
 
@@ -382,7 +352,7 @@ extension KeyboardShortcuts {
         Navigation.back, Navigation.forward, Navigation.reload, Navigation.hardReload,
 
         // Window
-        Window.new, Window.newPrivate, Window.close, Window.fullscreen,
+        Window.new, Window.newPrivate, Window.close, Window.fullscreen, Window.toggleCompactMode,
 
         // Address
         Address.copyURL, Address.focus,
@@ -399,17 +369,16 @@ extension KeyboardShortcuts {
         // Files
         Files.open,
 
+        Page.save, Page.reader, Page.source, Page.clearCookies,
+
         // Zoom
         Zoom.zoomIn, Zoom.zoomOut, Zoom.reset,
 
         // Privacy
         Privacy.toggleJavaScript,
 
-        // Developer
-        Developer.toggleDevTools,
-
         // App
-        App.quit, App.hide, App.preferences, App.toggleSidebar, App.toggleToolbar
+        App.preferences, App.toggleSidebar, App.toggleToolbar
     ]
 
     /// Get shortcuts grouped by category for settings display
@@ -417,5 +386,27 @@ extension KeyboardShortcuts {
         Dictionary(grouping: allShortcuts, by: \.category)
             .map { (category: $0.key, items: $0.value) }
             .sorted { $0.category.caseInsensitiveCompare($1.category) == .orderedAscending }
+    }
+}
+
+extension KeyboardShortcuts {
+    enum Page {
+        // Command-S belongs to the sidebar.
+        static let save = KeyboardShortcutDefinition(
+            id: "page.save", name: "Save Page As", category: "Page",
+            defaultChord: KeyChord(keyEquivalent: .init("s"), modifiers: [.command, .shift])
+        )
+        static let reader = KeyboardShortcutDefinition(
+            id: "page.reader", name: "Reader", category: "Page",
+            defaultChord: KeyChord(keyEquivalent: .init("r"), modifiers: [.command, .option])
+        )
+        static let source = KeyboardShortcutDefinition(
+            id: "page.source", name: "View Source", category: "Page",
+            defaultChord: KeyChord(keyEquivalent: .init("u"), modifiers: [.command, .option])
+        )
+        static let clearCookies = KeyboardShortcutDefinition(
+            id: "navigation.clearCookies", name: "Clear Cookies & Reload", category: "Navigation",
+            defaultChord: KeyChord(keyEquivalent: .init("r"), modifiers: [.command, .option, .shift])
+        )
     }
 }

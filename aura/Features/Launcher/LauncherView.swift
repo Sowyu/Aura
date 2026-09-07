@@ -13,8 +13,6 @@ struct LauncherView: View {
     @StateObject private var viewModel = LauncherViewModel()
 
     @State private var input = ""
-    @State private var isVisible = false
-    @FocusState private var isTextFieldFocused: Bool
     @State private var match: LauncherMatch?
     @State private var mouseHasMoved = false
     @State private var mouseMonitor: Any?
@@ -69,7 +67,7 @@ struct LauncherView: View {
             // Dismiss first and open one turn later, so the dismissal paints before
             // the tab's WKWebView is built. Built inline, the whole main-thread stall
             // showed as the launcher frozen on screen.
-            appState.showLauncher = false
+            withTransaction(Transaction(animation: nil)) { appState.showLauncher = false }
             DispatchQueue.main.async {
                 tabManager.openTab(
                     url: url,
@@ -84,10 +82,7 @@ struct LauncherView: View {
     }
 
     private func dismiss() {
-        isVisible = false
-        DispatchQueue.main.async {
-            appState.showLauncher = false
-        }
+        appState.showLauncher = false
     }
 
     var body: some View {
@@ -185,8 +180,6 @@ struct LauncherView: View {
             Color.black.opacity(0.25)
         }
         .ignoresSafeArea()
-        .opacity(isVisible ? 1 : 0)
-        .animation(AnimationSettings.easeOut(0.12), value: isVisible)
         .allowsHitTesting(false)
     }
 
@@ -194,17 +187,12 @@ struct LauncherView: View {
         LauncherMain(
             text: $input,
             match: $match,
-            isFocused: $isTextFieldFocused,
             onTabPress: onTabPress,
             onEscape: dismiss,
             viewModel: viewModel,
             focusToken: appState.launcherFocusToken
         )
-        .opacity(isVisible ? 1.0 : 0.0)
-        .animation(AnimationSettings.easeOut(0.12), value: isVisible)
         .onAppear {
-            isVisible = true
-            isTextFieldFocused = true
             if !appState.launcherSearchText.isEmpty {
                 input = appState.launcherSearchText
                 appState.launcherSearchText = ""
@@ -242,10 +230,6 @@ struct LauncherView: View {
             viewModel.reset()
             input = ""
             match = nil
-            isTextFieldFocused = false
-        }
-        .onChange(of: appState.showLauncher) { _, newValue in
-            isVisible = newValue
         }
     }
 }

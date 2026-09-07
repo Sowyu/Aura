@@ -4,6 +4,7 @@ import SwiftUI
 struct ShortcutsSettingsView: View {
     @StateObject private var shortcutManager = CustomKeyboardShortcutManager.shared
     @State private var editingShortcut: KeyboardShortcutDefinition?
+    @State private var recordingMessage: String?
 
     private let extensionManager = ExtensionManager.shared
 
@@ -53,15 +54,16 @@ struct ShortcutsSettingsView: View {
             item: item,
             isOverriden: shortcutManager.hasCustomShortcut(for: item),
             isEditing: editingShortcut == item,
-            displayText: display,
+            displayText: editingShortcut == item ? (recordingMessage ?? "Press a shortcut") : display,
             handler: { action in
                 handleAction(for: item, action: action)
             }
         )
         .overlay {
             if editingShortcut == item {
-                KeyCaptureView(onKeyDown: { event in
+                KeyCaptureView(onKeyDownResult: { event in
                     handleKeyCapture(event)
+                    return nil
                 })
                 .allowsHitTesting(false)
             }
@@ -78,6 +80,7 @@ struct ShortcutsSettingsView: View {
             if editingShortcut == item {
                 cancelEditing()
             } else {
+                recordingMessage = nil
                 editingShortcut = item
             }
         }
@@ -85,7 +88,18 @@ struct ShortcutsSettingsView: View {
 
     private func handleKeyCapture(_ event: NSEvent) {
         guard let editingShortcut else { return }
-        if KeyChord(fromEvent: event) != nil {
+        if event.keyCode == 53 {
+            cancelEditing()
+            return
+        }
+        guard !event.modifierFlags.intersection([.command, .option, .control]).isEmpty,
+              let chord = KeyChord(fromEvent: event) else { return }
+        let candidates = KeyboardShortcuts.allShortcuts + extensionShortcuts.map(\.definition)
+        if let taken = candidates.first(where: { $0.id != editingShortcut.id && $0.currentChord == chord }) {
+            recordingMessage = "Used by \(taken.name)"
+            return
+        }
+        do {
             shortcutManager.setCustomShortcut(for: editingShortcut, event: event)
             applyIfExtensionCommand(editingShortcut)
             cancelEditing()
@@ -101,6 +115,7 @@ struct ShortcutsSettingsView: View {
 
     private func cancelEditing() {
         editingShortcut = nil
+        recordingMessage = nil
     }
 }
 
@@ -133,8 +148,9 @@ struct ShortcutRowView: View {
 
             if isOverriden {
                 Button(action: { handler(.resetTapped) }) {
-                    Text("Reset to Default")
+                    Text("Reset to default")
                 }
+                .buttonStyle(.plain)
             }
 
             Button(action: { handler(.editTapped) }) {
@@ -156,6 +172,7 @@ struct ShortcutRowView: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(isEditing ? "Recording shortcut for \(item.name)" : "\(item.name) shortcut, \(item.currentChord.display)"))
             // The chip already switches to an accent fill and a heavier stroke while it
             // waits for a chord; growing it as well broke the no-scale rule.
             .animation(AnimationSettings.easeOut(0.1), value: isEditing)

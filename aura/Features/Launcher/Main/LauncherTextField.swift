@@ -81,7 +81,7 @@ struct LauncherTextField: NSViewRepresentable {
             }
         }
 
-        private func configureEditorIfNeeded() {
+        func configureEditorIfNeeded() {
             guard let textView = currentEditor() as? NSTextView else { return }
             if let color = cursorColor {
                 textView.insertionPointColor = color
@@ -150,7 +150,6 @@ struct LauncherTextField: NSViewRepresentable {
         let textField = CustomTextField()
         textField.delegate = context.coordinator
         textField.font = font
-        textField.bezelStyle = .roundedBezel
         textField.isBordered = false
         textField.focusRingType = .none
         textField.drawsBackground = false
@@ -186,7 +185,8 @@ struct LauncherTextField: NSViewRepresentable {
             onBeginEditing?()
             return text.wrappedValue
         }
-        if let isEditing { nsView.wantsFocus = isEditing }
+        // An expired home-page focus pulse must release the window lock.
+        nsView.wantsFocus = isEditing ?? false
         if let isEditing, isEditing != focused {
             // Outside a SwiftUI update pass: becoming first responder writes state.
             DispatchQueue.main.async {
@@ -209,19 +209,7 @@ struct LauncherTextField: NSViewRepresentable {
         if let textColor {
             nsView.textColor = NSColor(textColor)
         }
-        if let textView = nsView.currentEditor() as? NSTextView {
-            textView.insertionPointColor = nsView.cursorColor
-            textView.isHorizontallyResizable = true
-            textView.isVerticallyResizable = false
-            textView.textContainerInset = .zero
-            textView.textContainer?.widthTracksTextView = false
-            textView.textContainer?.containerSize = NSSize(
-                width: .greatestFiniteMagnitude,
-                height: nsView.bounds.height
-            )
-            textView.textContainer?.lineBreakMode = .byClipping
-            textView.textContainer?.maximumNumberOfLines = 1
-        }
+        nsView.configureEditorIfNeeded()
     }
 
     class Coordinator: NSObject, NSTextFieldDelegate {

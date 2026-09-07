@@ -303,11 +303,8 @@ class Tab: ObservableObject, Identifiable {
         self.isWebViewReady = false
         self.setupBrowserPageDelegate(for: page)
         self.syncBackgroundColorFromHex()
-        // Load after a short delay to ensure layout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-            self.startRestoredLoad(page: page, loading: loading)
-            self.isWebViewReady = true
-        }
+        startRestoredLoad(page: page, loading: loading)
+        isWebViewReady = true
     }
 
     /// Fire and forget by design: the two round trips below go to the web process, and

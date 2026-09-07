@@ -215,6 +215,9 @@ enum LauncherResultMerger {
         limit: Int = resultsLimit
     ) -> [LauncherSuggestion] {
         var sortable = mixOpenTabs(links: dedupeByURL(links), openTabs: openTabs)
+        if let key = LauncherScoring.urlKey(typed?.url) {
+            sortable.removeAll { $0.type == .suggestedLink && LauncherScoring.urlKey($0.url) == key }
+        }
         sortable.sort(by: ranksBefore)
         // Leave room for the search-engine rows that arrive a moment later, so they do
         // not push a row the user is already looking at off the bottom.

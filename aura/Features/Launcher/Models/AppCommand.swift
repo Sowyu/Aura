@@ -52,7 +52,7 @@ enum AppCommandCatalog {
     static let looseScore: Float = 0.5
 
     static let all: [AppCommand] = [
-        AppCommand("command.newTab", "New Tab", .newTab, shortcut: KeyboardShortcuts.Tabs.new),
+        AppCommand("command.newTab", "New home tab", .newTab),
         AppCommand("command.closeTab", "Close Tab", .closeActiveTab, shortcut: KeyboardShortcuts.Tabs.close),
         AppCommand(
             "command.reopenTab", "Reopen Closed Tab", .restoreLastTab,

@@ -58,8 +58,11 @@ struct OraRoot: View {
     /// so every `OraRoot.init` builds a manager set even if SwiftUI keeps only the first.
     /// Measured: SwiftUI calls this exactly once per window, and `TabManager.init` writes
     /// to the store (it creates the first space), so a second call would matter.
-    init(isPrivate: Bool = false, initialURL: URL? = nil) {
+    init(isPrivate: Bool = false, initialURL: URL? = nil, initialShowLauncher: Bool = false) {
         self.initialURL = initialURL
+        let initialState = AppState()
+        initialState.showLauncher = initialShowLauncher
+        _appState = State(wrappedValue: initialState)
         _privacyMode = StateObject(wrappedValue: PrivacyMode(isPrivate: isPrivate))
 
         let container = Self.openStore(isPrivate: isPrivate)
@@ -211,6 +214,7 @@ struct OraRoot: View {
         // onAppear can re-fire; registering twice would double-run every handler.
         guard notificationObservers.isEmpty else { return }
 
+        tabManager.fallbackDownloadManager = downloadManager
         downloadManager.toastManager = toastManager
         // The name-collision prompt goes on this window's dialog stack.
         downloadManager.dialogManager = dialogManager
@@ -278,7 +282,9 @@ struct OraRoot: View {
 
         keyModifierListener.registerKeyDownHandler { event in
             guard !appState.isFloatingTabSwitchVisible else { return false }
-            guard event.keyCode == 48, event.modifierFlags.contains(.control) else { return false }
+            guard let chord = KeyChord(fromEvent: event),
+                  chord == KeyboardShortcuts.Tabs.next.currentChord || chord == KeyboardShortcuts.Tabs.previous.currentChord
+            else { return false }
             DispatchQueue.main.async { appState.isFloatingTabSwitchVisible = true }
             return true
         }
@@ -374,6 +380,11 @@ extension OraRoot {
     /// run inline on the notification's main-queue delivery.
     fileprivate var events: [WindowEvent] {
         [
+            WindowEvent(.copyAddressURL, .windowOrKey) { _ in
+                if let tab = tabManager.activeTab {
+                    ClipboardUtils.copyWithToast(tab.url.absoluteString, toastManager: toastManager)
+                }
+            },
             WindowEvent(.quitRequested, .exactWindow) { _ in confirmQuit() },
             // `.windowOrKey`: the sidebar's menus post with a window that is nil inside
             // an `NSHostingView`, and `.window` dropped those posts on the floor.
@@ -431,8 +442,8 @@ extension OraRoot {
                     tabManager.togglePinTab(tab)
                 }
             },
-            WindowEvent(.nextTab) { _ in appState.isFloatingTabSwitchVisible = true },
-            WindowEvent(.previousTab) { _ in appState.isFloatingTabSwitchVisible = true },
+            WindowEvent(.nextTab) { _ in tabManager.selectAdjacentTab(forward: true) },
+            WindowEvent(.previousTab) { _ in tabManager.selectAdjacentTab(forward: false) },
             WindowEvent(.setAppearance) { note in
                 guard let raw = note.userInfo?["appearance"] as? String,
                       let mode = AppAppearance(rawValue: raw)

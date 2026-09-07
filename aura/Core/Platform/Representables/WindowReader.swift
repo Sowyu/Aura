@@ -7,14 +7,14 @@ struct WindowReader: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async { [weak view] in
-            if let win = view?.window { self.window = win }
+            if let win = view?.window, win !== self.window { self.window = win }
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async { [weak nsView] in
-            if let win = nsView?.window { self.window = win }
+            if let win = nsView?.window, win !== self.window { self.window = win }
         }
     }
 }

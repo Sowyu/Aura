@@ -14,7 +14,10 @@ class CustomKeyboardShortcutManager: ObservableObject {
     /// A binding stored under a retired id has nothing left to apply to, so it is dropped
     /// on load instead of being carried forward, where it would only ever show up as a
     /// phantom collision against a chord someone sets later.
-    static let retiredShortcutIDs: Set<String> = ["developer.reloadIgnoringCache"]
+    static let retiredShortcutIDs: Set<String> = [
+        "developer.reloadIgnoringCache", "tabs.moveRight", "tabs.moveLeft",
+        "developer.toggleDevTools", "app.quit", "app.hide"
+    ]
 
     /// The bindings that still belong to a command.
     static func withoutRetired(_ stored: [String: KeyChord]) -> [String: KeyChord] {
