@@ -123,7 +123,9 @@ struct ViewSourceView: View {
         }
         isLoading = true
         failure = nil
-        switch await PageSourceLoader.markup(for: target) {
+        let result = await PageSourceLoader.markup(for: target, tabID: tab.id)
+        guard !Task.isCancelled else { return }
+        switch result {
         case let .success(html):
             markup = html
             lines = ViewSourceDocument.lines(from: html)

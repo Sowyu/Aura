@@ -1,30 +1,17 @@
 import SwiftUI
+import os
 
-/// One dial for the window chrome's motion. With reduce motion on, every duration that
-/// goes through here becomes 0, so the sidebar, toolbar, launcher and menus cut straight
-/// to their end state instead of sliding.
-///
-/// The flag is read from `UserDefaults` rather than observed: a view picks the new value
-/// up on its next redraw, which for chrome is the same frame the user toggles anything.
-///
-/// It is read once and cached, because `duration`/`easeOut`/`spring` are called from
-/// view bodies at 84 sites; a `UserDefaults` lookup per animated modifier per frame is
-/// pure overhead. `SettingsStore.reduceMotion`'s `didSet` pushes changes back in here.
-///
-/// Zeroing durations is the whole reduce-motion story for the chrome, because the chrome
-/// has no scale or gradient effects to guard. Buttons, tabs and rows give press feedback
-/// with a tint, never by resizing, and every chrome fill is a flat colour. Adding either
-/// back would need a reduce-motion branch of its own, so do not.
+/// Chrome animation helpers. SettingsStore updates the cached app preference;
+/// readers and writers share a lock because they can run on different threads.
 enum AnimationSettings {
-    /// Written only from the main actor (the settings toggle), read from wherever a view
-    /// body runs. A `Bool` word is not worth a lock.
-    nonisolated(unsafe) private static var cachedReduceMotion =
-        UserDefaults.standard.bool(forKey: SettingsStore.reduceMotionKey)
+    private static let cachedReduceMotion = OSAllocatedUnfairLock(
+        initialState: UserDefaults.standard.bool(forKey: SettingsStore.reduceMotionKey)
+    )
 
-    static var reduceMotion: Bool { cachedReduceMotion }
+    static var reduceMotion: Bool { cachedReduceMotion.withLock { $0 } }
 
     static func reduceMotionDidChange(to value: Bool) {
-        cachedReduceMotion = value
+        cachedReduceMotion.withLock { $0 = value }
     }
 
     static func duration(_ seconds: Double) -> Double {

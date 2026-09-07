@@ -168,7 +168,7 @@ enum ExtensionShim {
             options: [.skipsHiddenFiles]
         )
         while let url = enumerator?.nextObject() as? URL {
-            guard url.pathExtension.lowercased() == "html" else { continue }
+            guard url.pathExtension.lowercased() == "html", containsResource(url, in: directory) else { continue }
             guard url.standardizedFileURL.path != backgroundPath else { continue }
             // A document with no script of its own cannot call runtime.connect,
             // and several of them are placeholders shown in place of a blocked
@@ -176,7 +176,7 @@ enum ExtensionShim {
             guard let html = try? String(contentsOf: url, encoding: .utf8),
                   html.range(of: "<script", options: .caseInsensitive) != nil
             else { continue }
-            injectScriptTags(into: url, scripts: [pageScriptName, scriptName])
+            injectScriptTags(into: url, in: directory, scripts: [pageScriptName, scriptName])
         }
     }
 
@@ -215,7 +215,7 @@ enum ExtensionShim {
         }
 
         if let page = background["page"] as? String {
-            injectScriptTags(into: directory.appendingPathComponent(page), scripts: prelude)
+            injectScriptTags(into: directory.appendingPathComponent(page), in: directory, scripts: prelude)
             return background
         }
 
@@ -228,8 +228,16 @@ enum ExtensionShim {
     /// Puts the shim's script tags ahead of every other script in a background
     /// page. Text surgery rather than an HTML parser: the file is the
     /// extension's own boilerplate, not arbitrary web content.
-    private static func injectScriptTags(into pageURL: URL, scripts: [String]) {
-        guard var html = try? String(contentsOf: pageURL, encoding: .utf8),
+    static func containsResource(_ url: URL, in directory: URL) -> Bool {
+        guard url.isFileURL, directory.isFileURL else { return false }
+        let root = directory.standardizedFileURL.resolvingSymlinksInPath().path
+        let resource = url.standardizedFileURL.resolvingSymlinksInPath().path
+        return resource.hasPrefix(root + "/")
+    }
+
+    private static func injectScriptTags(into pageURL: URL, in directory: URL, scripts: [String]) {
+        guard containsResource(pageURL, in: directory),
+              var html = try? String(contentsOf: pageURL, encoding: .utf8),
               !html.contains(scriptName)
         else { return }
 

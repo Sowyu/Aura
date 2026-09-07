@@ -433,6 +433,7 @@ struct SettingsBackupTests {
 
         let document: [String: Any] = [
             "format": 1,
+            "app": "Aura",
             "values": ["AppleLanguages": ["fr"], "browser.homePage": "https://ok.example"],
             "data": ["downloads.folderBookmark": Data([0x09]).base64EncodedString()]
         ]

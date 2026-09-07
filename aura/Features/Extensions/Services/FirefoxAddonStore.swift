@@ -114,7 +114,8 @@ struct FirefoxAddonStore {
     /// https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/
     static func slug(fromPageURL text: String) -> String? {
         guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
-              let host = url.host, host.hasSuffix("addons.mozilla.org")
+              url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased(), host == "addons.mozilla.org"
         else { return nil }
         let parts = url.path.split(separator: "/").map(String.init)
         guard let addonIndex = parts.firstIndex(of: "addon"), addonIndex + 1 < parts.count else { return nil }
@@ -153,7 +154,8 @@ struct FirefoxAddonStore {
         )
         components?.queryItems = items
         guard let searchURL = components?.url else { return FirefoxAddonPage() }
-        let (data, _) = try await URLSession.shared.data(from: searchURL)
+        let (data, response) = try await URLSession.shared.data(from: searchURL)
+        try Self.validate(response)
         return Self.parsePage(data)
     }
 
@@ -172,6 +174,7 @@ struct FirefoxAddonStore {
         guard (response as? HTTPURLResponse)?.statusCode != 404 else {
             throw FirefoxAddonStoreError.addonNotFound
         }
+        try Self.validate(response)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let addon = Self.parseAddon(json)
         else {
@@ -182,11 +185,20 @@ struct FirefoxAddonStore {
 
     /// Downloads the .xpi to a temporary file and returns its URL.
     func downloadXPI(from url: URL) async throws -> URL {
-        let (tempURL, _) = try await URLSession.shared.download(from: url)
+        guard url.scheme?.lowercased() == "https" else { throw URLError(.secureConnectionFailed) }
+        let (tempURL, response) = try await URLSession.shared.download(from: url)
+        try Self.validate(response)
         let destination = FileManager.default.temporaryDirectory
             .appendingPathComponent("ora-addon-\(UUID().uuidString).xpi")
         try FileManager.default.moveItem(at: tempURL, to: destination)
         return destination
+    }
+
+    static func validate(_ response: URLResponse) throws {
+        guard let response = response as? HTTPURLResponse,
+              response.url?.scheme?.lowercased() == "https",
+              (200 ... 299).contains(response.statusCode)
+        else { throw URLError(.badServerResponse) }
     }
 
     // MARK: - Response parsing
@@ -268,9 +280,10 @@ enum XPIUnpacker {
         } catch {
             throw FirefoxAddonStoreError.unpackFailed(error.localizedDescription)
         }
+        // Drain while ditto runs. Waiting first deadlocks when stderr fills its pipe.
+        let stderrData = errorPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            let stderrData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let reason = String(data: stderrData, encoding: .utf8) ?? "ditto exited \(process.terminationStatus)"
             throw FirefoxAddonStoreError.unpackFailed(reason.trimmingCharacters(in: .whitespacesAndNewlines))
         }

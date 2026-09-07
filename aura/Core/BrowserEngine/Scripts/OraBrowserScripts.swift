@@ -37,7 +37,8 @@ enum OraBrowserScripts {
                     name: "ora-password-manager",
                     source: passwordManagerScript,
                     injectionTime: .atDocumentEnd,
-                    forMainFrameOnly: true
+                    forMainFrameOnly: true,
+                    usesPasswordWorld: true
                 )
             )
         }
@@ -259,12 +260,13 @@ private extension OraBrowserScripts {
             return null;
         }
 
-        function caps() {
-            post({
-                type: 'caps',
-                hasNext: !!findNextButton(),
-                hasPrevious: !!findPrevButton()
-            });
+        let lastCaps = null;
+        function caps(force = false) {
+            const hasNext = !!findNextButton();
+            const hasPrevious = !!findPrevButton();
+            if (!force && lastCaps && lastCaps.hasNext === hasNext && lastCaps.hasPrevious === hasPrevious) return;
+            lastCaps = { type: 'caps', hasNext, hasPrevious };
+            post(lastCaps);
         }
 
         const stateFrom = (element) => ({
@@ -306,6 +308,10 @@ private extension OraBrowserScripts {
             if (elements.length === 0 && !hadMedia) return;
             if (elements.length === 0) {
                 hadMedia = false;
+                treeObserver.disconnect();
+                treeObserver = null;
+                lastCaps = null;
+                if (window.__oraMedia) window.__oraMedia.active = null;
                 post({ type: 'removed' });
                 return;
             }
@@ -338,7 +344,8 @@ private extension OraBrowserScripts {
             startWatchingTree();
             hadMedia = true;
             attach(element);
-            caps();
+            // A play event may have just created the native session.
+            caps(true);
         }
 
         for (const name of ['play', 'playing', 'loadedmetadata', 'loadeddata']) {

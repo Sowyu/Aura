@@ -53,6 +53,17 @@ struct TabLifecycleTests {
         }
     }
 
+    @Test func privateTabsDoNotFetchOrPersistFavicons() throws {
+        let (manager, space) = try makeManager()
+        let tab = try makeTab(manager, space, order: 1)
+        tab.isPrivate = true
+        tab.favicon = URL(string: "https://example.com/favicon.ico")
+        tab.faviconLocalFile = URL(fileURLWithPath: "/tmp/unused-private-favicon")
+        tab.setFavicon()
+        #expect(tab.favicon == nil)
+        #expect(tab.faviconLocalFile == nil)
+    }
+
     // MARK: - Closing
 
     @Test func closingTheActiveTabSelectsTheRowBelowIt() throws {

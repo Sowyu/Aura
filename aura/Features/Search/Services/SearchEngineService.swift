@@ -332,7 +332,7 @@ class SearchEngineService: ObservableObject {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await Self.suggestionsSession.data(from: url)
             let decoded = try JSONDecoder().decode(SuggestResponse.self, from: data)
             return decoded.suggestions
         } catch {
@@ -340,4 +340,13 @@ class SearchEngineService: ObservableObject {
             return []
         }
     }
+
+    // Shared by normal and private launchers. Typed queries and response cookies
+    // must not enter URLSession.shared's persistent cache or cookie jar.
+    private static let suggestionsSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
+        return URLSession(configuration: configuration)
+    }()
 }

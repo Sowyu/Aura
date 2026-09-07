@@ -113,37 +113,42 @@ struct SitePermissionStoreTests {
         body()
     }
 
-    @Test func grantsAreKeyedByRegistrableDomain() {
+    @Test func grantsAreKeyedByExactOrigin() {
         withCleanPermissions {
             let store = SettingsStore.shared
-            store.setSitePermission(true, for: .camera, host: "meet.example.com")
+            store.setSitePermission(true, for: .camera, origin: "https://meet.example.com")
 
-            #expect(store.sitePermissions(forHost: "example.com")?.camera == true)
-            #expect(store.sitePermissions(forHost: "other.example.com")?.camera == true)
-            #expect(store.sitePermissions(forHost: "example.org") == nil)
+            #expect(store.sitePermissions(forOrigin: "https://meet.example.com:443/call")?.camera == true)
+            #expect(store.sitePermissions(forOrigin: "https://other.example.com") == nil)
+            #expect(store.sitePermissions(forOrigin: "https://example.org") == nil)
+            #expect(store.sitePermissions(forOrigin: "https://meet.example.com:8443") == nil)
+            #expect(store.sitePermissions(forOrigin: "http://meet.example.com") == nil)
+            #expect(store.sitePermissions(forOrigin: "https://meet.example.com.") == nil)
+            store.sitePermissions["example.com"] = SitePermissionSettings(host: "example.com", camera: true)
+            #expect(store.sitePermissions(forOrigin: "https://example.com") == nil)
         }
     }
 
     @Test func aHostWithNoGrantsLeftDropsOutOfTheMap() {
         withCleanPermissions {
             let store = SettingsStore.shared
-            store.setSitePermission(true, for: .camera, host: "example.com")
-            store.setSitePermission(false, for: .microphone, host: "example.com")
+            store.setSitePermission(true, for: .camera, origin: "https://example.com")
+            store.setSitePermission(false, for: .microphone, origin: "https://example.com")
             #expect(store.sitePermissions.count == 1)
 
-            store.setSitePermission(nil, for: .camera, host: "example.com")
-            #expect(store.sitePermissions["example.com"]?.microphone == false)
+            store.setSitePermission(nil, for: .camera, origin: "https://example.com")
+            #expect(store.sitePermissions["https://example.com"]?.microphone == false)
 
-            store.setSitePermission(nil, for: .microphone, host: "example.com")
+            store.setSitePermission(nil, for: .microphone, origin: "https://example.com")
             #expect(store.sitePermissions.isEmpty)
         }
     }
 
-    @Test func removingASiteTakesEverySubdomainWithIt() {
+    @Test func removingAnOriginRemovesItsGrants() {
         withCleanPermissions {
             let store = SettingsStore.shared
-            store.setSitePermission(true, for: .camera, host: "example.com")
-            store.removeSitePermission(host: "meet.example.com")
+            store.setSitePermission(true, for: .camera, origin: "https://example.com")
+            store.removeSitePermission(host: "https://example.com")
             #expect(store.sitePermissions.isEmpty)
         }
     }
@@ -176,7 +181,7 @@ struct SitePermissionCoordinatorTests {
         let tab = UUID()
         withCleanCoordinator(tab: tab) {
             let coordinator = SitePermissionCoordinator.shared
-            SettingsStore.shared.setSitePermission(true, for: .camera, host: "example.com")
+            SettingsStore.shared.setSitePermission(true, for: .camera, origin: "https://meet.example.com")
 
             var answered: BrowserPermissionDecision?
             coordinator.request(
@@ -189,7 +194,7 @@ struct SitePermissionCoordinatorTests {
             #expect(label(answered) == "grant")
             #expect(coordinator.request(forTab: tab) == nil)
 
-            SettingsStore.shared.setSitePermission(false, for: .microphone, host: "example.com")
+            SettingsStore.shared.setSitePermission(false, for: .microphone, origin: "https://example.com")
             var denied: BrowserPermissionDecision?
             coordinator.request(
                 kind: .microphone,
@@ -217,7 +222,7 @@ struct SitePermissionCoordinatorTests {
 
             #expect(label(answered) == "unanswered")
             let pending = coordinator.request(forTab: tab)
-            #expect(pending?.host == "example.com")
+            #expect(pending?.host == "https://example.com")
             #expect(pending?.kinds == [.camera, .microphone])
 
             guard let pending else { return }
@@ -242,7 +247,7 @@ struct SitePermissionCoordinatorTests {
             if let pending = coordinator.request(forTab: tab) {
                 coordinator.answer(pending, with: SitePermissionAnswer(isAllowed: false, remember: true))
             }
-            #expect(SettingsStore.shared.sitePermissions["example.com"]?.camera == false)
+            #expect(SettingsStore.shared.sitePermissions["https://example.com"]?.camera == false)
 
             SettingsStore.shared.sitePermissions = [:]
             coordinator.request(
@@ -287,9 +292,15 @@ struct SitePermissionCoordinatorTests {
             ) { answered = $0 }
             #expect(label(answered) == "unanswered")
 
+            let stale = coordinator.request(forTab: tab)
             coordinator.cancelRequests(forTab: tab)
             #expect(label(answered) == "deny")
             #expect(coordinator.request(forTab: tab) == nil)
+            if let stale {
+                coordinator.answer(stale, with: SitePermissionAnswer(isAllowed: true, remember: true))
+                #expect(label(answered) == "deny")
+                #expect(SettingsStore.shared.sitePermissions(forOrigin: "https://example.com") == nil)
+            }
         }
     }
 

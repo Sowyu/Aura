@@ -1,6 +1,5 @@
 #import "AuraWebRequestChannel.h"
 
-#import <os/lock.h>
 #import <os/log.h>
 
 #import "AuraResourceTypes.h"
@@ -21,23 +20,6 @@ void AuraWebRequestChannelSetBundle(WKBundleRef bundle)
 {
     AuraBundle = bundle;
 }
-
-#pragma mark - Decision cache
-
-/// Decisions repeat constantly (a page reloads the same sprite, the same
-/// beacon fires per click), and a repeat costs a full IPC stall. 512 entries of
-/// url+type is enough for a heavy page and cheap to blow away wholesale.
-static NSMutableDictionary<NSString *, NSDictionary *> *AuraDecisionCache(void)
-{
-    static NSMutableDictionary<NSString *, NSDictionary *> *cache;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ cache = [NSMutableDictionary dictionary]; });
-    return cache;
-}
-
-/// Guards the cache. Resource loads are main-thread work in the web process,
-/// but workers and service workers load from their own threads.
-static os_unfair_lock AuraCacheLock = OS_UNFAIR_LOCK_INIT;
 
 #pragma mark - Active flag
 
@@ -67,9 +49,6 @@ void AuraWebRequestChannelSetActive(NSString *state)
     const NSInteger flags = AuraStateFlags(state);
     AuraActive = (flags & 1) != 0;
     AuraWantsRequestHeaders = (flags & 2) != 0;
-    os_unfair_lock_lock(&AuraCacheLock);
-    [AuraDecisionCache() removeAllObjects];
-    os_unfair_lock_unlock(&AuraCacheLock);
 }
 
 void AuraWebRequestChannelRefreshActive(void)
@@ -115,16 +94,8 @@ NSDictionary *AuraWebRequestChannelDecide(NSDictionary *request)
 {
     if (!AuraBundle) { return nil; }
 
-    NSString *cacheKey = [NSString stringWithFormat:@"%@\n%@\n%@",
-                                                    request[@"url"] ?: @"",
-                                                    request[@"type"] ?: @"",
-                                                    request[@"documentUrl"] ?: @""];
-    NSMutableDictionary *cache = AuraDecisionCache();
-    os_unfair_lock_lock(&AuraCacheLock);
-    NSDictionary *cached = cache[cacheKey];
-    os_unfair_lock_unlock(&AuraCacheLock);
-    if (cached) { return cached; }
-
+    // A listener can depend on the method, headers, tab or its own mutable state.
+    // Reusing a URL-based verdict skips the extension's decision for this request.
     NSData *body = [NSJSONSerialization dataWithJSONObject:request options:0 error:NULL];
     if (!body) { return nil; }
     NSString *json = [[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding];
@@ -135,14 +106,5 @@ NSDictionary *AuraWebRequestChannelDecide(NSDictionary *request)
                  request[@"url"], [decision[@"cancel"] boolValue] ? "cancel" : "allow",
                  (CFAbsoluteTimeGetCurrent() - start) * 1000.0);
 
-    // A missing "cacheable" flag means the host wants to be asked again (the
-    // listener was still starting up, or the answer depends on state it expects
-    // to change).
-    if ([decision[@"cacheable"] boolValue]) {
-        os_unfair_lock_lock(&AuraCacheLock);
-        if (cache.count > 512) { [cache removeAllObjects]; }
-        cache[cacheKey] = decision;
-        os_unfair_lock_unlock(&AuraCacheLock);
-    }
     return decision;
 }

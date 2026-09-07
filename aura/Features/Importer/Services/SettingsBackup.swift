@@ -29,6 +29,7 @@ enum SettingsBackup {
     /// The WebKit key is WebKit's own default, which Aura mirrors rather than owns.
     static let excludedKeys: Set<String> = [
         "downloads.folderBookmark",
+        "files.accessBookmarks",
         LegacyDataMigrator.defaultsMigrationKey,
         SettingsStore.webKitSpellCheckKey,
         SettingsStore.appleShowScrollBarsKey
@@ -89,17 +90,27 @@ enum SettingsBackup {
             throw SettingsBackupError.newerFormat(version)
         }
 
-        var applied = 0
-        for (key, value) in document[Key.values] as? [String: Any] ?? [:] where isExportable(key) {
+        guard version == formatVersion, document[Key.application] as? String == "Aura",
+              let values = document[Key.values] as? [String: Any],
+              let blobs = document[Key.data] as? [String: String],
+              Set(values.keys).isDisjoint(with: blobs.keys)
+        else { throw SettingsBackupError.notASettingsFile }
+
+        // Validate the whole document before writing. JSON null is not a defaults
+        // value and raises an Objective-C exception in UserDefaults.set.
+        var validated = values.filter { isExportable($0.key) }
+        guard PropertyListSerialization.propertyList(validated, isValidFor: .binary) else {
+            throw SettingsBackupError.notASettingsFile
+        }
+        for (key, encoded) in blobs where isExportable(key) {
+            guard let blob = Data(base64Encoded: encoded) else { throw SettingsBackupError.notASettingsFile }
+            validated[key] = blob
+        }
+
+        for (key, value) in validated {
             defaults.set(value, forKey: key)
-            applied += 1
         }
-        for (key, encoded) in document[Key.data] as? [String: String] ?? [:] where isExportable(key) {
-            guard let blob = Data(base64Encoded: encoded) else { continue }
-            defaults.set(blob, forKey: key)
-            applied += 1
-        }
-        return applied
+        return validated.count
     }
 }
 

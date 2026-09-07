@@ -2,9 +2,53 @@ import AppKit
 import Foundation
 @testable import Aura
 import Testing
+import os
 
 @Suite("Favicon decoding")
 struct FaviconDecoderTests {
+    @Test(.timeLimit(.minutes(1)))
+    @MainActor
+    func simultaneousDisplayAndSaveRequestsShareOneDownload() async throws {
+        let data = try pngData(side: 64)
+        let image = try #require(NSImage(data: data))
+        let sourceURL = try #require(URL(string: "https://example.test/favicon.ico"))
+        let fetches = OSAllocatedUnfairLock(initialState: 0)
+        let service = FaviconService(fetchPayload: { _ in
+            fetches.withLock { $0 += 1 }
+            try? await Task.sleep(for: .milliseconds(20))
+            return FaviconPayload(image: image, data: data, sourceURL: sourceURL)
+        })
+        // A non-directory parent makes every save fail without creating any files.
+        let destination = URL(fileURLWithPath: "/dev/null/aura-favicon")
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            var remaining = 40
+            let completed = {
+                remaining -= 1
+                if remaining == 0 { continuation.resume() }
+            }
+            for _ in 0 ..< 20 {
+                service.fetchFaviconSync(for: "https://example.test") { result in
+                    #expect(result === image)
+                    completed()
+                }
+                service.downloadAndSaveFavicon(for: "example.test", faviconURL: sourceURL, to: destination) { _, success in
+                    #expect(!success)
+                    completed()
+                }
+            }
+        }
+        #expect(fetches.withLock { $0 } == 1)
+
+        service.originalBytes.removeAllObjects()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            service.downloadAndSaveFavicon(for: "example.test", faviconURL: sourceURL, to: destination) { _, success in
+                #expect(!success)
+                continuation.resume()
+            }
+        }
+        #expect(fetches.withLock { $0 } == 2)
+    }
+
     private func pngData(side: Int) throws -> Data {
         let rep = try #require(NSBitmapImageRep(
             bitmapDataPlanes: nil,

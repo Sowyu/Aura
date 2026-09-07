@@ -4,8 +4,8 @@ import Foundation
 ///
 /// `aura://view-source` and `aura://reader` render natively, and a tab showing an
 /// internal page has no web view at all, so the document has to be captured from the
-/// original page *before* the new tab exists. Whoever opens the tab stores the markup
-/// here first and the page tool reads it back by target address.
+/// original page before opening the tool. The tool reads the markup by its own tab ID
+/// and target address, so another tab cannot reuse a private capture.
 ///
 /// Nothing here persists: a tab restored after a relaunch finds an empty store and the
 /// loader fetches the address again instead.
@@ -22,17 +22,26 @@ final class PageSourceStore {
     /// captures can still be on screen.
     private static let limit = 6
 
-    private var entries: [String: Entry] = [:]
+    private struct Key: Hashable {
+        let tabID: UUID
+        let target: URL
+    }
 
-    func store(_ html: String, for target: URL) {
-        entries[target.absoluteString] = Entry(html: html, stored: Date())
+    private var entries: [Key: Entry] = [:]
+
+    func store(_ html: String, for target: URL, tabID: UUID) {
+        entries[Key(tabID: tabID, target: target)] = Entry(html: html, stored: Date())
         guard entries.count > Self.limit else { return }
         let oldest = entries.min { $0.value.stored < $1.value.stored }
         if let key = oldest?.key { entries.removeValue(forKey: key) }
     }
 
-    func html(for target: URL) -> String? {
-        entries[target.absoluteString]?.html
+    func html(for target: URL, tabID: UUID) -> String? {
+        entries[Key(tabID: tabID, target: target)]?.html
+    }
+
+    func clear(tabID: UUID) {
+        entries = entries.filter { $0.key.tabID != tabID }
     }
 
     func clear() {
@@ -50,8 +59,8 @@ enum PageSourceLoader {
 
     /// The capture, or nil when the address has to be fetched.
     @MainActor
-    static func cached(_ target: URL) -> String? {
-        PageSourceStore.shared.html(for: target)
+    static func cached(_ target: URL, tabID: UUID) -> String? {
+        PageSourceStore.shared.html(for: target, tabID: tabID)
     }
 
     /// Ephemeral, because this runs for a private tab whose capture the cache has
@@ -86,8 +95,8 @@ enum PageSourceLoader {
     /// The capture if there is one, the network if there is not. The one entry point the
     /// page tools use, so both resolve their markup the same way.
     @MainActor
-    static func markup(for target: URL) async -> Swift.Result<String, Error> {
-        if let cached = cached(target) { return .success(cached) }
+    static func markup(for target: URL, tabID: UUID) async -> Swift.Result<String, Error> {
+        if let cached = cached(target, tabID: tabID) { return .success(cached) }
         do {
             return .success(try await fetch(target))
         } catch {

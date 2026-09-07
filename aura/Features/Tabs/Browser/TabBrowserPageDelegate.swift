@@ -279,11 +279,14 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
             // Once the extension is up the page has to be rebuilt on its configuration;
             // loading again into this web view would fail the same way forever. Until
             // then the same load fails again and comes back through here.
-            let hostable = MainActor.assumeIsolated { ExtensionManager.shared.pageConfiguration(hosting: url) != nil }
+            guard let tab = self?.tab, !tab.isDeleted, let page, tab.browserPage === page else { return }
+            let hostable = MainActor.assumeIsolated {
+                ExtensionManager.shared.pageConfiguration(hosting: url, isPrivate: tab.isPrivate) != nil
+            }
             if hostable {
                 self?.tab?.rehost(url)
             } else {
-                page?.load(URLRequest(url: url))
+                page.load(URLRequest(url: url))
             }
         }
         return true
@@ -297,7 +300,9 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         page: BrowserPage
     ) -> BrowserNavigationActionDisposition? {
         guard navigationAction.isMainFrame, let url = navigationAction.request.url, let tab else { return nil }
-        let canHost = MainActor.assumeIsolated { ExtensionManager.shared.pageConfiguration(hosting: url) != nil }
+        let canHost = MainActor.assumeIsolated {
+            ExtensionManager.shared.pageConfiguration(hosting: url, isPrivate: tab.isPrivate) != nil
+        }
         guard Self.needsRehost(hostedExtensionHost: page.hostedExtensionHost, target: url, canHost: canHost) else {
             return nil
         }
@@ -333,12 +338,12 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
     }
 
     func browserPage(_ page: BrowserPage, didReceiveScriptMessage message: BrowserScriptMessage) {
-        guard let tab else { return }
+        guard let tab, tab.browserPage === page else { return }
 
         switch message.name {
         case "listener":
             flushPendingHeaderColor(page)
-            handleURLUpdateMessage(message.body, for: tab)
+            handleURLUpdateMessage(from: page, for: tab)
         case "linkHover":
             let hovered = (message.body as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             tab.hoveredLinkURL = hovered.isEmpty ? nil : hovered
@@ -547,25 +552,20 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
     }
 
-    private func handleURLUpdateMessage(_ body: Any?, for tab: Tab) {
-        guard let jsonString = body as? String,
-              let jsonData = jsonString.data(using: .utf8),
-              let update = try? JSONDecoder().decode(URLUpdate.self, from: jsonData)
-        else {
-            return
-        }
-
+    private func handleURLUpdateMessage(from page: BrowserPage, for tab: Tab) {
+        // Page messages are notifications, not a source for the address bar.
+        // Any site or subframe can send a forged listener payload.
+        guard let url = page.currentURL else { return }
         let oldTitle = tab.title
-        tab.title = update.title
-        if let href = URL(string: update.href) {
-            tab.updateURL(href)
-        }
+        let title = page.title ?? tab.title
+        tab.title = title
+        tab.updateURL(url)
         tab.setFavicon()
         recordHistory(for: tab)
 
-        if oldTitle != update.title, !update.title.isEmpty {
+        if oldTitle != title, !title.isEmpty {
             MainActor.assumeIsolated {
-                mediaController?.syncTitleForTab(tab.id, newTitle: update.title)
+                mediaController?.syncTitleForTab(tab.id, newTitle: title)
             }
         }
     }

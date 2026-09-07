@@ -96,8 +96,8 @@ enum SiteInfoMenu {
                 shortcut: summary.javaScriptAllowed ? "Allowed" : "Blocked",
                 items: JavaScriptSiteMenu.items(for: tab.url)
             ),
-            permissionRow(.camera, decision: summary.camera, host: summary.host),
-            permissionRow(.microphone, decision: summary.microphone, host: summary.host),
+            permissionRow(.camera, decision: summary.camera, host: tab.url.absoluteString),
+            permissionRow(.microphone, decision: summary.microphone, host: tab.url.absoluteString),
             .separator,
             AuraMenuItem(
                 kind: .submenu,
@@ -127,7 +127,7 @@ enum SiteInfoMenu {
             url: tab.url,
             javaScriptRule: JavaScriptPolicyService.shared.rule(for: tab.url),
             blocksJavaScriptByDefault: JavaScriptPolicyService.shared.blocksByDefault,
-            permissions: SettingsStore.shared.sitePermissions(forHost: tab.url.host ?? ""),
+            permissions: SettingsStore.shared.sitePermissions(forOrigin: tab.url.absoluteString),
             zoom: SiteZoomController.level(for: tab.url),
             spaceName: spaceName
         )
@@ -143,13 +143,13 @@ enum SiteInfoMenu {
         let settings = SettingsStore.shared
         let rows: [AuraMenuItem] = [
             .item("Allow", state: decision == true ? .radioOn : .none) {
-                settings.setSitePermission(true, for: kind, host: host)
+                settings.setSitePermission(true, for: kind, origin: host)
             },
             .item("Ask Every Time", state: decision == nil ? .radioOn : .none) {
-                settings.setSitePermission(nil, for: kind, host: host)
+                settings.setSitePermission(nil, for: kind, origin: host)
             },
             .item("Block", state: decision == false ? .radioOn : .none) {
-                settings.setSitePermission(false, for: kind, host: host)
+                settings.setSitePermission(false, for: kind, origin: host)
             }
         ]
         return AuraMenuItem(

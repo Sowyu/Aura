@@ -47,11 +47,17 @@ final class ExtensionMessageRelay {
         backgroundPorts[extensionID]?.disconnect()
         backgroundPorts[extensionID] = port
 
-        port.messageHandler = { [weak self] message, _ in
-            MainActor.assumeIsolated { self?.fromBackground(message, extensionID: extensionID) }
+        port.messageHandler = { [weak self, weak port] message, _ in
+            MainActor.assumeIsolated {
+                guard let port, self?.backgroundPorts[extensionID] === port else { return }
+                self?.fromBackground(message, extensionID: extensionID)
+            }
         }
-        port.disconnectHandler = { [weak self] _ in
-            MainActor.assumeIsolated { self?.backgroundDidDisconnect(extensionID: extensionID) }
+        port.disconnectHandler = { [weak self, weak port] _ in
+            MainActor.assumeIsolated {
+                guard let port, self?.backgroundPorts[extensionID] === port else { return }
+                self?.backgroundDidDisconnect(extensionID: extensionID)
+            }
         }
 
         let waiting = queued.removeValue(forKey: extensionID) ?? []
@@ -65,11 +71,17 @@ final class ExtensionMessageRelay {
         // reopen would add more. Fifty popup opens, fifty leaked entries.
         pruneDeadOwners(for: extensionID)
         pages[extensionID, default: []].append(port)
-        port.messageHandler = { [weak self] message, _ in
-            MainActor.assumeIsolated { self?.fromPage(message, port: port, extensionID: extensionID) }
+        port.messageHandler = { [weak self, weak port] message, _ in
+            MainActor.assumeIsolated {
+                guard let port else { return }
+                self?.fromPage(message, port: port, extensionID: extensionID)
+            }
         }
-        port.disconnectHandler = { [weak self] _ in
-            MainActor.assumeIsolated { self?.pageDidDisconnect(port, extensionID: extensionID) }
+        port.disconnectHandler = { [weak self, weak port] _ in
+            MainActor.assumeIsolated {
+                guard let port else { return }
+                self?.pageDidDisconnect(port, extensionID: extensionID)
+            }
         }
     }
 

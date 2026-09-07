@@ -536,22 +536,7 @@ final class PasswordManagerService: ObservableObject {
     }
 
     static func normalizedOrigin(from url: URL) -> String? {
-        guard let scheme = url.scheme?.lowercased(),
-              ["http", "https"].contains(scheme),
-              let host = normalizedHost(from: url)
-        else {
-            return nil
-        }
-
-        var components = URLComponents()
-        components.scheme = scheme
-        components.host = host
-
-        if let port = url.port, port != defaultPort(for: scheme) {
-            components.port = port
-        }
-
-        return components.url?.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        url.webOrigin
     }
 
     static func looksLikeEmail(_ value: String) -> Bool {

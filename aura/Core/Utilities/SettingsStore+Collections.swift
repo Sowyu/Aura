@@ -14,23 +14,21 @@ extension SettingsStore {
 
     func removeSitePermission(host: String) {
         var copy = sitePermissions
-        copy.removeValue(forKey: registrableDomain(from: host))
+        copy.removeValue(forKey: host)
         sitePermissions = copy
     }
 
-    /// Grants are keyed by registrable domain, so a decision made on `mail.example.com`
-    /// covers `example.com` and every other subdomain, the way Safari and Chrome do it.
-    func sitePermissions(forHost host: String) -> SitePermissionSettings? {
-        let key = registrableDomain(from: host)
-        guard !key.isEmpty else { return nil }
+    /// Legacy domain-wide grants are not reused. Their original requesting origin
+    /// was not stored, so the browser must ask again.
+    func sitePermissions(forOrigin origin: String) -> SitePermissionSettings? {
+        guard let key = URL(string: origin)?.webOrigin else { return nil }
         return sitePermissions[key]
     }
 
     /// Writes one grant. `nil` clears it, and a host left with no grants at all drops
     /// out of the map rather than staying as an empty row in the settings list.
-    func setSitePermission(_ decision: Bool?, for kind: SitePermissionKind, host: String) {
-        let key = registrableDomain(from: host)
-        guard !key.isEmpty else { return }
+    func setSitePermission(_ decision: Bool?, for kind: SitePermissionKind, origin: String) {
+        guard let key = URL(string: origin)?.webOrigin else { return }
         var copy = sitePermissions
         var entry = copy[key] ?? SitePermissionSettings(host: key)
         entry.set(decision, for: kind)
@@ -44,9 +42,8 @@ extension SettingsStore {
 
     /// Applies a prompt answer. An answer the user did not ask to remember changes
     /// nothing on disk; `SitePermissionResolver` owns that rule so it can be tested.
-    func recordSitePermission(_ answer: SitePermissionAnswer, kinds: [SitePermissionKind], host: String) {
-        let key = registrableDomain(from: host)
-        guard !key.isEmpty else { return }
+    func recordSitePermission(_ answer: SitePermissionAnswer, kinds: [SitePermissionKind], origin: String) {
+        guard let key = URL(string: origin)?.webOrigin else { return }
         let updated = SitePermissionResolver.applying(answer, kinds: kinds, host: key, to: sitePermissions)
         guard updated != sitePermissions else { return }
         sitePermissions = updated

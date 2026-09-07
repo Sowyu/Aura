@@ -8,12 +8,6 @@ enum TabType: String, Codable {
     case normal
 }
 
-struct URLUpdate: Codable {
-    let href: String
-    let title: String
-    let favicon: String?
-}
-
 // MARK: - Tab
 
 @Model
@@ -133,6 +127,13 @@ class Tab: ObservableObject, Identifiable {
     }
 
     func setFavicon() {
+        // FaviconService downloads to disk. Private tabs use the default icon
+        // until favicon fetching supports an in-memory, ephemeral session.
+        guard !isPrivate else {
+            favicon = nil
+            faviconLocalFile = nil
+            return
+        }
         guard let host = self.url.host else { return }
 
         let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
@@ -152,9 +153,10 @@ class Tab: ObservableObject, Identifiable {
         FaviconService.shared
             .downloadAndSaveFavicon(for: domain, faviconURL: faviconURL, to: saveURL) {
                 [weak self] sourceURL, success in
-                guard let self else { return }
                 if success {
-                    Task { @MainActor in
+                    Task { @MainActor [weak self] in
+                        guard let self, !self.isPrivate, self.url.host == host,
+                              self.favicon == faviconURL else { return }
                         self.faviconLocalFile = saveURL
                         if let sourceURL {
                             self.favicon = sourceURL
@@ -311,6 +313,8 @@ class Tab: ObservableObject, Identifiable {
     /// the caller closing the tab must not wait on them. The page is detached up front
     /// so nothing here touches the tab once its row is gone.
     func stopMedia(completed: @escaping () -> Void = {}) {
+        MainActor.assumeIsolated { PageSourceStore.shared.clear(tabID: id) }
+        passwordCoordinator?.clearAutofillState()
         guard let page = browserPage else {
             completed()
             return
@@ -415,6 +419,8 @@ class Tab: ObservableObject, Identifiable {
     }
 
     func destroyWebView() {
+        MainActor.assumeIsolated { PageSourceStore.shared.clear(tabID: id) }
+        passwordCoordinator?.clearAutofillState()
         browserPage?.teardown()
         browserPage = nil
         pageDelegate = nil

@@ -189,9 +189,7 @@ final class ExtensionManager {
     /// private browsing is `hasAccessToPrivateData` on its own context, not withholding
     /// the controller from the web view: without the controller there, an extension the
     /// user did allow into private windows could neither block nor inject there.
-    /// `isPrivate` stays in the signature because the caller knows it and a future
-    /// per-store decision belongs here rather than at the call site.
-    func attach(to configuration: WKWebViewConfiguration, isPrivate: Bool) {
+    func attach(to configuration: WKWebViewConfiguration) {
         guard #available(macOS 15.4, *) else { return }
         configuration.webExtensionController = engine.controller
         start()
@@ -207,9 +205,10 @@ final class ExtensionManager {
     /// `NSURLErrorResourceUnavailable`, which is what put Aura's error page on every
     /// extension page opened in a tab. And a web view built that way shows nothing else,
     /// so a tab crossing that line in either direction swaps web views (`Tab.rehost`).
-    func pageConfiguration(hosting url: URL) -> WKWebViewConfiguration? {
+    func pageConfiguration(hosting url: URL, isPrivate: Bool) -> WKWebViewConfiguration? {
         guard #available(macOS 15.4, *), url.scheme?.lowercased() == ExtensionOrigin.scheme,
-              let context = loadedEngine?.controller.extensionContext(for: url), context.isLoaded
+              let context = loadedEngine?.controller.extensionContext(for: url), context.isLoaded,
+              !isPrivate || context.hasAccessToPrivateData
         else { return nil }
         return context.webViewConfiguration
     }

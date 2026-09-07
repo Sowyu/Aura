@@ -245,7 +245,8 @@ struct DebugPassRegressionTests {
             username: hostile,
             password: hostile,
             highlightColor: hostile,
-            submitAfterFill: true
+            submitAfterFill: true,
+            documentID: hostile
         )
 
         let encoded = try #require(PasswordBridgeScript.base64Payload(payload))
@@ -262,6 +263,7 @@ struct DebugPassRegressionTests {
         #expect(decoded.password == hostile)
         #expect(decoded.username == hostile)
         #expect(decoded.passwordFieldIDs == [hostile])
+        #expect(decoded.documentID == hostile)
     }
 
     /// A wedged download never calls back, so nothing but this decision releases its

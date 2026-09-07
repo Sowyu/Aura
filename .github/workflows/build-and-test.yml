@@ -8,8 +8,18 @@ on:
   workflow_dispatch:
 
 jobs:
+  local-checks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - run: bash scripts/check-local.sh
+
   build-and-test:
     runs-on: macos-latest
+    timeout-minutes: 35
     
     steps:
     - name: Check architecture
@@ -30,8 +40,8 @@ jobs:
     - name: Show Swift version
       run: swift --version
 
-    - name: Install Xcodegen
-      run: brew install xcodegen
+    - name: Install build tools
+      run: brew install xcodegen trash-cli
 
     - name: Generate Xcode project
       run: xcodegen
@@ -40,27 +50,28 @@ jobs:
       run: brew install swiftlint
 
     - name: Run SwiftLint
+      id: lint
+      continue-on-error: true
       run: swiftlint lint
 
     - name: Install SwiftFormat
       run: brew install swiftformat
 
     - name: Check code formatting
+      id: format
+      continue-on-error: true
       run: swiftformat --lint .
 
     - name: Install Xcbeautify
       run: brew install xcbeautify
 
-    - name: Clean build folder
-      run: xcodebuild clean -scheme aura -project Aura.xcodeproj
-    
     - name: Cache SPM dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/Library/Caches/org.swift.swiftpm/
           ~/.swiftpm/
-        key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.swift') }}
+        key: ${{ runner.os }}-spm-${{ hashFiles('project.yml', '**/Package.resolved') }}
         restore-keys: |
           ${{ runner.os }}-spm-
     
@@ -72,11 +83,49 @@ jobs:
         set -o pipefail
         xcodebuild build-for-testing -project Aura.xcodeproj -scheme aura \
           -destination "platform=macOS" -configuration Debug \
-          -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | xcbeautify
+          -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee build.log | xcbeautify
 
     - name: Unit tests
       run: |
         set -o pipefail
         xcodebuild test-without-building -project Aura.xcodeproj -scheme aura \
           -destination "platform=macOS" -derivedDataPath DerivedData \
-          -only-testing:auraTests CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | xcbeautify
+          -resultBundlePath TestResults.xcresult \
+          -only-testing:auraTests CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee tests.log | xcbeautify
+
+    - name: Injected WebKit bundle tests
+      run: |
+        set -o pipefail
+        TEST_RUNNER_AURA_BUNDLE=1 xcodebuild test-without-building \
+          -project Aura.xcodeproj -scheme aura -destination "platform=macOS" \
+          -derivedDataPath DerivedData -resultBundlePath WebBundleResults.xcresult \
+          -only-testing:auraTests/WebBundleTests CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee webbundle.log | xcbeautify
+
+    - name: Build Release
+      run: |
+        set -o pipefail
+        xcodebuild build -project Aura.xcodeproj -scheme aura \
+          -destination "platform=macOS" -configuration Release \
+          -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee release.log | xcbeautify
+
+    - name: Capture formatter fixes
+      if: ${{ !cancelled() && steps.format.outcome == 'failure' }}
+      run: |
+        swiftformat .
+        git diff > format.patch
+
+    - name: Upload validation results
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-validation
+        path: |
+          *.log
+          *.xcresult
+          format.patch
+        if-no-files-found: ignore
+        retention-days: 7
+
+    - name: Require lint and formatting checks
+      if: ${{ !cancelled() && (steps.lint.outcome == 'failure' || steps.format.outcome == 'failure') }}
+      run: exit 1

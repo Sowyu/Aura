@@ -56,6 +56,7 @@ struct PasswordBridgeSubmitPayload: Codable, Equatable {
 
 struct PasswordBridgeEvent: Codable, Equatable {
     let type: String
+    let documentID: String
     let focus: PasswordBridgeFocusPayload?
     let submit: PasswordBridgeSubmitPayload?
     let keyCommand: PasswordAutofillKeyCommand?
@@ -70,6 +71,7 @@ struct PasswordFillRequest: Codable {
     let password: String
     let highlightColor: String
     let submitAfterFill: Bool
+    let documentID: String
 }
 
 /// Builds the bridge call. The payload travels as base64 and is parsed on the JS
@@ -158,6 +160,7 @@ final class PasswordAutofillCoordinator {
     private let decoder = JSONDecoder()
 
     private var dismissWorkItem: DispatchWorkItem?
+    private var activeDocumentID: String?
 
     init(tab: Tab) {
         self.tab = tab
@@ -173,6 +176,7 @@ final class PasswordAutofillCoordinator {
         switch message.type {
         case "focus":
             dismissWorkItem?.cancel()
+            activeDocumentID = message.documentID
             if let focus = message.focus {
                 presentOverlay(for: focus, pageURL: pageURL)
             }
@@ -204,6 +208,7 @@ final class PasswordAutofillCoordinator {
 
     func clearAutofillState() {
         dismissWorkItem?.cancel()
+        activeDocumentID = nil
         tab?.passwordOverlayState = nil
         tab?.passwordTriggerOverlayState = nil
         setOverlayKeyboardActive(false)
@@ -217,32 +222,44 @@ final class PasswordAutofillCoordinator {
     }
 
     func autofill(_ entry: SavedPasswordSummary, for overlay: PasswordAutofillOverlayState) {
-        Task { [weak self] in
+        guard let documentID = activeDocumentID, let page = tab?.browserPage,
+              let url = page.currentURL,
+              passwordManager.matchingEntries(for: url, containerID: tab?.container.id).contains(entry)
+        else { return }
+
+        Task { @MainActor [weak self, weak page] in
             guard let self else { return }
 
             let authenticated = await self.passwordManager.authenticate(
                 reason: "Autofill the saved password for \(entry.displayUsername) on \(entry.host)"
             )
             guard authenticated,
+                  self.settings.passwordsEnabled, self.settings.passwordAutofillEnabled,
+                  self.providers.descriptor(for: self.settings.passwordManagerProvider).usesBuiltInOverlay,
+                  self.tab?.isPrivate == false,
+                  let page, self.tab?.browserPage === page,
+                  self.activeDocumentID == documentID,
+                  self.tab?.passwordTriggerOverlayState?.focus == overlay.focus,
+                  page.currentURL.flatMap(PasswordManagerService.normalizedOrigin)
+                    == PasswordManagerService.normalizedOrigin(from: url),
                   let password = try? self.passwordManager.revealPassword(for: entry)
             else {
                 return
             }
 
-            await MainActor.run {
-                let request = PasswordFillRequest(
-                    usernameFieldID: overlay.focus.usernameFieldID,
-                    passwordFieldIDs: overlay.focus.passwordFieldIDs,
-                    username: entry.username.isEmpty ? nil : entry.username,
-                    password: password,
-                    highlightColor: "#E8F5E9",
-                    submitAfterFill: overlay.focus.action == .login && self.settings.passwordAutofillSubmitEnabled
-                )
+            let request = PasswordFillRequest(
+                usernameFieldID: overlay.focus.usernameFieldID,
+                passwordFieldIDs: overlay.focus.passwordFieldIDs,
+                username: entry.username.isEmpty ? nil : entry.username,
+                password: password,
+                highlightColor: "#E8F5E9",
+                submitAfterFill: overlay.focus.action == .login && self.settings.passwordAutofillSubmitEnabled,
+                documentID: documentID
+            )
 
-                self.evaluate(scriptMethod: "fillCredentials", payload: request)
-                self.passwordManager.markUsed(entry)
-                self.dismissOverlay()
-            }
+            self.evaluate(scriptMethod: "fillCredentials", payload: request)
+            self.passwordManager.markUsed(entry)
+            self.dismissOverlay()
         }
     }
 
@@ -251,7 +268,9 @@ final class PasswordAutofillCoordinator {
             return
         }
 
-        guard tab?.browserPage != nil else {
+        guard tab?.browserPage != nil, let documentID = activeDocumentID,
+              tab?.passwordTriggerOverlayState?.focus == overlay.focus
+        else {
             return
         }
 
@@ -261,7 +280,8 @@ final class PasswordAutofillCoordinator {
             username: nil,
             password: generatedPassword,
             highlightColor: "#FFF4CC",
-            submitAfterFill: false
+            submitAfterFill: false,
+            documentID: documentID
         )
 
         evaluate(scriptMethod: "fillCredentials", payload: request)
@@ -273,7 +293,9 @@ final class PasswordAutofillCoordinator {
             return
         }
 
-        guard tab?.browserPage != nil else {
+        guard tab?.browserPage != nil, let documentID = activeDocumentID,
+              tab?.passwordTriggerOverlayState?.focus == overlay.focus
+        else {
             return
         }
 
@@ -283,7 +305,8 @@ final class PasswordAutofillCoordinator {
             username: suggestion.email,
             password: "",
             highlightColor: "#E8F1FF",
-            submitAfterFill: false
+            submitAfterFill: false,
+            documentID: documentID
         )
 
         evaluate(scriptMethod: "fillCredentials", payload: request)
@@ -308,6 +331,7 @@ final class PasswordAutofillCoordinator {
               provider.usesBuiltInOverlay,
               tab?.isPrivate == false,
               let pageURL,
+              PasswordManagerService.normalizedOrigin(from: pageURL) != nil,
               let normalizedHost = PasswordManagerService.normalizedHost(from: pageURL)
         else {
             clearAutofillState()
@@ -379,10 +403,10 @@ final class PasswordAutofillCoordinator {
         }
 
         let trimmedUsername = payload.username.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedPassword = payload.password.trimmingCharacters(in: .whitespacesAndNewlines)
+        let password = payload.password
 
         guard payload.action == .login || payload.action == .createAccount,
-              !trimmedPassword.isEmpty
+              !password.isEmpty
         else {
             return
         }
@@ -397,7 +421,7 @@ final class PasswordAutofillCoordinator {
         // secret unauthenticated; saving once backfills the fingerprint.
         if let matchingEntry,
            SubmitComparison.matchesSavedPassword(
-               typedPassword: trimmedPassword,
+               typedPassword: password,
                savedFingerprint: matchingEntry.passwordFingerprint
            ) {
             return
@@ -410,13 +434,18 @@ final class PasswordAutofillCoordinator {
             isUpdate: matchingEntry != nil
         )
 
+        let containerID = tab?.container.id
         let saveAction: () -> Void = {
-            _ = try? self.passwordManager.upsertCredential(
-                for: pageURL,
-                username: trimmedUsername,
-                password: trimmedPassword,
-                containerID: self.tab?.container.id
-            )
+            do {
+                try self.passwordManager.upsertCredential(
+                    for: pageURL,
+                    username: trimmedUsername,
+                    password: password,
+                    containerID: containerID
+                )
+            } catch {
+                self.passwordManager.report(error)
+            }
         }
 
         Task { @MainActor [weak self] in
@@ -517,7 +546,9 @@ final class PasswordAutofillCoordinator {
 
     private func evaluate(scriptMethod: String, payload: some Encodable) {
         guard let encoded = PasswordBridgeScript.base64Payload(payload) else { return }
-        tab?.evaluateJavaScript(PasswordBridgeScript.script(method: scriptMethod, base64Payload: encoded))
+        tab?.browserPage?.evaluatePasswordScript(
+            PasswordBridgeScript.script(method: scriptMethod, base64Payload: encoded)
+        )
     }
 
     private func setOverlayKeyboardActive(_ isActive: Bool) {

@@ -24,7 +24,6 @@ struct OraButton: View {
     var variant: OraButtonVariant = .default
     var size: OraButtonSize = .md
     var isDisabled: Bool = false
-    var isLoading: Bool = false
     var keyboardShortcut: String?
     var leadingIcon: String?
     var trailingIcon: String?

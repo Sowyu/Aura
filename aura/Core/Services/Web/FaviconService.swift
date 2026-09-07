@@ -9,7 +9,6 @@ struct FaviconPayload {
     let image: NSImage
     let data: Data
     let sourceURL: URL
-    let pixels: CGFloat
 }
 
 /// A dictionary that drops its oldest insertion once it passes `limit`. Insertion order,
@@ -60,6 +59,8 @@ final class FaviconService: ObservableObject {
     private var sourceURLCache = BoundedCache<String, URL>(limit: FaviconService.cacheLimit)
     private var isFetching: Set<String> = []
     private var pendingCompletions: [String: [(NSImage?) -> Void]] = [:]
+    private var payloadTasks: [String: Task<FaviconPayload?, Never>] = [:]
+    private let fetchPayload: (String) async -> FaviconPayload?
     /// Original downloaded bytes, kept so a second tab on the same domain writes the real
     /// icon file rather than a TIFF snapshot of the already-downscaled image.
     /// Internal so the tests can read the ceilings back.
@@ -87,7 +88,12 @@ final class FaviconService: ObservableObject {
     private var failedFetches = BoundedCache<String, Date>(limit: FaviconService.cacheLimit)
     private let failureRetryInterval: TimeInterval = 300
 
-    private init() {
+    private convenience init() {
+        self.init(fetchPayload: Self.fetchFaviconPayload)
+    }
+
+    init(fetchPayload: @escaping (String) async -> FaviconPayload?) {
+        self.fetchPayload = fetchPayload
         originalBytes.countLimit = Self.cacheCountLimit
         originalBytes.totalCostLimit = Self.byteCacheCostLimit
         fileImages.countLimit = Self.cacheCountLimit
@@ -125,12 +131,12 @@ final class FaviconService: ObservableObject {
 
     func faviconURL(for domain: String) -> URL? {
         let normalizedDomain = normalizeDomain(domain)
-        return sourceURLCache[normalizedDomain] ?? canonicalURL(for: normalizedDomain)
+        return sourceURLCache[normalizedDomain] ?? Self.canonicalURL(for: normalizedDomain)
     }
 
     func faviconURL(forSearchURL searchURL: String) -> URL? {
         guard let domain = extractDomain(from: searchURL) else { return nil }
-        return canonicalURL(for: domain)
+        return Self.canonicalURL(for: domain)
     }
 
     private func extractDomain(from searchURL: String) -> String? {
@@ -155,7 +161,7 @@ final class FaviconService: ObservableObject {
         return lowercased.hasPrefix("www.") ? String(lowercased.dropFirst(4)) : lowercased
     }
 
-    private func canonicalURL(for domain: String) -> URL? {
+    private static func canonicalURL(for domain: String) -> URL? {
         guard !domain.isEmpty else { return nil }
         return URL(string: "https://\(domain)")
     }
@@ -191,17 +197,27 @@ final class FaviconService: ObservableObject {
         isFetching.insert(domain)
 
         Task(priority: .utility) { [weak self] in
-            guard let self else { return }
-            let payload = await self.fetchFaviconPayload(for: domain)
-            await MainActor.run {
-                self.completeFetch(
-                    for: domain,
-                    favicon: payload?.image,
-                    sourceURL: payload?.sourceURL,
-                    data: payload?.data
-                )
-            }
+            _ = await self?.sharedPayload(for: domain)
         }
+    }
+
+    /// Display requests and disk saves share the same download and decode.
+    @MainActor
+    private func sharedPayload(for domain: String) async -> FaviconPayload? {
+        if let task = payloadTasks[domain] { return await task.value }
+        if let data = originalBytes.object(forKey: domain as NSString),
+           let image = cache[domain], let sourceURL = sourceURLCache[domain] {
+            return FaviconPayload(image: image, data: data as Data, sourceURL: sourceURL)
+        }
+        if let failedAt = failedFetches[domain], Date().timeIntervalSince(failedAt) < failureRetryInterval {
+            return nil
+        }
+        let task = Task(priority: .utility) { await self.fetchPayload(domain) }
+        payloadTasks[domain] = task
+        let payload = await task.value
+        payloadTasks[domain] = nil
+        completeFetch(for: domain, favicon: payload?.image, sourceURL: payload?.sourceURL, data: payload?.data)
+        return payload
     }
 
     @MainActor
@@ -242,7 +258,7 @@ final class FaviconService: ObservableObject {
 
     /// Walks the ranked candidates, stopping at the first one that is genuinely ≥ 32 px
     /// and otherwise keeping the largest that did download.
-    private func fetchFaviconPayload(for domain: String) async -> FaviconPayload? {
+    private static func fetchFaviconPayload(for domain: String) async -> FaviconPayload? {
         guard let siteURL = canonicalURL(for: domain) else { return nil }
 
         let declared = (try? await FaviconFinder(url: siteURL).fetchFaviconURLs()) ?? []
@@ -253,6 +269,7 @@ final class FaviconService: ObservableObject {
         }
 
         var best: FaviconPayload?
+        var bestPixels: CGFloat = 0
         for candidate in candidates.prefix(Self.maxCandidateDownloads) {
             guard let favicon = try? await candidate.download(),
                   let downloaded = favicon.image
@@ -260,12 +277,12 @@ final class FaviconService: ObservableObject {
 
             let pixels = FaviconDecoder.nativeDimension(of: downloaded.image)
             guard let decoded = FaviconDecoder.decode(downloaded.data) else { continue }
-            if pixels > (best?.pixels ?? 0) {
+            if pixels > bestPixels {
+                bestPixels = pixels
                 best = FaviconPayload(
                     image: decoded,
                     data: downloaded.data,
-                    sourceURL: favicon.url.source,
-                    pixels: pixels
+                    sourceURL: favicon.url.source
                 )
             }
             if pixels >= FaviconCandidates.minimumPixels { break }
@@ -283,42 +300,28 @@ final class FaviconService: ObservableObject {
         let normalizedDomain = normalizeDomain(domain)
         // The original bytes, never a re-encode of the downscaled render: writing
         // `tiffRepresentation` here is what used to bake 16 px icons onto disk.
-        if let data = originalBytes.object(forKey: normalizedDomain as NSString) {
-            do {
-                try (data as Data).write(to: saveURL, options: .atomic)
-                completion(faviconURL(for: normalizedDomain), true)
-            } catch {
-                completion(nil, false)
-            }
-            return
-        }
+        let cachedData = originalBytes.object(forKey: normalizedDomain as NSString).map { $0 as Data }
+        let cachedURL = faviconURL(for: normalizedDomain)
 
-        Task(priority: .utility) { [weak self] in
-            guard let self else {
-                completion(nil, false)
+        Task.detached(priority: .utility) { [weak self] in
+            let data: Data
+            let sourceURL: URL?
+            if let cachedData {
+                data = cachedData
+                sourceURL = cachedURL
+            } else if let payload = await self?.sharedPayload(for: normalizedDomain) {
+                data = payload.data
+                sourceURL = payload.sourceURL
+            } else {
+                await MainActor.run { completion(nil, false) }
                 return
             }
 
-            let payload = await self.fetchFaviconPayload(for: normalizedDomain)
-            await MainActor.run {
-                guard let payload else {
-                    completion(nil, false)
-                    return
-                }
-
-                self.completeFetch(
-                    for: normalizedDomain,
-                    favicon: payload.image,
-                    sourceURL: payload.sourceURL,
-                    data: payload.data
-                )
-
-                do {
-                    try payload.data.write(to: saveURL, options: .atomic)
-                    completion(payload.sourceURL, true)
-                } catch {
-                    completion(nil, false)
-                }
+            do {
+                try data.write(to: saveURL, options: .atomic)
+                await MainActor.run { completion(sourceURL, true) }
+            } catch {
+                await MainActor.run { completion(nil, false) }
             }
         }
     }

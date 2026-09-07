@@ -160,11 +160,14 @@ struct ReaderView: View {
         failure = nil
         article = nil
 
-        switch await PageSourceLoader.markup(for: target) {
+        let result = await PageSourceLoader.markup(for: target, tabID: tab.id)
+        guard !Task.isCancelled else { return }
+        switch result {
         case let .success(html):
             let extracted = await Task.detached(priority: .userInitiated) {
                 ReaderExtractor.article(fromHTML: html, baseURL: target)
             }.value
+            guard !Task.isCancelled else { return }
             if let extracted, extracted.isReadable {
                 article = extracted
             } else {

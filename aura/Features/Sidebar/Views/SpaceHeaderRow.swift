@@ -93,6 +93,8 @@ struct SpaceHeaderRow: View {
         .accessibilityLabel(Text("Switch Space"))
         .accessibilityValue(Text(container.name))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { labelAnchor?.presentAuraMenu(spacesMenu(current: container)) }
+        .accessibilityAction(named: Text("Rename space")) { isRenaming = true }
     }
 
     @ViewBuilder

@@ -47,7 +47,7 @@ enum SitePermissionKind: String, CaseIterable, Codable, Sendable, Identifiable {
 }
 
 /// Per-site grants the permission prompts hand out. Stored as one JSON blob under
-/// `settings.permissions.sitePermissions`, keyed by registrable domain.
+/// `settings.permissions.sitePermissions`, keyed by serialized web origin.
 ///
 /// Each grant is optional because "not asked yet" is a third state: a site the user gave
 /// the microphone to must still be asked about the camera. Blobs written before this

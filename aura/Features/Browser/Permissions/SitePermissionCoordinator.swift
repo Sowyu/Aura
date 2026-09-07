@@ -10,7 +10,7 @@ struct SitePermissionRequest: Identifiable {
     let tabID: UUID
     /// Every grant this request covers. A `getUserMedia` asking for both devices is two.
     let kinds: [SitePermissionKind]
-    /// Registrable domain, which is the key a remembered decision is stored under.
+    /// Serialized origin, retained under the existing field name for persistence.
     let host: String
     /// What the prompt shows, for example `https://meet.example.com`.
     let origin: String
@@ -66,14 +66,14 @@ final class SitePermissionCoordinator {
         decide: @escaping (BrowserPermissionDecision) -> Void
     ) {
         let kinds = kind.siteKinds
-        guard let origin, let host = registrableDomain(from: origin) else {
+        guard let origin, let host = origin.webOrigin else {
             // An opaque origin (a `data:` or `about:` frame) has nothing a decision could
             // be remembered against, so it is refused rather than asked about.
             decide(.deny)
             return
         }
 
-        let stored = SettingsStore.shared.sitePermissions(forHost: host)
+        let stored = SettingsStore.shared.sitePermissions(forOrigin: host)
         if let remembered = SitePermissionResolver.decision(for: kinds, in: stored) {
             decide(remembered ? .grant : .deny)
             return
@@ -97,10 +97,11 @@ final class SitePermissionCoordinator {
     }
 
     func answer(_ request: SitePermissionRequest, with answer: SitePermissionAnswer) {
+        guard pending.contains(where: { $0.id == request.id }) else { return }
         // A private window never writes a grant: remembering one would outlive exactly
         // the session the user asked to leave no trace of.
         if answer.remember, !request.isPrivate {
-            SettingsStore.shared.recordSitePermission(answer, kinds: request.kinds, host: request.host)
+            SettingsStore.shared.recordSitePermission(answer, kinds: request.kinds, origin: request.host)
         }
 
         // Anything the same page asked for a second time while the prompt was up takes

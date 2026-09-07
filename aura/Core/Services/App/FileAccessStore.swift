@@ -26,6 +26,7 @@ final class FileAccessStore {
     private let makeBookmark: (URL) -> Data?
     private let resolveBookmark: (Data) -> (url: URL, isStale: Bool)?
     private let start: (URL) -> Bool
+    private let stop: (URL) -> Void
 
     /// File path to bookmark. Small enough to write whole on every change: one blob of a
     /// few hundred bytes per file the user has ever opened, and the tray prunes it.
@@ -61,12 +62,14 @@ final class FileAccessStore {
             }
             return (url, isStale)
         },
-        start: @escaping (URL) -> Bool = { $0.startAccessingSecurityScopedResource() }
+        start: @escaping (URL) -> Bool = { $0.startAccessingSecurityScopedResource() },
+        stop: @escaping (URL) -> Void = { $0.stopAccessingSecurityScopedResource() }
     ) {
         self.defaults = defaults
         self.makeBookmark = makeBookmark
         self.resolveBookmark = resolveBookmark
         self.start = start
+        self.stop = stop
         bookmarks = (defaults.dictionary(forKey: Self.bookmarksKey) as? [String: Data]) ?? [:]
     }
 
@@ -90,7 +93,7 @@ final class FileAccessStore {
         }
         bookmarks[path] = data
         persist()
-        opened[path] = url
+        beginAccess(to: url)
     }
 
     /// Opens the stored grant for `url`, if there is one, and reports whether the file
@@ -126,7 +129,7 @@ final class FileAccessStore {
     func forget(_ url: URL) {
         let path = url.standardizedFileURL.path
         guard bookmarks.removeValue(forKey: path) != nil else { return }
-        opened[path] = nil
+        if let openedURL = opened.removeValue(forKey: path) { stop(openedURL) }
         persist()
     }
 
@@ -143,7 +146,7 @@ final class FileAccessStore {
         guard !stale.isEmpty else { return }
         for path in stale {
             bookmarks[path] = nil
-            opened[path] = nil
+            if let openedURL = opened.removeValue(forKey: path) { stop(openedURL) }
         }
         persist()
     }

@@ -19,7 +19,9 @@ NOTES=""
 shift || true
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --notes) NOTES="$2"; shift 2 ;;
+        --notes)
+            [[ $# -ge 2 ]] || { echo "error: --notes requires a file" >&2; exit 2; }
+            NOTES="$2"; shift 2 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -40,6 +42,7 @@ die()  { printf '\033[31merror: %s\033[0m\n' "$*" >&2; exit 1; }
 step "Preflight"
 [[ -z "$(git status --porcelain)" ]] || die "uncommitted changes; commit first"
 command -v xcodegen >/dev/null || die "xcodegen missing (brew install xcodegen)"
+bash "$ROOT/scripts/trash-paths.sh"
 command -v gh >/dev/null || die "gh missing (brew install gh)"
 gh auth status >/dev/null 2>&1 || die "gh is not logged in"
 security find-identity -v -p codesigning | grep -q "$IDENTITY" || die "no \"$IDENTITY\" identity in the keychain"
@@ -52,19 +55,17 @@ step "Version $VERSION"
 BUILD=$(( $(grep 'CURRENT_PROJECT_VERSION:' project.yml | tr -dc '0-9') + 1 ))
 sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: $VERSION/; s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD/" project.yml
 xcodegen -q
-git add project.yml aura/Info/Info.plist
-git commit -q -m "release: v$VERSION (build $BUILD)"
-git tag "v$VERSION"
 
 step "Building Release"
-rm -rf "$DD" "$ROOT/build/dmg" "$ROOT/build/sparkle"
+bash "$ROOT/scripts/trash-paths.sh" "$DD" "$ROOT/build/dmg" "$ROOT/build/sparkle"
+mkdir -p "$ROOT/build"
 xcodebuild -project Aura.xcodeproj -scheme aura -configuration Release -destination 'platform=macOS' \
     -derivedDataPath "$DD" CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= build > build/release-build.log 2>&1 \
     || { tail -40 build/release-build.log; die "build failed, see build/release-build.log"; }
 APP="$DD/Build/Products/Release/Aura.app"
 [[ -d "$APP" ]] || die "no app at $APP"
 # The scheme also builds the unit-test bundle into the app. It has no place in a release.
-rm -rf "$APP/Contents/PlugIns/auraTests.xctest"
+bash "$ROOT/scripts/trash-paths.sh" "$APP/Contents/PlugIns/auraTests.xctest"
 # The build ran unsigned, so everything is signed here, innermost first: the injected
 # bundle, any frameworks beside Sparkle (which gets its own pass below), and stray dylibs.
 find "$APP/Contents/PlugIns" "$APP/Contents/Frameworks" "$APP/Contents/MacOS" -mindepth 1 -maxdepth 1 \
@@ -131,6 +132,9 @@ GENERATE_APPCAST=$(find "$DD/SourcePackages/artifacts" -path '*/Sparkle/bin/gene
 grep -q "sparkle:edSignature" build/sparkle/appcast.xml || die "appcast carries no EdDSA signature"
 
 step "Publishing"
+git add project.yml aura/Info/Info.plist
+git commit -q -m "release: v$VERSION (build $BUILD)"
+git tag "v$VERSION"
 git push origin HEAD "v$VERSION"
 NOTES_ARGS=(--notes "Aura $VERSION")
 [[ -n "$NOTES" ]] && NOTES_ARGS=(--notes-file "$NOTES")

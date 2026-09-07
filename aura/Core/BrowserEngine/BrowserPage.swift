@@ -16,6 +16,7 @@ private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
 }
 
 final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    static let passwordWorld = WKContentWorld.world(name: "AuraPasswords")
     weak var delegate: BrowserPageDelegate?
 
     private let webView: AuraWebView
@@ -38,7 +39,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     private let profile: BrowserEngineProfile
     private let pageConfiguration: BrowserPageConfiguration
     /// Host of the extension whose own pages this web view was built for, or nil for an
-    /// ordinary page. See `ExtensionManager.pageConfiguration(hosting:)`.
+    /// ordinary page. See `ExtensionManager.pageConfiguration(hosting:isPrivate:)`.
     let hostedExtensionHost: String?
 
     /// `hosting` is the address the page is about to load. When that is an extension's own
@@ -52,7 +53,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         hosting url: URL? = nil
     ) {
         if let url, let extensionConfiguration = MainActor.assumeIsolated({
-            ExtensionManager.shared.pageConfiguration(hosting: url)
+            ExtensionManager.shared.pageConfiguration(hosting: url, isPrivate: profile.isPrivate)
         }) {
             self.init(
                 profile: profile,
@@ -65,9 +66,9 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         }
         let webConfiguration = WKWebViewConfiguration()
         webConfiguration.websiteDataStore = profile.dataStore
-        // Private tabs get the injected bundle too: request blocking is not
-        // privacy-sensitive, and the pool carries no website data.
-        AuraWebBundle.apply(to: webConfiguration)
+        // The custom broker cannot identify a request's private browsing context.
+        // Keep private traffic on WebKit's native path, which enforces grants.
+        if !profile.isPrivate { AuraWebBundle.apply(to: webConfiguration) }
         self.init(
             profile: profile,
             configuration: configuration,
@@ -142,7 +143,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         webConfiguration.userContentController = contentController
 
         MainActor.assumeIsolated {
-            ExtensionManager.shared.attach(to: webConfiguration, isPrivate: profile.isPrivate)
+            ExtensionManager.shared.attach(to: webConfiguration)
         }
         messageNames = configuration.scriptMessageNames
         webView = AuraWebView(frame: .zero, configuration: webConfiguration)
@@ -153,13 +154,18 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         for messageName in configuration.scriptMessageNames {
             // A weak proxy keeps the content controller from retaining the page,
             // so a Tab released without an explicit teardown() can't leak the webview.
-            contentController.add(WeakScriptMessageHandler(target: self), name: messageName)
+            contentController.add(
+                WeakScriptMessageHandler(target: self),
+                contentWorld: messageName == "passwordManager" ? Self.passwordWorld : .page,
+                name: messageName
+            )
         }
         for script in configuration.userScripts {
             let userScript = WKUserScript(
                 source: script.source,
                 injectionTime: mapInjectionTime(script.injectionTime),
-                forMainFrameOnly: script.forMainFrameOnly
+                forMainFrameOnly: script.forMainFrameOnly,
+                in: script.usesPasswordWorld ? Self.passwordWorld : .page
             )
             contentController.addUserScript(userScript)
         }
@@ -316,6 +322,10 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         webView.evaluateJavaScript(script, completionHandler: completion)
     }
 
+    func evaluatePasswordScript(_ script: String) {
+        webView.evaluateJavaScript(script, in: nil, in: Self.passwordWorld, completionHandler: nil)
+    }
+
     func takeSnapshot(
         configuration: BrowserSnapshotConfiguration,
         completion: @escaping (NSImage?, Error?) -> Void
@@ -343,7 +353,10 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
         for messageName in messageNames {
-            controller.removeScriptMessageHandler(forName: messageName)
+            controller.removeScriptMessageHandler(
+                forName: messageName,
+                contentWorld: messageName == "passwordManager" ? Self.passwordWorld : .page
+            )
         }
         webView.removeFromSuperview()
     }
@@ -405,6 +418,13 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "passwordManager" {
+            guard message.world === Self.passwordWorld, message.frameInfo.isMainFrame,
+                  let source = Self.originURL(message.frameInfo.securityOrigin),
+                  let origin = PasswordManagerService.normalizedOrigin(from: source),
+                  webView.url.flatMap(PasswordManagerService.normalizedOrigin) == origin
+            else { return }
+        }
         if message.name == "contextMenu" {
             cacheContextMenuInfo(message.body)
             return
@@ -671,8 +691,11 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
     /// `WKSecurityOrigin` reports port 0 for a scheme's default port, so the port is
     /// only spelled out when the page really is on an unusual one.
     private static func originURL(_ origin: WKSecurityOrigin) -> URL? {
-        let base = "\(origin.protocol)://\(origin.host)"
-        return URL(string: origin.port == 0 ? base : "\(base):\(origin.port)")
+        var components = URLComponents()
+        components.scheme = origin.protocol
+        components.host = origin.host
+        if origin.port != 0 { components.port = origin.port }
+        return components.url
     }
 
     func webView(
@@ -681,7 +704,8 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping ([URL]?) -> Void
     ) {
-        delegate?.browserPage(
+        guard let delegate else { return completionHandler(nil) }
+        delegate.browserPage(
             self,
             runOpenPanelWith: BrowserOpenPanelOptions(
                 allowsDirectories: parameters.allowsDirectories,
@@ -786,7 +810,8 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (Bool) -> Void
     ) {
-        delegate?.browserPage(self, runJavaScriptConfirm: message, completion: completionHandler)
+        guard let delegate else { return completionHandler(false) }
+        delegate.browserPage(self, runJavaScriptConfirm: message, completion: completionHandler)
     }
 
     func webView(
@@ -796,7 +821,8 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (String?) -> Void
     ) {
-        delegate?.browserPage(
+        guard let delegate else { return completionHandler(nil) }
+        delegate.browserPage(
             self,
             runJavaScriptPrompt: prompt,
             defaultText: defaultText,

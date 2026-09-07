@@ -17,6 +17,7 @@ struct BrowserUserScript {
     let source: String
     let injectionTime: BrowserUserScriptInjectionTime
     let forMainFrameOnly: Bool
+    var usesPasswordWorld = false
 }
 
 struct BrowserScriptMessage {

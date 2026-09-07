@@ -15,7 +15,7 @@ import os
 /// deadline, the muting of an extension that stopped answering, and
 /// `WebRequestAskGate` capping how many asks may be parked at once. Everything
 /// else the bundle does for itself: it never asks at all unless `isActive` was
-/// pushed to it, and it caches answers this class marks cacheable.
+/// pushed to it. Each request gets a fresh extension decision.
 @available(macOS 15.4, *)
 @MainActor
 final class WebRequestBroker {
@@ -49,9 +49,15 @@ final class WebRequestBroker {
         }
     }
 
-    private var listeners: [Int: Listener] = [:]
+    private struct ListenerKey: Hashable {
+        let extensionID: String
+        let listenerID: Int
+    }
+
+    private var listeners: [ListenerKey: Listener] = [:]
     private var ports: [String: WKWebExtension.MessagePort] = [:]
-    private var outstanding: Set<Int> = []
+    private var contexts: [String: WKWebExtensionContext] = [:]
+    private var outstanding: [Int: Set<String>] = [:]
     /// Replies to the request in flight, keyed by request id and then by the
     /// extension that sent them. Keyed by sender because every asked extension
     /// gets a say, and because a silent one has to be identifiable to be muted.
@@ -59,10 +65,8 @@ final class WebRequestBroker {
     private var nextRequestID = 1
     private var gate = WebRequestAskGate()
 
-    /// The reply for an ask nothing could answer: a timeout, or a gate that was
-    /// full. Allowed, because a synchronous reply has nothing else it can say,
-    /// and explicitly not cacheable so the bundle asks again next time instead
-    /// of remembering an answer no extension gave.
+    /// Timeout and overload allow the request. Keep the legacy no-cache flag
+    /// for compatibility with an already-running older web process.
     nonisolated static var unansweredVerdict: [String: Any] { ["cacheable": false] }
 
     /// The run loop mode the wait in `decide` spins in. Registering it as one of
@@ -177,17 +181,23 @@ final class WebRequestBroker {
 
     /// The shim's `runtime.connectNative` landed. Everything the extension says
     /// after this arrives on `port.messageHandler`.
-    func attach(port: WKWebExtension.MessagePort, extensionID: String) {
-        ports[extensionID]?.disconnect()
+    func attach(port: WKWebExtension.MessagePort, context: WKWebExtensionContext) {
+        let extensionID = context.uniqueIdentifier
+        let previous = ports[extensionID]
+        detach(extensionID: extensionID)
+        previous?.disconnect()
         ports[extensionID] = port
+        contexts[extensionID] = context
 
-        port.messageHandler = { [weak self] message, _ in
+        port.messageHandler = { [weak self, weak port] message, _ in
             MainActor.assumeIsolated {
+                guard let port, self?.ports[extensionID] === port else { return }
                 self?.receive(message, from: extensionID)
             }
         }
-        port.disconnectHandler = { [weak self] _ in
+        port.disconnectHandler = { [weak self, weak port] _ in
             MainActor.assumeIsolated {
+                guard let port, self?.ports[extensionID] === port else { return }
                 self?.detach(extensionID: extensionID)
             }
         }
@@ -196,6 +206,7 @@ final class WebRequestBroker {
 
     func detach(extensionID: String) {
         ports.removeValue(forKey: extensionID)
+        contexts.removeValue(forKey: extensionID)
         listeners = listeners.filter { $0.value.extensionID != extensionID }
         consecutiveTimeouts.removeValue(forKey: extensionID)
         mutedUntil.removeValue(forKey: extensionID)
@@ -240,7 +251,7 @@ final class WebRequestBroker {
             listeners.removeValue(forKey: key(extensionID, id))
             writeState()
         case "verdict":
-            guard let id = message["id"] as? Int, outstanding.contains(id) else { return }
+            guard let id = message["id"] as? Int, outstanding[id]?.contains(extensionID) == true else { return }
             answers[id, default: [:]][extensionID] = message
         default:
             break
@@ -248,11 +259,8 @@ final class WebRequestBroker {
     }
 
     /// Listener ids are per-extension, so they need the extension folded in.
-    private func key(_ extensionID: String, _ listenerID: Int) -> Int {
-        var hasher = Hasher()
-        hasher.combine(extensionID)
-        hasher.combine(listenerID)
-        return hasher.finalize()
+    private func key(_ extensionID: String, _ listenerID: Int) -> ListenerKey {
+        ListenerKey(extensionID: extensionID, listenerID: listenerID)
     }
 
     // MARK: - Deciding
@@ -271,12 +279,20 @@ final class WebRequestBroker {
 
     private func decide(_ details: [String: Any]) -> [String: Any] {
         let url = details["url"] as? String ?? ""
+        guard let requestURL = URL(string: url) else { return Self.unansweredVerdict }
+        let documentURL = (details["documentUrl"] as? String).flatMap(URL.init(string:))
         let type = details["type"] as? String ?? "other"
         let interested = Set(
             listeners.values.filter { $0.matches(url: url, type: type) }.map(\.extensionID)
-        ).filter { !isMuted($0) }
+        ).filter { extensionID in
+            guard !isMuted(extensionID), let context = contexts[extensionID], context.isLoaded,
+                  context.hasPermission(.webRequest),
+                  context.hasAccess(to: requestURL)
+            else { return false }
+            return documentURL.map { context.hasAccess(to: $0) } ?? true
+        }
         // Costs no wait, so it never takes a slot in the gate.
-        guard !interested.isEmpty else { return ["cacheable": true] }
+        guard !interested.isEmpty else { return [:] }
 
         // Past the cap this is the one thing left to do. Everything up to it is
         // served, including asks that arrive while this one is parked.
@@ -288,19 +304,20 @@ final class WebRequestBroker {
 
         let id = nextRequestID
         nextRequestID &+= 1
-        outstanding.insert(id)
+        outstanding[id] = []
         defer {
-            outstanding.remove(id)
+            outstanding.removeValue(forKey: id)
             answers.removeValue(forKey: id)
         }
 
         var asked: Set<String> = []
         for extensionID in interested {
             guard let port = ports[extensionID], !port.isDisconnected else { continue }
+            outstanding[id, default: []].insert(extensionID)
             port.sendMessage(["op": "decide", "id": id, "details": details], completionHandler: nil)
             asked.insert(extensionID)
         }
-        guard !asked.isEmpty else { return ["cacheable": true] }
+        guard !asked.isEmpty else { return [:] }
 
         let start = CFAbsoluteTimeGetCurrent()
         let deadline = start + Self.timeout
@@ -340,11 +357,6 @@ final class WebRequestBroker {
             ? WebRequestHeaderPatch.merge(ordered.map { WebRequestHeaderPatch(message: $0) })
             : WebRequestHeaderPatch()
         verdict.merge(patch.payload) { current, _ in current }
-        // A verdict that only part of the extensions contributed to must not be
-        // remembered by the bundle: the silent one may answer next time. Neither is a
-        // header patch: the listener was handed this request's own headers, and the
-        // next request with the same URL carries different ones.
-        verdict["cacheable"] = silent.isEmpty && patch.isEmpty
         return verdict
     }
 
@@ -378,9 +390,7 @@ final class WebRequestBroker {
 
     // MARK: - State
 
-    /// Tells live web processes whether asking is worth the IPC. The bundle drops
-    /// its cached verdicts on every push, since a new set of listeners may decide
-    /// differently.
+    /// Tells live web processes whether any listener can answer a request.
     private func writeState() {
         AuraWebBundle.webRequestStateDidChange()
     }
@@ -457,8 +467,7 @@ enum WebRequestVerdict: Equatable {
         return .allow
     }
 
-    /// The half of the bundle's reply that names the action. `cacheable` is the
-    /// broker's to add.
+    /// The part of the bundle's reply that names the action.
     var payload: [String: Any] {
         switch self {
         case .allow: return [:]

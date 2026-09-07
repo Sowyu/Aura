@@ -21,14 +21,15 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         _ controller: WKWebExtensionController,
         openWindowsFor context: WKWebExtensionContext
     ) -> [any WKWebExtensionWindow] {
-        ExtensionWindowAdapter.openAdapters()
+        ExtensionWindowAdapter.openAdapters().filter { $0.isVisible(to: context) }
     }
 
     func webExtensionController(
         _ controller: WKWebExtensionController,
         focusedWindowFor context: WKWebExtensionContext
     ) -> (any WKWebExtensionWindow)? {
-        ExtensionWindowAdapter.focusedAdapter()
+        guard let window = ExtensionWindowAdapter.focusedAdapter(), window.isVisible(to: context) else { return nil }
+        return window
     }
 
     func webExtensionController(
@@ -38,7 +39,9 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         completionHandler: @escaping ((any WKWebExtensionTab)?, (any Error)?) -> Void
     ) {
         let target = configuration.window as? ExtensionWindowAdapter ?? ExtensionWindowAdapter.focusedAdapter()
-        guard let manager = target?.tabManager, let container = manager.activeContainer else {
+        guard let target, target.isVisible(to: context),
+              let manager = target.tabManager, let container = manager.activeContainer
+        else {
             completionHandler(nil, ExtensionActionError.noBrowserWindow)
             return
         }
@@ -49,14 +52,14 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
             return
         }
 
-        target?.window?.makeKeyAndOrderFront(nil)
+        target.window?.makeKeyAndOrderFront(nil)
         // `addTab` reports the open to WebKit through ExtensionManager.tabDidOpen.
         let tab = manager.addTab(
             url: url,
             container: container,
             historyManager: manager.activeTab?.historyManager,
             downloadManager: manager.activeTab?.downloadManager,
-            isPrivate: false,
+            isPrivate: target.isPrivateWindow,
             activateAfterAdding: configuration.shouldBeActive
         )
         completionHandler(ExtensionTabAdapter.adapter(for: tab), nil)
@@ -64,8 +67,8 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
 
     // MARK: - Permissions
 
-    // v1 trust model: installing an extension grants everything, so every prompt
-    // is answered yes with no expiry. Revisit when Settings grows per-permission UI.
+    // Required permissions were reviewed at installation. Optional access needs
+    // a new decision when the extension asks for it.
 
     func webExtensionController(
         _ controller: WKWebExtensionController,
@@ -74,7 +77,9 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         for context: WKWebExtensionContext,
         completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void
     ) {
-        completionHandler(permissions, nil)
+        requestAdditionalAccess(permissions.map(\.rawValue), for: context) { allowed in
+            completionHandler(allowed ? permissions : [], nil)
+        }
     }
 
     func webExtensionController(
@@ -84,7 +89,9 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         for context: WKWebExtensionContext,
         completionHandler: @escaping (Set<URL>, Date?) -> Void
     ) {
-        completionHandler(urls, nil)
+        requestAdditionalAccess(urls.map(\.absoluteString), for: context) { allowed in
+            completionHandler(allowed ? urls : [], nil)
+        }
     }
 
     func webExtensionController(
@@ -94,7 +101,28 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         for context: WKWebExtensionContext,
         completionHandler: @escaping (Set<WKWebExtension.MatchPattern>, Date?) -> Void
     ) {
-        completionHandler(matchPatterns, nil)
+        requestAdditionalAccess(matchPatterns.map(\.string), for: context) { allowed in
+            completionHandler(allowed ? matchPatterns : [], nil)
+        }
+    }
+
+    private func requestAdditionalAccess(
+        _ permissions: [String],
+        for context: WKWebExtensionContext,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard context.isLoaded,
+              let target = ExtensionWindowAdapter.focusedAdapter(), target.isVisible(to: context),
+              let window = target.window, window.attachedSheet == nil
+        else { return completion(false) }
+        let alert = NSAlert()
+        alert.messageText = "Allow additional access for \(context.webExtension.displayName ?? "this extension")?"
+        alert.informativeText = permissions.sorted().joined(separator: "\n")
+        alert.addButton(withTitle: "Don't Allow")
+        alert.addButton(withTitle: "Allow")
+        alert.beginSheetModal(for: window) { response in
+            completion(response == .alertSecondButtonReturn && context.isLoaded)
+        }
     }
 
     // MARK: - Native messaging
@@ -112,7 +140,7 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         let extensionID = context.uniqueIdentifier
         switch port.applicationIdentifier {
         case WebRequestBroker.applicationIdentifier:
-            WebRequestBroker.shared.attach(port: port, extensionID: extensionID)
+            WebRequestBroker.shared.attach(port: port, context: context)
         case ExtensionMessageRelay.backgroundIdentifier:
             ExtensionMessageRelay.shared.attachBackground(port: port, extensionID: extensionID)
         case ExtensionMessageRelay.pageIdentifier:
@@ -172,7 +200,7 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
             completionHandler(ExtensionActionError.noOptionsPage)
             return
         }
-        guard let target = ExtensionWindowAdapter.focusedAdapter(),
+        guard let target = ExtensionWindowAdapter.focusedAdapter(), target.isVisible(to: context),
               let manager = target.tabManager,
               let container = manager.activeContainer
         else {
@@ -186,7 +214,7 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
             container: container,
             historyManager: manager.activeTab?.historyManager,
             downloadManager: manager.activeTab?.downloadManager,
-            isPrivate: false
+            isPrivate: target.isPrivateWindow
         )
         completionHandler(nil)
     }

@@ -33,14 +33,10 @@ final class MediaController {
     }
 
     @ObservationIgnored private var tabRefs: [UUID: WeakTab] = [:]
-    @ObservationIgnored private var titleSyncTimer: Timer?
+    @ObservationIgnored private(set) var titleSyncTimer: Timer?
 
     /// How many tabs the controller still holds a box for. Only the prune check reads it.
     var trackedTabCount: Int { tabRefs.count }
-
-    init() {
-        startPeriodicTitleSync()
-    }
 
     deinit {
         titleSyncTimer?.invalidate()
@@ -61,6 +57,7 @@ final class MediaController {
     func receive(event: MediaEventPayload, from tab: Tab) {
         // Media events arrive constantly; only box a new WeakTab when the old one is gone.
         if tabRefs[tab.id]?.value !== tab {
+            tabRefs = tabRefs.filter { $0.value.value != nil }
             tabRefs[tab.id] = WeakTab(tab)
         }
         let id = tab.id
@@ -140,6 +137,7 @@ final class MediaController {
         if isVisible != shouldBeVisible {
             isVisible = shouldBeVisible
         }
+        updateTitleSyncTimer()
     }
 
     // MARK: - Controls (per session, default to primary)
@@ -150,6 +148,7 @@ final class MediaController {
         if let idx = sessions.firstIndex(where: { $0.tabID == id }) {
             sessions[idx].isPlaying.toggle()
         }
+        updateTitleSyncTimer()
     }
 
     func nextTrack(_ tabID: UUID? = nil) {
@@ -189,6 +188,7 @@ final class MediaController {
         tabRefs[id]?.value?.isPlayingMedia = false
         tabRefs[id] = nil
         isVisible = !visibleSessions.isEmpty
+        updateTitleSyncTimer()
     }
 
     func removeSession(for tabID: UUID) {
@@ -199,6 +199,7 @@ final class MediaController {
         tabRefs[tabID]?.value?.isPlayingMedia = false
         tabRefs[tabID] = nil
         isVisible = !visibleSessions.isEmpty
+        updateTitleSyncTimer()
     }
 
     /// Helpers
@@ -230,9 +231,15 @@ final class MediaController {
         max(0, min(1, value))
     }
 
-    private func startPeriodicTitleSync() {
+    private func updateTitleSyncTimer() {
+        guard sessions.contains(where: { $0.isPlaying && tabRefs[$0.tabID]?.value != nil }) else {
+            titleSyncTimer?.invalidate()
+            titleSyncTimer = nil
+            return
+        }
+        guard titleSyncTimer == nil else { return }
         titleSyncTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self?.syncTitlesForPlayingSessions()
             }
         }
@@ -251,6 +258,7 @@ final class MediaController {
                 sessions[idx].title = tab.title
             }
         }
+        updateTitleSyncTimer()
     }
 
     // MARK: - Title sync helpers

@@ -11,13 +11,11 @@
   <a href="https://github.com/Sowyu/Aura/releases/latest"><img src="https://img.shields.io/github/v/release/Sowyu/Aura" alt="Latest release"></a>
 </p>
 
-## Heads up
+## Review status
 
-This is total AI slop. Nearly every line in this repository was written by AI coding
-agents (Claude) steered by one person over a few days: the app, the tests, the docs and
-this README. It builds, the tests pass and it has been used, but nobody has read all of
-it. Treat it as unreviewed code: expect bugs, read before you trust it with anything
-that matters, and report what you find.
+Aura is experimental. The [code audit](AUDIT.md) records security and correctness
+fixes, checks that ran, and remaining work. The audit changes still need a macOS
+build and native tests before release.
 
 ## Install
 
@@ -48,7 +46,8 @@ Runs on macOS 15 or later, Apple Silicon and Intel.
 - Browsing containers in the Firefox style, each with its own cookie jar
 - Web extensions from addons.mozilla.org through WKWebExtension, including grants for
   private windows and automatic add-on updates
-- uBlock Origin Lite is bundled. Full uBlock Origin is a switch in Settings, Privacy
+- uBlock Origin Lite is bundled. Full uBlock Origin is a switch in Settings, Privacy.
+  Its custom request-blocking bridge currently runs only outside private windows
 - Password vault with autofill, stored in the Keychain
 - Per-site JavaScript rules, native camera and microphone prompts, site info on the
   lock icon
@@ -77,7 +76,7 @@ Settings, About.
 Needs macOS 15 or later and Xcode 26, or the current beta.
 
 ```bash
-brew install xcodegen
+brew install xcodegen trash-cli
 git clone https://github.com/Sowyu/Aura.git
 cd Aura
 ./scripts/setup.sh
@@ -87,6 +86,15 @@ open Aura.xcodeproj
 `scripts/setup.sh` installs the tooling and the git hooks, then generates
 `Aura.xcodeproj` from `project.yml`. Run `xcodegen` again after any change to
 `project.yml`.
+
+Build and release cleanup uses `trash-put` for recoverable removal. The helper also
+finds Homebrew's keg-only [trash-cli](https://formulae.brew.sh/formula/trash-cli) installation.
+
+Portable checks, on Linux or macOS with Node.js 22 or later:
+
+```bash
+bash scripts/check-local.sh
+```
 
 Tests:
 

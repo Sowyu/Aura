@@ -3,6 +3,20 @@ import Foundation
 /// Internal pages use the `aura://` scheme (for example `aura://settings/spaces`).
 /// They render as native SwiftUI inside a tab and are never handed to WebKit.
 extension URL {
+    /// A web security origin. Paths and default ports do not distinguish origins;
+    /// subdomains, schemes and non-default ports do.
+    var webOrigin: String? {
+        guard let scheme = scheme?.lowercased(), ["http", "https"].contains(scheme),
+              let host = host?.lowercased(), !host.isEmpty
+        else { return nil }
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        let defaultPort = scheme == "https" ? 443 : 80
+        if let port, port != defaultPort { components.port = port }
+        return components.url?.absoluteString
+    }
+
     static let oraScheme = "aura"
 
     /// Pre-rename scheme. Saved tabs and typed addresses still use it, so it stays

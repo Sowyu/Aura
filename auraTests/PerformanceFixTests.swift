@@ -112,6 +112,7 @@ struct PerformanceFixTests {
         )
         let context = ModelContext(modelContainer)
         let media = MediaController()
+        #expect(media.titleSyncTimer == nil)
         let manager = TabManager(
             modelContainer: modelContainer,
             modelContext: context,
@@ -141,9 +142,21 @@ struct PerformanceFixTests {
                 from: tab
             )
             #expect(media.trackedTabCount == 1)
+            let playingTimer = try #require(media.titleSyncTimer)
+            #expect(playingTimer.isValid)
+            tab.title = "new song"
+            media.syncTitlesForPlayingSessions()
+            #expect(media.primary?.title == "new song")
+            #expect(media.titleSyncTimer === playingTimer)
+            media.togglePlayPause(tab.id)
+            #expect(media.titleSyncTimer == nil)
+            #expect(!playingTimer.isValid)
+            media.togglePlayPause(tab.id)
+            #expect(media.titleSyncTimer?.isValid == true)
         }
 
         media.syncTitlesForPlayingSessions()
         #expect(media.trackedTabCount == 0)
+        #expect(media.titleSyncTimer == nil)
     }
 }

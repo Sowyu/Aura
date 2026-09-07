@@ -39,11 +39,6 @@ struct BrowserPageConfiguration {
 }
 
 final class BrowserEngine {
-    private struct ProfileKey: Hashable {
-        let identifier: UUID
-        let isPrivate: Bool
-    }
-
     static let shared = BrowserEngine()
 
     /// Store every tab that is in no browsing container shares, Firefox's "No
@@ -51,7 +46,7 @@ final class BrowserEngine {
     /// relaunches and nobody is signed out by a restart.
     static let defaultStoreIdentifier = UUID(uuidString: "6E9F1C34-2B7A-4C05-9E1D-3A5B8C7D0F42")!
     private let profileCacheLock = NSLock()
-    private var profileCache: [ProfileKey: BrowserEngineProfile] = [:]
+    private var profileCache: [UUID: BrowserEngineProfile] = [:]
 
     /// Held briefly so the warm-up view is not torn down before its load starts.
     @MainActor private var warmupView: WKWebView?
@@ -77,16 +72,15 @@ final class BrowserEngine {
             return BrowserEngineProfile(identifier: identifier, isPrivate: true)
         }
 
-        let key = ProfileKey(identifier: identifier, isPrivate: false)
         profileCacheLock.lock()
         defer { profileCacheLock.unlock() }
 
-        if let profile = profileCache[key] {
+        if let profile = profileCache[identifier] {
             return profile
         }
 
         let profile = BrowserEngineProfile(identifier: identifier, isPrivate: false)
-        profileCache[key] = profile
+        profileCache[identifier] = profile
         return profile
     }
 
@@ -97,7 +91,7 @@ final class BrowserEngine {
     func dropProfile(identifier: UUID) {
         profileCacheLock.lock()
         defer { profileCacheLock.unlock() }
-        profileCache[ProfileKey(identifier: identifier, isPrivate: false)] = nil
+        profileCache[identifier] = nil
     }
 
     /// `hosting` is what the page will load first; an extension's own page gets a web

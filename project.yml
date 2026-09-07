@@ -15,6 +15,9 @@ packages:
   FaviconFinder:
     url: https://github.com/will-lumley/FavIconFinder
     exactVersion: 5.1.5
+  SwiftSoup:
+    url: https://github.com/scinfu/SwiftSoup.git
+    from: 2.3.7
 
 targets:
   aura:
@@ -39,6 +42,7 @@ targets:
       - package: PublicSuffixList
       - package: Inject
       - package: FaviconFinder
+      - package: SwiftSoup
       - target: AuraWebBundle
         embed: true
         codeSign: true
@@ -56,7 +60,7 @@ targets:
           # merges into an existing folder and would keep layers that no longer exist.
           ICON_SRC="$SRCROOT/aura/Assets/Icons/AuraIcon.icon"
           ICON_DST="$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Resources/"
-          rm -rf "$ICON_DST/AuraIcon.icon" "$ICON_DST/AuraIconDev.icon"
+          bash "$SRCROOT/scripts/trash-paths.sh" "$ICON_DST/AuraIcon.icon" "$ICON_DST/AuraIconDev.icon"
           cp -R "$ICON_SRC" "$ICON_DST"
 
     info:

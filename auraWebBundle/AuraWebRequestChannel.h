@@ -36,8 +36,6 @@ BOOL AuraWebRequestChannelWantsRequestHeaders(void);
 /// Records the host's answer to `AuraWebRequestStateMessageName`, a bit mask in a
 /// string: bit 0 is "a listener is registered", bit 1 is "send request headers".
 /// "0" and "1" carry the meaning they had before headers existed.
-/// Every call drops the cached verdicts: the host only sends on a change, and a
-/// new set of listeners may decide differently.
 void AuraWebRequestChannelSetActive(NSString *_Nullable state);
 
 /// Pulls the active flag from the host. Called once per page creation so a web

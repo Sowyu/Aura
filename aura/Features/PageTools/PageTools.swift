@@ -48,19 +48,21 @@ enum PageTools {
         title: @escaping (URL) -> String
     ) {
         guard let tab, isAvailable(for: tab), let page = tab.browserPage else { return }
-        let target = tab.url
+        guard let target = page.currentURL else { return }
         page.captureDocumentHTML { html in
             MainActor.assumeIsolated {
+                guard !tab.isDeleted, tab.browserPage === page, page.currentURL == target,
+                      let opened = open(address(target), titled: title(target), from: tab)
+                else { return }
                 if let html, !html.isEmpty {
-                    PageSourceStore.shared.store(html, for: target)
+                    PageSourceStore.shared.store(html, for: target, tabID: opened.id)
                 }
-                open(address(target), titled: title(target), from: tab)
             }
         }
     }
 
-    private static func open(_ url: URL, titled title: String, from tab: Tab) {
-        guard let tabManager = tab.tabManager, let historyManager = tab.historyManager else { return }
+    private static func open(_ url: URL, titled title: String, from tab: Tab) -> Tab? {
+        guard let tabManager = tab.tabManager, let historyManager = tab.historyManager else { return nil }
         let opened = tabManager.openTab(
             url: url,
             historyManager: historyManager,
@@ -69,9 +71,10 @@ enum PageTools {
             isPrivate: tab.isPrivate
         )
         // Without this the row reads "view-source", which is the internal address's host.
-        guard let opened else { return }
+        guard let opened else { return nil }
         opened.title = title
         saveOrLog(tabManager.modelContext)
+        return opened
     }
 
     private static func fileNameSeed(for tab: Tab) -> String {

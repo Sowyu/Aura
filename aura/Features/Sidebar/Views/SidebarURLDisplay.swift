@@ -105,6 +105,7 @@ struct SidebarURLDisplay: View {
         .onTapGesture { openLauncher() }
         .accessibilityLabel(Text("Search or enter address"))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { openLauncher() }
         .onHover { hovering in
             isHovering = hovering
         }

@@ -9,15 +9,21 @@
         return;
     }
 
+    // Kept in the isolated world. A fill queued before navigation must not reach
+    // the next document, even if that page copies the old field IDs.
+    const documentID = Array.from(crypto.getRandomValues(new Uint32Array(4)), n => n.toString(16)).join("-");
+
     let activeField = null;
     let blurTimeout = null;
+    let rectUpdatePending = false;
+    let lastRect = null;
     let overlayKeyboardNavigationState = {
         active: false
     };
 
     function send(payload) {
         try {
-            handler.postMessage(JSON.stringify(payload));
+            handler.postMessage(JSON.stringify({ ...payload, documentID }));
         } catch (error) {}
     }
 
@@ -34,11 +40,11 @@
         return element.dataset.oraPasswordFieldId;
     }
 
-    function isVisible(element) {
+    function isVisible(element, rect) {
         if (!element) {
             return false;
         }
-        const rect = element.getBoundingClientRect();
+        rect = rect || element.getBoundingClientRect();
         const style = window.getComputedStyle(element);
         return rect.width > 0
             && rect.height > 0
@@ -131,9 +137,11 @@
             return null;
         }
 
+        // Only username/password candidates need layout and style reads.
         const inputs = Array.from(scope.querySelectorAll("input"))
-            .filter(isRelevantInput)
-            .filter(isVisible);
+            .filter(input => isRelevantInput(input)
+                && (input.type === "password" || isUsernameField(input))
+                && isVisible(input));
         const passwordFields = inputs.filter((input) => input.type === "password");
 
         if (!passwordFields.length) {
@@ -156,8 +164,7 @@
         };
     }
 
-    function rectPayload(element) {
-        const rect = element.getBoundingClientRect();
+    function rectPayload(element, rect = element.getBoundingClientRect()) {
         return {
             x: rect.x,
             y: rect.y,
@@ -167,13 +174,13 @@
     }
 
     function focusPayload(element) {
-        const group = relevantFieldsFor(element);
-        if (!group) {
+        const fieldKind = fieldKindFor(element);
+        if (!fieldKind) {
             return null;
         }
 
-        const fieldKind = fieldKindFor(element);
-        if (!fieldKind) {
+        const group = relevantFieldsFor(element);
+        if (!group) {
             return null;
         }
 
@@ -189,14 +196,18 @@
     }
 
     function scheduleRectUpdate() {
-        if (!activeField || !isVisible(activeField)) {
-            return;
-        }
-
-        send({
-            type: "rect",
-            fieldID: ensureFieldID(activeField),
-            rect: rectPayload(activeField)
+        if (!activeField || rectUpdatePending) { return; }
+        rectUpdatePending = true;
+        window.requestAnimationFrame(() => {
+            rectUpdatePending = false;
+            if (!activeField) { return; }
+            const bounds = activeField.getBoundingClientRect();
+            if (!isVisible(activeField, bounds)) { return; }
+            const rect = rectPayload(activeField, bounds);
+            if (lastRect && rect.x === lastRect.x && rect.y === lastRect.y
+                && rect.width === lastRect.width && rect.height === lastRect.height) { return; }
+            lastRect = rect;
+            send({ type: "rect", fieldID: ensureFieldID(activeField), rect });
         });
     }
 
@@ -213,6 +224,7 @@
         }
 
         activeField = element;
+        lastRect = payload.rect;
         send({
             type: "focus",
             focus: payload
@@ -251,8 +263,9 @@
         }
 
         const inputs = Array.from(form.querySelectorAll("input"))
-            .filter(isRelevantInput)
-            .filter(isVisible);
+            .filter(input => input.value && isRelevantInput(input)
+                && (input.type === "password" || isUsernameField(input))
+                && isVisible(input));
         const passwordFields = inputs.filter((input) => input.type === "password" && input.value);
 
         if (!passwordFields.length) {
@@ -282,7 +295,7 @@
     }
 
     function handleKeyDown(event) {
-        if (!overlayKeyboardNavigationState.active || !activeField || event.target !== activeField) {
+        if (!event.isTrusted || !overlayKeyboardNavigationState.active || !activeField || event.target !== activeField) {
             return;
         }
 
@@ -395,6 +408,7 @@
     window.__oraPasswordManager = {
         fillCredentials(payload) {
             const request = typeof payload === "string" ? JSON.parse(payload) : payload;
+            if (request.documentID !== documentID) { return; }
             const highlightColor = request.highlightColor || "#E8F5E9";
 
             if (request.usernameFieldID && typeof request.username === "string") {

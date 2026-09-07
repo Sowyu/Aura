@@ -23,6 +23,11 @@ ensure_formula() {
     echo "  Installing $formula..."
     brew list --formula "$formula" >/dev/null 2>&1 || brew install "$formula"
 
+    # Keg-only tools such as trash-cli do not appear on Homebrew's default PATH.
+    if [[ -x "$(brew --prefix "$formula")/bin/$cmd" ]]; then
+        export PATH="$(brew --prefix "$formula")/bin:$PATH"
+    fi
+
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "error: Failed to install $cmd" >&2
         exit 1
@@ -31,6 +36,7 @@ ensure_formula() {
 }
 
 ensure_formula xcodegen xcodegen
+ensure_formula trash-put trash-cli
 ensure_formula swiftlint swiftlint
 ensure_formula swiftformat swiftformat
 ensure_formula xcbeautify xcbeautify
