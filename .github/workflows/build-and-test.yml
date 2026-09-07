@@ -107,6 +107,18 @@ jobs:
           -only-testing:auraTests/BrowserPageTests \
           CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee webbundle.log | xcbeautify
 
+    - name: Upload native test logs
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-test-logs
+        path: |
+          build.log
+          tests.log
+          webbundle.log
+        if-no-files-found: ignore
+        retention-days: 7
+
     - name: Build Release
       if: ${{ steps.tests.outcome == 'success' && steps.webbundle.outcome == 'success' }}
       run: |

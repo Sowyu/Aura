@@ -180,7 +180,7 @@ struct PasswordWorldTests {
         var ready = false
         for _ in 0 ..< 100 {
             let value = try? await view.evaluateJavaScript(
-                "typeof window.__oraPasswordManager", in: nil, in: BrowserPage.passwordWorld
+                "typeof window.__oraPasswordManager", in: nil, contentWorld: BrowserPage.passwordWorld
             )
             if value as? String == "object" { ready = true
                 break
@@ -193,16 +193,16 @@ struct PasswordWorldTests {
                 installed: window.__oraPasswordManagerInstalled,
                 handler: typeof window.webkit?.messageHandlers?.passwordManager,
                 error: window.__passwordError})
-            """, in: nil, in: BrowserPage.passwordWorld
+            """, in: nil, contentWorld: BrowserPage.passwordWorld
         )
-        try #require(ready, "Password script did not load: \(diagnostic)")
+        try #require(ready, "Password script did not load: \(String(describing: diagnostic))")
         let exposed = try await view.evaluateJavaScript(
             "typeof window.__oraPasswordManager + ':' + typeof window.webkit.messageHandlers.passwordManager"
         )
         #expect(exposed as? String == "undefined:undefined")
         _ = try await view.evaluateJavaScript("window.__oraPasswordManager = { fillCredentials: 'hijacked' }")
         let isolated = try await view.evaluateJavaScript(
-            "typeof window.__oraPasswordManager.fillCredentials", in: nil, in: BrowserPage.passwordWorld
+            "typeof window.__oraPasswordManager.fillCredentials", in: nil, contentWorld: BrowserPage.passwordWorld
         )
         #expect(isolated as? String == "function")
     }
