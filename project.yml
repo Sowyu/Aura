@@ -218,7 +218,29 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: aura/Core/BrowserEngine/AuraWebBundleSupport.h
         HEADER_SEARCH_PATHS: "$(SRCROOT)/auraWebBundle"
 
+  auraLaunchTests:
+    type: bundle.ui-testing
+    platform: "macOS"
+    deploymentTarget: "15.0"
+    sources:
+      - path: auraUITests/auraUITestsLaunchTests.swift
+    dependencies:
+      - target: aura
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: aura
+
 schemes:
+  AuraLaunch:
+    shared: true
+    build:
+      targets:
+        aura: all
+    test:
+      config: Release
+      targets:
+        - auraLaunchTests
   aura:
     shared: true
     build:

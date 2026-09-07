@@ -289,9 +289,9 @@ final class TabManager {
         if let lastAccessedContainer = containers.first {
             activeContainer = lastAccessedContainer
             // Get the last accessed tab from the active container
-            if let lastAccessedTab = lastAccessedContainer.tabs
-                .sorted(by: { ($0.lastAccessedAt ?? Date.distantPast) > ($1.lastAccessedAt ?? Date.distantPast) })
-                .first {
+            if let lastAccessedTab = lastAccessedContainer.tabs.max(by: {
+                ($0.lastAccessedAt ?? .distantPast) < ($1.lastAccessedAt ?? .distantPast)
+            }) {
                 activeTab = lastAccessedTab
                 activeTab?.maybeIsActive = true
             }
@@ -392,9 +392,9 @@ final class TabManager {
         activeContainer = container
         container.lastAccessedAt = Date()
 
-        if let lastAccessedTab = container.tabs
-            .sorted(by: { ($0.lastAccessedAt ?? .distantPast) > ($1.lastAccessedAt ?? .distantPast) })
-            .first {
+        if let lastAccessedTab = container.tabs.max(by: {
+            ($0.lastAccessedAt ?? .distantPast) < ($1.lastAccessedAt ?? .distantPast)
+        }) {
             activateTab(lastAccessedTab, persist: false)
         } else {
             activeTab?.maybeIsActive = false

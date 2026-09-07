@@ -70,13 +70,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         handleIncomingURLs(urls)
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard let window = getWindow() else { return true }
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        sender.activate()
+        return false
+    }
+
+    /// Reuse browser windows in front-to-back order. Settings and utility windows
+    /// cannot receive navigation events or replace a browser on a Dock click.
+    static func browserWindow(in windows: [NSWindow]) -> NSWindow? {
+        let browsers = windows.filter(isBrowserWindow)
+        return browsers.first(where: \.isKeyWindow)
+            ?? browsers.first(where: \.isVisible)
+            ?? browsers.first
+    }
+
     func getWindow() -> NSWindow? {
-        if let key = NSApp.keyWindow { return key }
-        if let visible = NSApp.windows.first(where: { $0.isVisible }) { return visible }
-        if let any = NSApp.windows.first {
-            any.makeKeyAndOrderFront(nil)
-            return any
-        }
+        if let window = Self.browserWindow(in: NSApp.orderedWindows) { return window }
+        if let window = Self.browserWindow(in: NSApp.windows) { return window }
         return WindowFactory.makeMainWindow(rootView: OraRoot())
     }
 

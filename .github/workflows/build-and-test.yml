@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      launch-baseline:
+        description: 'Optional commit to compare Release launch times against on the same Mac'
+        required: false
+        type: string
 
 jobs:
   local-checks:
@@ -149,3 +154,54 @@ jobs:
     - name: Require all validation checks
       if: ${{ !cancelled() && (steps.lint.outcome == 'failure' || steps.format.outcome == 'failure' || steps.tests.outcome == 'failure' || steps.webbundle.outcome == 'failure') }}
       run: exit 1
+
+  launch-benchmark:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: '26.0'
+    - name: Install build tools
+      run: brew install xcodegen trash-cli xcbeautify
+    - name: Record hardware and software
+      run: |
+        { system_profiler SPHardwareDataType; sw_vers; xcodebuild -version; git rev-parse HEAD; } | tee launch-environment.log
+    - name: Compare Release launches
+      env:
+        LAUNCH_BASELINE: ${{ inputs.launch-baseline }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$LAUNCH_BASELINE" ]]; then
+          BASELINE_COMMIT=$(git rev-parse --verify "${LAUNCH_BASELINE}^{commit}")
+          BASELINE_DIR="$RUNNER_TEMP/aura-launch-baseline"
+          git worktree add --detach "$BASELINE_DIR" "$BASELINE_COMMIT"
+          # Use the identical test and project configuration for both app revisions.
+          cp project.yml "$BASELINE_DIR/project.yml"
+          cp auraUITests/auraUITestsLaunchTests.swift "$BASELINE_DIR/auraUITests/auraUITestsLaunchTests.swift"
+          (cd "$BASELINE_DIR" && xcodegen)
+          xcodebuild test -project "$BASELINE_DIR/Aura.xcodeproj" -scheme AuraLaunch \
+            -configuration Release -destination "platform=macOS" \
+            -derivedDataPath "$RUNNER_TEMP/aura-launch-before" \
+            -resultBundlePath "$GITHUB_WORKSPACE/LaunchBefore.xcresult" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee launch-before.log | xcbeautify
+        fi
+        xcodegen
+        xcodebuild test -project Aura.xcodeproj -scheme AuraLaunch \
+          -configuration Release -destination "platform=macOS" \
+          -derivedDataPath "$RUNNER_TEMP/aura-launch-after" \
+          -resultBundlePath "$GITHUB_WORKSPACE/LaunchAfter.xcresult" \
+          CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee launch-after.log | xcbeautify
+    - name: Upload launch measurements
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-launch-measurements
+        path: |
+          launch-*.log
+          Launch*.xcresult
+        retention-days: 7

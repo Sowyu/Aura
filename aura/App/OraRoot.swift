@@ -50,9 +50,7 @@ struct OraRoot: View {
     /// The scene-made windows leave it nil and open the usual launch tabs.
     private let initialURL: URL?
 
-    let tabContext: ModelContext
-    let historyContext: ModelContext
-    let downloadContext: ModelContext
+    let modelContext: ModelContext
     @State private var window: NSWindow?
     @State private var notificationObservers: [NSObjectProtocol] = []
 
@@ -67,9 +65,7 @@ struct OraRoot: View {
         let container = Self.openStore(isPrivate: isPrivate)
         let modelContext = ModelContext(container)
 
-        self.tabContext = modelContext
-        self.downloadContext = modelContext
-        self.historyContext = modelContext
+        self.modelContext = modelContext
         _historyManager = State(
             wrappedValue: HistoryManager(
                 modelContainer: container,
@@ -81,9 +77,8 @@ struct OraRoot: View {
         // on purpose, so this store is always the on-disk one, never the in-memory
         // container the rest of a private window runs on. The shared container is cached,
         // so a normal window gets the one it already opened.
-        _bookmarkStore = State(
-            wrappedValue: BookmarkStore(modelContext: ModelContext(Self.openStore(isPrivate: false)))
-        )
+        let bookmarkContainer = isPrivate ? Self.openStore(isPrivate: false) : container
+        _bookmarkStore = State(wrappedValue: BookmarkStore(modelContext: ModelContext(bookmarkContainer)))
 
         let media = MediaController()
         _mediaController = State(wrappedValue: media)
@@ -191,9 +186,7 @@ struct OraRoot: View {
             .environment(dialogManager)
             .environment(toastManager)
             .dialogs(manager: dialogManager)
-            .modelContext(tabContext)
-            .modelContext(historyContext)
-            .modelContext(downloadContext)
+            .modelContext(modelContext)
             .withTheme()
             .enableInjection()
             .onAppear(perform: start)
@@ -236,7 +229,7 @@ struct OraRoot: View {
             )
         }
 
-        StartupProfiler.reportFirstPaint()
+        StartupProfiler.reportFirstAppearance()
         scheduleDeferredWork()
     }
 

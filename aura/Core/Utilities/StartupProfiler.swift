@@ -6,24 +6,26 @@ import os.signpost
 /// and everything before `main` is counted) to the first window's first `onAppear`.
 ///
 /// Two outputs. Signposts on the "Points of Interest" track, for Instruments. And one
-/// summary line in the unified log on first paint, so a regression is visible without
+/// summary line in the unified log on first appearance, so a regression is visible without
 /// attaching anything:
 ///
 ///     log stream --predicate 'subsystem == "com.aurabrowser.app" and category == "Startup"'
 ///
 /// ponytail: a plain array of marks, no ring buffer and no sampling. It records at most
-/// a handful of entries and stops at first paint. Revisit if it ever grows a second use.
+/// a handful of entries and stops at first appearance. Revisit if it ever grows a second use.
 enum StartupProfiler {
     private static let logger = AuraLog.category("Startup")
 
-    /// Wall clock at process creation, from `sysctl`. Falls back to "now" if the call
-    /// fails, which only makes the reported numbers smaller, never wrong in a way that
-    /// hides a regression.
+    /// Wall clock at process creation. A failed lookup omits earlier startup work;
+    /// the warning distinguishes that partial measurement from a full launch.
     private static let processStart: Date = {
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
-        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return Date() }
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else {
+            logger.warning("Process start unavailable; startup timing begins at profiler initialization")
+            return Date()
+        }
         let started = info.kp_proc.p_starttime
         return Date(
             timeIntervalSince1970: Double(started.tv_sec) + Double(started.tv_usec) / 1_000_000
@@ -58,7 +60,7 @@ enum StartupProfiler {
         )
         let took = milliseconds(since: start)
         if didReport {
-            // Ran after first paint, i.e. it was deliberately deferred. Logged on its
+            // Ran after first appearance, i.e. it was deliberately deferred. Logged on its
             // own so the cost of the work moved off the launch path stays visible.
             logger.notice("deferred \(name, privacy: .public) \(Int(took.rounded()), privacy: .public) ms")
         } else {
@@ -67,15 +69,16 @@ enum StartupProfiler {
         return result
     }
 
-    /// Call once, from the first window's first `onAppear`. Later windows are ignored.
-    static func reportFirstPaint() {
+    /// Call once from the first window's `onAppear`. This precedes presentation and
+    /// does not prove the app accepts input. UI tests measure responsiveness separately.
+    static func reportFirstAppearance() {
         guard !didReport else { return }
         let total = milliseconds()
         didReport = true
         let breakdown = marks
             .map { "\($0.name) \(Int($0.ms.rounded()))" }
             .joined(separator: ", ")
-        logger.notice("first paint \(Int(total.rounded()), privacy: .public) ms [\(breakdown, privacy: .public)]")
+        logger.notice("first appearance \(Int(total.rounded()), privacy: .public) ms [\(breakdown, privacy: .public)]")
         marks.removeAll()
     }
 }
