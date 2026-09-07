@@ -311,15 +311,33 @@ extension AuraWebBundle {
         /// read zero on a healthy stack. One point of flat grey for a couple of seconds
         /// is what the user can see of it. It never takes the first responder away from
         /// what they are typing in, and clicks pass through it.
+        ///
+        /// A non-activating panel that can never be key or main. As a bare borderless
+        /// `NSWindow` it took key status from the browser window for the seconds it was
+        /// up, so the first page load after launch sent the user's typing nowhere and
+        /// greyed the traffic lights, and tiling window managers (paneru, yabai,
+        /// AeroSpace) followed that focus and scrolled the browser window off screen.
+        /// The frame counter of a bundle page only ticks while its window is key, so
+        /// with the theft gone `frames` reads zero on a healthy stack; the screen
+        /// reading decides, and `combined` never lets a still counter outvote it.
+        final class HostPanel: NSPanel {
+            override var canBecomeKey: Bool { false }
+            override var canBecomeMain: Bool { false }
+            override func accessibilitySubrole() -> NSAccessibility.Subrole? { .floatingWindow }
+        }
+
         @MainActor
         private static func hostWindow(for view: NSView, slot: Int) -> NSWindow {
-            let window = NSWindow(
+            let window = HostPanel(
                 contentRect: view.frame,
-                styleMask: [.borderless],
+                styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
             window.isReleasedWhenClosed = false
+            window.isFloatingPanel = true
+            window.hidesOnDeactivate = false
+            window.isExcludedFromWindowsMenu = true
             window.contentView = view
             window.hasShadow = false
             window.ignoresMouseEvents = true
