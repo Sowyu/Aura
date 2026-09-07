@@ -4,6 +4,14 @@ Status: portable checks and macOS CI passing, including Debug and Release builds
 Baseline commit: `73f9b86`. Changes are committed on `audit/native-validation-20260907`.
 No release or deployment was made.
 
+The subsequent startup cleanup is validated at `05a12f9` in
+[run 34109366660](https://github.com/Sowyu/Aura/actions/runs/34109366660).
+Debug and Release builds, formatting, lint, the native suite, injected WebKit checks
+and the Release launch UI test passed. It also removes a tab-manager retain cycle
+and verifies manager deallocation. [PERFORMANCE.md](PERFORMANCE.md) records the
+launch samples and their limits; [CONTRIBUTING.md](CONTRIBUTING.md) covers setup,
+code locations and the commands to repeat the checks.
+
 The subsequent [performance pass](PERFORMANCE.md) records reduced bridge work and
 native changes awaiting profiling. The portable suite now contains ten tests.
 The macOS runs caught a generic static-property compile error, formatting failures,
@@ -33,7 +41,7 @@ implementations. It was not an exhaustive manual reading of every source line.
 This Debian environment has no Swift compiler, Xcode or macOS frameworks. Native
 validation runs on GitHub's Apple Silicon macOS runner with Xcode 26.0.1. Syntax
 parsing alone cannot establish Swift type correctness or native runtime behavior.
-No visual quality score or whole-browser performance result is claimed.
+No visual quality score or whole-browser CPU or memory measurement is claimed.
 
 ## Security and privacy fixes
 

@@ -139,3 +139,42 @@ The `macos-launch-measurements` artifact includes the hardware and OS, raw logs 
 XCTest result bundles. Runner contention and test instrumentation affect timings.
 The target machine is the user's M5 Pro MacBook on macOS 27; CI hardware and OS are
 recorded separately and cannot predict its launch time.
+
+### Recorded launch results, 7 September 2026
+
+Five samples per revision, in seconds, through first frame and responsiveness:
+
+| Revision | Runner macOS | Mean | Median | Worst |
+| --- | --- | ---: | ---: | ---: |
+| `5121f32`, baseline | 26.6.2 | 1.392 | 1.447 | 1.477 |
+| `d42724f`, startup cleanup | 26.6.2, same runner | 1.163 | 1.059 | 1.434 |
+| `05a12f9`, including ownership fix | 26.5.2, separate runner | 1.007 | 0.955 | 1.241 |
+
+Both runners were Apple M1 virtual machines with 7 GB RAM and Xcode 26.0.1.
+The [comparison job](https://github.com/Sowyu/Aura/actions/runs/34108466820/job/101698885226)
+and [latest launch job](https://github.com/Sowyu/Aura/actions/runs/34109366660/job/101701772997)
+passed their launch and text-entry checks. The initial comparison run's separate
+unit-test job caught a test assuming SwiftData relationship order; the corrected
+test checks explicit tab order and passes at `05a12f9`.
+
+Raw samples, in execution order:
+
+```text
+5121f32: 1.475999, 1.446631, 1.477457, 1.194178, 1.367461
+d42724f: 1.433939, 1.032122, 1.058829, 1.261487, 1.030817
+05a12f9: 1.186062, 0.904395, 0.955195, 1.241097, 0.747304
+```
+
+The same-run mean decreased by 0.229 seconds. Relative standard deviations were
+7.7% and 13.8%, with baseline always measured first. Five samples and fixed ordering
+do not establish that the code changes caused this difference. The final revision's
+18.2% variation and different runner OS also prevent attributing its lower time to
+the ownership fix. These are initial measurements, not an instant-launch claim.
+
+The latest native suite also passed the manager-deallocation regression, startup
+selection checks, 659 Swift Testing cases with 17 opt-in skips, two XCTest cases and
+a separate 26-test WebKit run. Fourteen of the skipped opt-in cases run in that
+separate integration pass; three longer performance workloads remain opt-in.
+
+All three jobs in [run 34109366660](https://github.com/Sowyu/Aura/actions/runs/34109366660)
+passed at `05a12f9`, including Debug and Release builds, formatting and lint.
