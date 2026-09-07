@@ -1,10 +1,3 @@
-//
-//  DefaultBrowserManager.swift
-//  aura
-//
-//  Created by keni on 9/30/25.
-//
-
 import AppKit
 import Combine
 import CoreServices
@@ -48,8 +41,10 @@ class DefaultBrowserManager: ObservableObject {
     }
 
     static func requestSetAsDefault() {
-        guard let bundleID = Bundle.main.bundleIdentifier as CFString? else { return }
-        LSSetDefaultHandlerForURLScheme("http" as CFString, bundleID)
-        LSSetDefaultHandlerForURLScheme("https" as CFString, bundleID)
+        for scheme in ["http", "https"] {
+            NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: scheme) { _ in
+                DispatchQueue.main.async { shared.updateIsDefault() }
+            }
+        }
     }
 }

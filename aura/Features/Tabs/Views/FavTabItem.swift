@@ -26,47 +26,12 @@ struct FavTabItem: View {
 
     var body: some View {
         ZStack {
-            if let favicon = tab.favicon, tab.isWebViewReady {
-                AsyncImage(
-                    url: favicon
-                ) { image in
-                    image
-                        .resizable()
-                        .interpolation(.high)
-                        .antialiased(true)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
-                } placeholder: {
-                    LocalFavIcon(
-                        faviconLocalFile: tab.faviconLocalFile,
-                        textColor: textColor
-                    )
-                }
-            } else {
-                LocalFavIcon(
-                    faviconLocalFile: tab.faviconLocalFile,
-                    textColor: textColor
-                )
-            }
-
+            LocalFavIcon(
+                faviconLocalFile: tab.faviconLocalFile, textColor: textColor,
+                identity: tab.favicon, revision: tab.faviconRevision, size: 20
+            )
             if tab.isPlayingMedia {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Image(systemName: "speaker.wave.2.fill")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 8, height: 8)
-                            .foregroundColor(textColor)
-                            .background(
-                                Circle()
-                                    .fill(theme.solidWindowBackgroundColor)
-                                    .frame(width: 12, height: 12)
-                            )
-                    }
-                }
-                .padding(2)
+                Image(systemName: "speaker.wave.2.fill").font(.system(size: 8)).foregroundColor(textColor)
             }
         }
 
@@ -90,6 +55,9 @@ struct FavTabItem: View {
         // `activateTab` rebuilds the web view for a hibernated tab on the way in.
         .onTapGesture { onTap() }
         .onHover { isHovering = $0 }
+        .help(tab.title)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAction { onTap() }
         .accessibilityLabel(Text(tab.title))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .auraContextMenu { contextMenuItems }

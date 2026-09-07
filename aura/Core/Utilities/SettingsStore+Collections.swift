@@ -86,6 +86,17 @@ extension SettingsStore {
 
     func updateCustomSearchEngine(_ engine: CustomSearchEngine) {
         guard let index = customSearchEngines.firstIndex(where: { $0.id == engine.id }) else { return }
+        let oldName = customSearchEngines[index].name
+        if oldName != engine.name {
+            if globalDefaultSearchEngine == oldName { globalDefaultSearchEngine = engine.name }
+            for (key, value) in defaults.dictionaryRepresentation()
+                where key
+                .hasPrefix("settings.container.") &&
+                (key.hasSuffix(".defaultSearch") || key.hasSuffix(".defaultAI")) {
+                if value as? String == oldName { defaults.set(engine.name, forKey: key) }
+            }
+            containerSettingsRevision &+= 1
+        }
         customSearchEngines[index] = engine
     }
 

@@ -51,11 +51,23 @@ struct ExtensionsSettingsView: View {
                             .controlSize(.regular)
                             .fixedSize()
                             .disabled(!ExtensionManager.isSupported)
-                        Button("Check for updates") { extensionManager.checkForUpdates(force: true) }
-                            .controlSize(.regular)
-                            .fixedSize()
-                            .disabled(!ExtensionManager.isSupported || installedCount == 0)
-                            .help("Asks addons.mozilla.org whether anything installed has a newer version.")
+                        if extensionManager.isCheckingForUpdates {
+                            ProgressView().controlSize(.small).accessibilityLabel(Text("Checking for updates"))
+                        } else {
+                            OraButton(label: "Check for updates", variant: .secondary, size: .sm) {
+                                extensionManager.checkForUpdates(force: true)
+                            }
+                        }
+                        if extensionManager.updateCheckFailed {
+                            Text("Could not reach the add-on store. Try again.").foregroundStyle(theme.mutedForeground)
+                        } else if let date = SettingsStore.shared.extensionUpdateLastCheck {
+                            Text("Last checked \(date.formatted(date: .abbreviated, time: .shortened))")
+                                .foregroundStyle(theme.mutedForeground)
+                        }
+                        .controlSize(.regular)
+                        .fixedSize()
+                        .disabled(!ExtensionManager.isSupported || installedCount == 0)
+                        .help("Asks addons.mozilla.org whether anything installed has a newer version.")
                     }
                 }
 
@@ -100,10 +112,12 @@ struct ExtensionsSettingsView: View {
         panel.message = "Choose an unpacked extension folder, or an .xpi, .zip, or .crx file."
         panel.prompt = "Install"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try extensionManager.installExtension(fromFile: url)
-        } catch {
-            installError = error.localizedDescription
+        Task {
+            do {
+                try await extensionManager.installExtension(fromFile: url)
+            } catch {
+                installError = error.localizedDescription
+            }
         }
     }
 }

@@ -202,10 +202,12 @@ struct ExtensionStoreView: View {
         panel.message = "Choose an unpacked extension folder, or an .xpi, .zip, or .crx file."
         panel.prompt = "Install"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try extensionManager.installExtension(fromFile: url)
-        } catch {
-            fileError = error.localizedDescription
+        Task {
+            do {
+                try await extensionManager.installExtension(fromFile: url)
+            } catch {
+                fileError = error.localizedDescription
+            }
         }
     }
 }

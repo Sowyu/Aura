@@ -130,11 +130,9 @@ extension ExtensionCompatibility {
                 "Theming the browser chrome is the point of this add-on, and WebKit has no API for it."
             )
         }
-        let functional = missing
-
         // Blocking webRequest is available behind Settings > Privacy > Extension request
         // blocking. Until that is on, the add-on installs and runs everything else.
-        return .partial(functional)
+        return .partial(missing)
     }
 }
 

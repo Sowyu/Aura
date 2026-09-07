@@ -36,7 +36,8 @@ class Tab: ObservableObject, Identifiable {
     @Transient var browserPage: BrowserPage?
     @Transient var pageDelegate: TabBrowserPageDelegate?
     @Transient @Published var isWebViewReady: Bool = false
-    @Transient @Published var loadingProgress: Double = 10.0
+    @Transient var faviconDomain: String?
+    @Transient var faviconRevision = 0
     @Transient var colorUpdated = false
     /// Where the page was scrolled to when it was hibernated, and the URL it belonged
     /// to. Transient on purpose: a scroll offset is not worth a store write, and a cold
@@ -142,14 +143,14 @@ class Tab: ObservableObject, Identifiable {
 
         // Extension-free: the bytes on disk are whatever the site served, .ico or .svg
         // as often as .png, and `NSImage(data:)` sniffs the format anyway.
-        let fileName = "\(self.id.uuidString).favicon"
+        let fileName = "\(domain.replacingOccurrences(of: ":", with: "_").replacingOccurrences(of: "/", with: "_")).favicon"
         let saveURL = FileManager.default.faviconDirectory.appendingPathComponent(fileName)
 
         // In-page navigations re-report the same URL constantly; re-running the download
         // rewrites the same bytes every time. A new domain, or a cache-version bump that
         // left this tab without a file, still refreshes.
-        guard self.favicon != faviconURL || !FileManager.default.fileExists(atPath: saveURL.path) else { return }
-        self.favicon = faviconURL
+        guard faviconDomain != domain || !FileManager.default.fileExists(atPath: saveURL.path) else { return }
+        faviconDomain = domain
 
         FaviconService.shared
             .downloadAndSaveFavicon(for: domain, faviconURL: faviconURL, to: saveURL) {
@@ -157,8 +158,9 @@ class Tab: ObservableObject, Identifiable {
                 if success {
                     Task { @MainActor [weak self] in
                         guard let self, !self.isPrivate, self.url.host == host,
-                              self.favicon == faviconURL else { return }
+                              self.faviconDomain == domain else { return }
                         self.faviconLocalFile = saveURL
+                        self.faviconRevision &+= 1
                         if let sourceURL {
                             self.favicon = sourceURL
                         }

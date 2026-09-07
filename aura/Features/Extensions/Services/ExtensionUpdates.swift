@@ -62,15 +62,22 @@ enum ExtensionUpdates {
 
     /// Newer versions by extension id. Entries with no gecko id, no version, or
     /// nothing newer on AMO are simply absent.
-    static func check(_ installed: [InstalledExtension], fetch: Fetch) async -> [String: String] {
-        var found: [String: String] = [:]
+    static func check(
+        _ installed: [InstalledExtension], previous: [String: String] = [:], fetch: Fetch
+    ) async -> [String: String]? {
+        let installedIDs = Set(installed.map(\.id))
+        var found = previous.filter { installedIDs.contains($0.key) }
+        var reachedServer = false
         for entry in installed {
             guard !Task.isCancelled else { break }
             guard let geckoID = entry.geckoID, let current = entry.displayVersion else { continue }
-            guard let addon = try? await fetch(geckoID), let latest = addon.version else { continue }
+            guard let addon = try? await fetch(geckoID) else { continue }
+            reachedServer = true
+            guard let latest = addon.version else { continue }
+            found[entry.id] = nil
             guard ExtensionVersion.isNewer(latest, than: current) else { continue }
             found[entry.id] = latest
         }
-        return found
+        return reachedServer ? found : nil
     }
 }

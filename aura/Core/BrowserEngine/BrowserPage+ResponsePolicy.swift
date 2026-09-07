@@ -47,3 +47,12 @@ extension BrowserPage {
         return canShowMIMEType && !isAttachment ? .inline : .download
     }
 }
+
+extension BrowserPage {
+    static func opensExternally(_ url: URL?, navigationType: WKNavigationType) -> Bool {
+        guard navigationType == .linkActivated || navigationType == .formSubmitted,
+              let scheme = url?.scheme?.lowercased() else { return false }
+        return !["http", "https", "file", "about", "data", "blob", "javascript", "aura", "webkit-extension"]
+            .contains(scheme)
+    }
+}

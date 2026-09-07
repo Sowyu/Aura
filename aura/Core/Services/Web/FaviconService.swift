@@ -319,6 +319,7 @@ final class FaviconService: ObservableObject {
 
             do {
                 try data.write(to: saveURL, options: .atomic)
+                self?.fileImages.removeObject(forKey: saveURL.path as NSString)
                 await MainActor.run { completion(sourceURL, true) }
             } catch {
                 await MainActor.run { completion(nil, false) }

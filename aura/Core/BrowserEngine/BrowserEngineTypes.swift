@@ -53,7 +53,6 @@ struct BrowserNavigationAction {
     /// A nil target frame means a brand-new frame or window, which counts as main frame.
     var isMainFrame = true
     /// True for a link click or a form submission, as opposed to a redirect or a reload.
-    var isUserInitiated = false
 }
 
 /// Where a clicked link should land. Middle button or command opens a tab behind the

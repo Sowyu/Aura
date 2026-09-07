@@ -451,6 +451,12 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
     ) {
         applyJavaScriptPolicy(to: preferences, for: navigationAction, in: webView)
+        if Self.opensExternally(navigationAction.request.url, navigationType: navigationAction.navigationType),
+           let url = navigationAction.request.url {
+            NSWorkspace.shared.open(url)
+            decisionHandler(.cancel, preferences)
+            return
+        }
 
         // `<a download>` and anything else WebKit has already decided is a file rather
         // than a page. Without this the link just navigated and the download never
@@ -464,10 +470,7 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
             request: navigationAction.request,
             modifierFlags: navigationAction.modifierFlags,
             buttonNumber: navigationAction.buttonNumber,
-            isMainFrame: navigationAction.targetFrame?.isMainFrame ?? true,
-            isUserInitiated: navigationAction.navigationType == .linkActivated
-                || navigationAction.navigationType == .formSubmitted
-                || navigationAction.navigationType == .other
+            isMainFrame: navigationAction.targetFrame?.isMainFrame ?? true
         )
 
         switch delegate?.browserPage(self, decidePolicyFor: action) ?? .allow {
@@ -608,6 +611,15 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
            let serverTrust = challenge.protectionSpace.serverTrust,
            sslBypassedHosts.contains(challenge.protectionSpace.host) {
             completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        } else if [
+            NSURLAuthenticationMethodHTTPBasic,
+            NSURLAuthenticationMethodHTTPDigest,
+            NSURLAuthenticationMethodNTLM
+        ]
+        .contains(challenge.protectionSpace.authenticationMethod), let delegate {
+            delegate.browserPage(self, authenticate: challenge) { credential in
+                completionHandler(credential == nil ? .cancelAuthenticationChallenge : .useCredential, credential)
+            }
         } else {
             completionHandler(.performDefaultHandling, nil)
         }
@@ -747,6 +759,11 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
+        if Self.opensExternally(navigationAction.request.url, navigationType: navigationAction.navigationType),
+           let url = navigationAction.request.url {
+            NSWorkspace.shared.open(url)
+            return nil
+        }
         let popup = BrowserPage(
             adopting: configuration,
             profile: profile,

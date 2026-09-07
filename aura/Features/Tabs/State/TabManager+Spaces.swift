@@ -54,7 +54,6 @@ extension TabManager {
         let tab = addTab(
             url: url,
             container: container,
-            favicon: url.host.flatMap { FaviconService.shared.faviconURL(for: $0) },
             historyManager: historyManager,
             downloadManager: downloadManager,
             isPrivate: isPrivate,

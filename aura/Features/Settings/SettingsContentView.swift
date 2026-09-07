@@ -160,13 +160,13 @@ enum SettingsTab: String, Hashable, CaseIterable {
                 "launch and quit",
                 "reopen tabs",
                 "ask before quitting",
-                "default browser"
+                "default browser", "settings file", "backup", "import settings", "export settings"
             ]
         case .bookmarks:
             return [
                 "bookmarks",
                 "bookmark",
-                "bookmarks bar",
+                "bookmarks bar", "import", "export", "safari", "html",
                 "reading list",
                 "unread",
                 "saved pages",
@@ -196,7 +196,7 @@ enum SettingsTab: String, Hashable, CaseIterable {
             ]
         case .passwords:
             return [
-                "password manager",
+                "password manager", "export passwords", "csv",
                 "autofill",
                 "saved credentials",
                 "vault",
@@ -240,7 +240,15 @@ enum SettingsTab: String, Hashable, CaseIterable {
         case .shortcuts:
             return ["keyboard shortcuts", "key bindings", "commands"]
         case .permissions:
-            return ["javascript rules", "sites pinned to a space", "site data", "cookies and storage"]
+            return [
+                "camera",
+                "microphone",
+                "site permissions",
+                "javascript rules",
+                "sites pinned to a space",
+                "site data",
+                "cookies and storage"
+            ]
         case .about:
             return [
                 "version",
@@ -290,6 +298,7 @@ struct SettingsContentView: View {
 
     /// Section to preselect, e.g. from a `aura://settings/<section>` tab URL.
     let initialTab: SettingsTab?
+    var onSectionChange: ((SettingsTab) -> Void)?
 
     @AppStorage(Self.selectedTabDefaultsKey) private var selectionRawValue: String = SettingsTab
         .lookAndFeel.rawValue
@@ -298,7 +307,10 @@ struct SettingsContentView: View {
     private var selection: Binding<SettingsTab> {
         Binding(
             get: { selectedTab },
-            set: { selectionRawValue = $0.rawValue }
+            set: {
+                selectionRawValue = $0.rawValue
+                onSectionChange?($0)
+            }
         )
     }
 
@@ -326,6 +338,9 @@ struct SettingsContentView: View {
         layout
             .onChange(of: initialTab, initial: true) { _, newValue in
                 guard let newValue else { return }
+                guard newValue != .extensions else { ExtensionsSettingsView.openStore()
+                    return
+                }
                 selectionRawValue = newValue.rawValue
             }
     }

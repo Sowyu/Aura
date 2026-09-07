@@ -126,7 +126,6 @@ final class TabManager {
         self.appliedMaxLiveTabs = SettingsStore.shared.maxLiveTabs
         self.sessionStore = TabSessionStore(modelContext: modelContext)
 
-        self.modelContext.undoManager = UndoManager()
         Self.registry.append(WeakTabManager(value: self))
         observeCrossWindowDeletes()
         applyLaunchTabPolicy()
@@ -563,7 +562,6 @@ final class TabManager {
             // A file URL has no host, so without the file name every opened document
             // would sit in the sidebar as "New Tab" until WebKit reported a title.
             title: url.isOraHome ? "New Tab" : (cleanHost ?? fileName ?? "New Tab"),
-            favicon: host.flatMap { FaviconService.shared.faviconURL(for: $0) },
             container: container,
             type: .normal,
             isPlayingMedia: false,
@@ -727,11 +725,13 @@ final class TabManager {
     /// Actually removes a pinned or favourite tab, where `closeTab` would park it.
     /// Demoting first sends it down the ordinary close path, reopen stack included.
     func deleteTab(tab: Tab) {
-        if tab.type != .normal {
-            tab.type = .normal
-            tab.savedURL = nil
+        guard tab.type != .normal else { closeTab(tab: tab)
+            return
         }
-        closeTab(tab: tab)
+        trackRecentlyClosedTab(tab)
+        tab.type = .normal
+        tab.savedURL = nil
+        closeTab(tab: tab, shouldTrackForRestore: false)
     }
 
     func closeActiveTab() {
@@ -755,6 +755,7 @@ final class TabManager {
     /// returning: opening or closing a tab used to commit two or three SQLite
     /// transactions on the main thread inside one click.
     func activateTab(_ tab: Tab, persist: Bool = true) {
+        if tab.folder?.isCollapsed == true { tab.folder?.isCollapsed = false }
         // Toggle Picture-in-Picture on tab switch
         togglePiP(tab, activeTab)
 
@@ -791,6 +792,8 @@ final class TabManager {
     private func startCleanupTimer() {
         cleanupTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
+                // Background windows have no new user scroll position to capture.
+                guard NSApp.isActive else { return }
                 self?.runTabMaintenance()
             }
         }

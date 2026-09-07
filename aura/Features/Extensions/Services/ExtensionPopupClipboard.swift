@@ -86,7 +86,8 @@ final class ExtensionPopupClipboard: NSObject, WKScriptMessageHandler {
 
         var originalExec = document.execCommand.bind(document);
         document.execCommand = function(command) {
-            if ((command === 'copy' || command === 'cut') && copy(selectedText())) return true;
+            if (command === 'copy' && copy(selectedText())) return true;
+            if (command === 'cut' && copy(selectedText())) return originalExec.apply(document, arguments) || true;
             return originalExec.apply(document, arguments);
         };
 

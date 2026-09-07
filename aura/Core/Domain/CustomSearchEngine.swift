@@ -30,6 +30,14 @@ struct CustomSearchEngine: Codable, Identifiable, Hashable {
         self.isAIChat = isAIChat
     }
 
+    static func isValidTemplate(_ template: String) -> Bool {
+        guard template.contains("{query}"),
+              let url = URL(string: template.replacingOccurrences(of: "{query}", with: "test")),
+              let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme),
+              let host = url.host, !host.isEmpty else { return false }
+        return true
+    }
+
     var favicon: NSImage? {
         guard let data = faviconData else { return nil }
         return NSImage(data: data)

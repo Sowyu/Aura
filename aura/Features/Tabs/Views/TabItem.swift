@@ -7,36 +7,30 @@ struct LocalFavIcon: View {
 
     @State private var image: NSImage?
 
+    var identity: URL?
+    var revision = 0
+    var size: CGFloat = 16
+
+    private var loadKey: String { "\(faviconLocalFile?.path ?? "")|\(identity?.absoluteString ?? "")|\(revision)" }
+
     var body: some View {
-        if let image {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .antialiased(true)
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 16, height: 16)
-                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
-        } else {
-            Image(systemName: "globe")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 16, height: 16)
-                .foregroundColor(textColor)
-                .onAppear(perform: loadFavicon)
-        }
-    }
-
-    private func loadFavicon() {
-        guard let localURL = faviconLocalFile,
-              FileManager.default.fileExists(atPath: localURL.path) else { return }
-
-        // Reading and decoding both block; the service memoises the 64 px result so only
-        // the first row to ask for a given file pays for it.
-        DispatchQueue.global(qos: .utility).async {
-            guard let loadedImage = FaviconService.shared.icon(atFile: localURL) else { return }
-            DispatchQueue.main.async {
-                self.image = loadedImage
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+            } else {
+                Image(systemName: "globe").resizable().aspectRatio(contentMode: .fit).foregroundColor(textColor)
             }
+        }
+        .frame(width: size, height: size)
+        .task(id: loadKey) {
+            guard let localURL = faviconLocalFile else { image = nil
+                return
+            }
+            let loaded = await Task.detached(priority: .utility) {
+                FaviconService.shared.icon(atFile: localURL)
+            }.value
+            guard !Task.isCancelled else { return }
+            image = loaded
         }
     }
 }
@@ -47,31 +41,16 @@ struct FavIcon: View {
     let faviconLocalFile: URL?
     let textColor: Color
     var isPlayingMedia: Bool = false
+    var revision = 0
 
     var body: some View {
         HStack(spacing: 4) {
-            if let favicon, isWebViewReady {
-                AsyncImage(
-                    url: favicon
-                ) { image in
-                    image
-                        .resizable()
-                        .interpolation(.high)
-                        .antialiased(true)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                } placeholder: {
-                    LocalFavIcon(
-                        faviconLocalFile: faviconLocalFile,
-                        textColor: textColor
-                    )
-                }
-            } else {
-                LocalFavIcon(
-                    faviconLocalFile: faviconLocalFile,
-                    textColor: textColor
-                )
-            }
+            LocalFavIcon(
+                faviconLocalFile: faviconLocalFile,
+                textColor: textColor,
+                identity: favicon,
+                revision: revision
+            )
 
             if isPlayingMedia {
                 Image(systemName: "speaker.wave.2.fill")
@@ -113,7 +92,7 @@ struct TabItem: View {
                 favicon: tab.favicon,
                 faviconLocalFile: tab.faviconLocalFile,
                 textColor: textColor,
-                isPlayingMedia: tab.isPlayingMedia
+                isPlayingMedia: tab.isPlayingMedia, revision: tab.faviconRevision
             )
             tabTitle
             Spacer(minLength: 4)
@@ -150,6 +129,9 @@ struct TabItem: View {
         .onHover { isHovering = $0 }
         // The row is a button made of a gesture, so it says so itself; the close button
         // inside it keeps its own label.
+        .accessibilityElement(children: .ignore)
+        .accessibilityAction { onTap() }
+        .accessibilityAction(named: Text("Close tab")) { onClose() }
         .accessibilityLabel(Text(tab.title))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .auraContextMenu { contextMenuItems }

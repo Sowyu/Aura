@@ -58,7 +58,9 @@ final class BrowserEngine {
     @MainActor
     func warmUp() {
         guard warmupView == nil else { return }
-        let view = WKWebView(frame: .zero)
+        let configuration = WKWebViewConfiguration()
+        AuraWebBundle.apply(to: configuration)
+        let view = WKWebView(frame: .zero, configuration: configuration)
         view.loadHTMLString("", baseURL: nil)
         warmupView = view
         Task { @MainActor [weak self] in

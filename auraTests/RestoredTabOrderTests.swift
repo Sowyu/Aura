@@ -98,4 +98,28 @@ struct RestoredTabOrderTests {
         #expect(folderBelow.order == 1)
         #expect(space.tabs.first { $0.type == .normal }?.order == 2)
     }
+
+    @Test func deletingPinnedTabKeepsItsRestoreType() async throws {
+        let (manager, space) = try makeManager()
+        let pinned = try makeTab(manager, space, order: 3, type: .pinned)
+        let id = pinned.id
+        manager.deleteTab(tab: pinned)
+        await settle()
+        manager.restoreLastTab()
+        let restored = try #require(space.tabs.first { $0.id == id || $0.title == "tab 3" })
+        #expect(restored.type == .pinned)
+    }
+
+    @Test func numberedTabsFollowFoldersInSidebarOrder() throws {
+        let (manager, space) = try makeManager()
+        let first = try makeTab(manager, space, order: 8)
+        let last = try makeTab(manager, space, order: 1)
+        let folder = try #require(manager.createFolder(name: "Middle", in: space))
+        folder.order = 4
+        let child = try makeTab(manager, space, order: 20)
+        child.folder = folder
+        folder.tabs = [child]
+        manager.activeContainer = space
+        #expect(manager.orderedTabs.map(\.id) == [first.id, child.id, last.id])
+    }
 }

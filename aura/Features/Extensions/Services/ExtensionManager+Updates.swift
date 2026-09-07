@@ -33,8 +33,11 @@ extension ExtensionManager {
         let installed = installedExtensions
         guard installed.contains(where: { $0.geckoID != nil }) else { return }
 
+        isCheckingForUpdates = true
+        updateCheckFailed = false
+        let previous = SettingsStore.shared.extensionAvailableUpdates
         updateCheckTask = Task { [weak self] in
-            let found = await ExtensionUpdates.check(installed) { guid in
+            let found = await ExtensionUpdates.check(installed, previous: previous) { guid in
                 try await FirefoxAddonStore.shared.addon(guid: guid)
             }
             guard !Task.isCancelled else { return }
@@ -42,8 +45,12 @@ extension ExtensionManager {
         }
     }
 
-    private func adoptUpdateCheck(_ found: [String: String]) {
+    private func adoptUpdateCheck(_ found: [String: String]?) {
         updateCheckTask = nil
+        isCheckingForUpdates = false
+        guard let found else { updateCheckFailed = true
+            return
+        }
         SettingsStore.shared.extensionUpdateLastCheck = Date()
         // Replaced wholesale: an id that no longer has an update must not keep an offer
         // from an earlier check, and neither must one that was removed.

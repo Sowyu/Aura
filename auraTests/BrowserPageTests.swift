@@ -367,7 +367,7 @@ private final class PolicyRecordingDelegate: BrowserPageDelegate {
 /// rendered at all. Both are pure, so neither needs a web view.
 struct HeaderColorSnapshotTests {
     @Test func theSnapshotIsTheWholeViewAtThumbnailWidthNeverARect() {
-        let config = HeaderColorSnapshot.configuration(for: CGSize(width: 1440, height: 900))
+        let config = HeaderColorSnapshot.configuration
         // A rect-scoped snapshot flashes the page; the strip is cropped from the bitmap.
         #expect(config.rect == nil)
         #expect(config.snapshotWidth == 32)

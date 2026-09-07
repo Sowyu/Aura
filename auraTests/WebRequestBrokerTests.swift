@@ -62,6 +62,14 @@ struct WebRequestBrokerTests {
         let wrapper = try String(contentsOf: worker.appendingPathComponent("aura-shim-worker.js"), encoding: .utf8)
         #expect(wrapper.contains("importScripts('aura-shim-manifest.js', 'aura-shim.js', 'sw.js')"))
 
+        let manifestURL = worker.appendingPathComponent("manifest.json")
+        var previous = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any])
+        previous[ExtensionShim.versionKey] = ExtensionShim.version - 1
+        try JSONSerialization.data(withJSONObject: previous).write(to: manifestURL)
+        #expect(try ExtensionShim.apply(at: worker))
+        let repatched = try String(contentsOf: worker.appendingPathComponent("aura-shim-worker.js"), encoding: .utf8)
+        #expect(repatched == wrapper, "a shim update must wrap the author's worker, never its own wrapper")
+
         let paged = try makeExtension(background: ["page": "background.html"])
         defer { try? FileManager.default.removeItem(at: paged) }
         let pageURL = paged.appendingPathComponent("background.html")

@@ -106,7 +106,7 @@ struct PrivacySettingsView: View {
         }
     }
 
-    /// The blocker rule, asked once per body: which of the two is running, and whether
+    /// The blocker rule, asked during rendering: which of the two is running, and whether
     /// the switch above is still waiting for something.
     private var blockingPlan: BundledExtensions.BlockingPlan {
         BundledExtensions.plan(for: BundledExtensions.blockingInputs())

@@ -137,7 +137,7 @@ final class TabHibernationPolicy {
 
     /// Least important first, which is the order they get unloaded in.
     func evictionOrder(_ tabs: [Tab], now: Date = Date()) -> [Tab] {
-        tabs.sorted { importanceScore($0, now: now) < importanceScore($1, now: now) }
+        tabs.map { (tab: $0, score: importanceScore($0, now: now)) }.sorted { $0.score < $1.score }.map(\.tab)
     }
 
     // MARK: - Triggers
@@ -328,7 +328,9 @@ extension TabManager {
 
     /// Completely remove old normal tabs that haven't been accessed for a long time
     func removeOldTabs(in containers: [TabContainer]? = nil) {
-        let cutoffDate = Date().addingTimeInterval(-SettingsStore.shared.tabRemovalTimeout)
+        let timeout = SettingsStore.shared.tabRemovalTimeout
+        guard timeout < 365 * 24 * 60 * 60 else { return }
+        let cutoffDate = Date().addingTimeInterval(-timeout)
         let allContainers = containers ?? fetchContainers()
 
         for container in allContainers {

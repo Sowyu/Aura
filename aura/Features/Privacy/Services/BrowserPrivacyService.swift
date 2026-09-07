@@ -575,7 +575,10 @@ final class BrowserPrivacyService {
                 encodedContentRuleList: encodedRuleList
             ) { [weak self] compiledRuleList, error in
                 if let error {
-                    print("Failed to compile privacy rule list \(identifier): \(error.localizedDescription)")
+                    AuraLog.category("Privacy")
+                        .error(
+                            "Compiling \(identifier, privacy: .public) failed: \(error.localizedDescription, privacy: .public)"
+                        )
                 }
                 self?.finishLoadingRuleList(identifier, ruleList: compiledRuleList)
             }

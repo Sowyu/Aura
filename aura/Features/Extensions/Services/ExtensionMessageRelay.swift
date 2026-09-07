@@ -29,6 +29,7 @@ final class ExtensionMessageRelay {
     private var backgroundPorts: [String: WKWebExtension.MessagePort] = [:]
     /// Which page opened each tunnelled port, so the background's replies know
     /// where to go. Keyed by extension, then by the page-minted port id.
+    private var oneShotIDs: [String: Set<String>] = [:]
     private var owners: [String: [String: WKWebExtension.MessagePort]] = [:]
     /// Every page's own relay port, per extension, so the background's one-shot
     /// broadcasts have somewhere to go. Pruned as pages disconnect.
@@ -94,10 +95,14 @@ final class ExtensionMessageRelay {
         else { return }
 
         switch operation {
-        case "connect", "message":
+        case "message":
+            oneShotIDs[extensionID, default: []].insert(portID)
+            owners[extensionID, default: [:]][portID] = port
+        case "connect":
             owners[extensionID, default: [:]][portID] = port
         case "disconnect":
             owners[extensionID]?.removeValue(forKey: portID)
+            oneShotIDs[extensionID]?.remove(portID)
         default:
             break
         }
@@ -128,6 +133,7 @@ final class ExtensionMessageRelay {
         // Both close the tunnelled port: a one-shot reply has no second message.
         if operation == "disconnect" || operation == "response" {
             owners[extensionID]?.removeValue(forKey: portID)
+            oneShotIDs[extensionID]?.remove(portID)
         }
         guard !page.isDisconnected else { return }
         page.sendMessage(frame, completionHandler: nil)
@@ -163,8 +169,9 @@ final class ExtensionMessageRelay {
     /// reliably disconnect the native ports it opened, so unloading says so here
     /// rather than waiting for a disconnect handler that may never fire.
     func detach(extensionID: String) {
-        backgroundPorts.removeValue(forKey: extensionID)?.disconnect()
-        queued.removeValue(forKey: extensionID)
+        let background = backgroundPorts[extensionID]
+        backgroundDidDisconnect(extensionID: extensionID)
+        background?.disconnect()
         for page in pages.removeValue(forKey: extensionID) ?? [] where !page.isDisconnected {
             page.disconnect()
         }
@@ -192,8 +199,12 @@ final class ExtensionMessageRelay {
     private func backgroundDidDisconnect(extensionID: String) {
         backgroundPorts.removeValue(forKey: extensionID)
         queued.removeValue(forKey: extensionID)
+        let pending = oneShotIDs.removeValue(forKey: extensionID) ?? []
         for (portID, page) in owners.removeValue(forKey: extensionID) ?? [:] where !page.isDisconnected {
-            page.sendMessage(["op": "disconnect", "portId": portID], completionHandler: nil)
+            let frame: [String: Any] = pending.contains(portID)
+                ? ["op": "response", "portId": portID, "message": NSNull()]
+                : ["op": "disconnect", "portId": portID]
+            page.sendMessage(frame, completionHandler: nil)
         }
     }
 

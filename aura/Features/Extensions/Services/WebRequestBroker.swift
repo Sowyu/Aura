@@ -174,7 +174,10 @@ final class WebRequestBroker {
         // Runs a round trip through the private-API stack and takes blocking off
         // for the session if it comes back empty. Detached from this call so the
         // first page is not held up by it.
-        Task { await AuraWebBundle.probe() }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            await AuraWebBundle.probe()
+        }
     }
 
     // MARK: - Ports

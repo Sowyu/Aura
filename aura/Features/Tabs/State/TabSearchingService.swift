@@ -20,22 +20,11 @@ final class TabSearchingService: TabSearchingProviding {
         activeContainer: TabContainer? = nil,
         modelContext: ModelContext
     ) -> [Tab] {
-        let activeContainerId = activeContainer?.id ?? UUID()
-        let trimmedText = text.trimmingCharacters(in: .whitespaces)
-
-        let predicate: Predicate<Tab>
-        if trimmedText.isEmpty {
-            predicate = #Predicate { _ in true }
-        } else {
-            predicate = #Predicate { tab in
-                (
-                    tab.urlString.localizedStandardContains(trimmedText) ||
-                        tab.title
-                        .localizedStandardContains(
-                            trimmedText
-                        )
-                ) && tab.container.id == activeContainerId
-            }
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let activeContainerId = activeContainer?.id, !trimmedText.isEmpty else { return [] }
+        let predicate = #Predicate<Tab> { tab in
+            (tab.urlString.localizedStandardContains(trimmedText) || tab.title.localizedStandardContains(trimmedText))
+                && tab.container.id == activeContainerId
         }
 
         let descriptor = FetchDescriptor<Tab>(predicate: predicate)

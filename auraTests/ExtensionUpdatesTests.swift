@@ -179,6 +179,13 @@ struct ExtensionUpdatesTests {
         let versionless = await ExtensionUpdates.check([self.installed(
             id: "fine", version: "1.0", geckoID: "fine@example.com"
         )]) { _ in self.addon(version: nil) }
-        #expect(versionless.isEmpty)
+        #expect(versionless?.isEmpty == true)
+    }
+
+    @Test func offlineChecksKeepExistingOffersAndRemainRetryable() async {
+        struct Offline: Error {}
+        let entries = [installed(id: "one", version: "1", geckoID: "one@example.com")]
+        let result = await ExtensionUpdates.check(entries, previous: ["one": "2"]) { _ in throw Offline() }
+        #expect(result == nil)
     }
 }

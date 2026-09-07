@@ -570,8 +570,17 @@ final class DownloadManager {
     /// out from under WebKit. `deleteDownload` cancels that case and leaves the partial
     /// where it is.
     func moveToTrash(_ download: Download) {
-        if download.status == .completed, let url = download.destinationURL {
-            try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        if download.status == .completed, let url = download.destinationURL,
+           FileManager.default.fileExists(atPath: url.path) {
+            do {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            } catch {
+                ToastManager.shared.show(
+                    "Could not move \(download.fileName) to the Trash: \(error.localizedDescription)",
+                    type: .error
+                )
+                return
+            }
         }
         deleteDownload(download)
     }

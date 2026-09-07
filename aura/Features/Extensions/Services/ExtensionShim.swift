@@ -78,7 +78,10 @@ enum ExtensionShim {
         // manifest that already carries Aura's own entries.
         try writeManifestScript(pristineManifest(in: directory) ?? manifest, to: directory)
 
-        manifest["background"] = patchedBackground(manifest["background"] as? [String: Any], in: directory)
+        manifest["background"] = patchedBackground(
+            (pristineManifest(in: directory) ?? manifest)["background"] as? [String: Any],
+            in: directory
+        )
         patchExtensionPages(manifest, in: directory)
         manifest["permissions"] = withNativeMessaging(manifest["permissions"] as? [Any] ?? [])
         manifest[versionKey] = version

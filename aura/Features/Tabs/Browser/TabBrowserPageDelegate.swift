@@ -45,7 +45,7 @@ enum HeaderColorSnapshot {
     /// The whole view at 32px wide, never a rect: a rect-scoped snapshot is a known
     /// WebKit flash trigger (see `BrowserSnapshotConfiguration`). The strip is cut out
     /// of the tiny bitmap afterwards, which costs nothing.
-    static func configuration(for viewSize: CGSize) -> BrowserSnapshotConfiguration {
+    static var configuration: BrowserSnapshotConfiguration {
         .thumbnail
     }
 
@@ -71,7 +71,6 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
     weak var mediaController: MediaController?
     weak var passwordCoordinator: PasswordAutofillCoordinator?
 
-    private var progressResetWorkItem: DispatchWorkItem?
     /// One delegate per tab, so this is the tab's own last-recorded URL.
     private var historyGate = HistoryVisitGate()
     /// A load finished while the tab was hidden or its window was in the background.
@@ -153,7 +152,8 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
                 container: container,
                 historyManager: tab.historyManager,
                 downloadManager: tab.downloadManager,
-                isPrivate: tab.isPrivate
+                isPrivate: tab.isPrivate,
+                activateAfterAdding: false
             )
             // WebKit built the popup on the opener's data store, so the adopted tab
             // records the opener's container rather than the space default.
@@ -162,6 +162,7 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
             newTab.setupBrowserPageDelegate(for: popup)
             newTab.syncBackgroundColorFromHex()
             newTab.isWebViewReady = true
+            tabManager.activateTab(newTab, persist: false)
             return true
         }
     }
@@ -172,7 +173,6 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
 
         switch event.phase {
         case .started:
-            progressResetWorkItem?.cancel()
             // The page that raised them is going away, and WebKit hangs a page on a
             // reply that never comes, so anything outstanding is refused first.
             MainActor.assumeIsolated {
@@ -182,14 +182,12 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
             tab.colorUpdated = false
             passwordCoordinator?.clearAutofillState()
             tab.isLoading = event.isLoading
-            tab.loadingProgress = event.progress
             if let url = event.url {
                 tab.updateURL(url)
             }
 
         case .committed:
             tab.isLoading = event.isLoading
-            tab.loadingProgress = event.progress
             if let title = event.title, !title.isEmpty {
                 tab.title = title
                 MainActor.assumeIsolated {
@@ -199,7 +197,6 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
 
         case .finished:
             tab.isLoading = event.isLoading
-            tab.loadingProgress = event.progress
             if let title = event.title, !title.isEmpty {
                 tab.title = title
                 MainActor.assumeIsolated {
@@ -224,12 +221,6 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
             tab.restoreScrollOffsetIfNeeded()
             // The one moment the back/forward list is settled.
             tab.captureSession()
-
-            let workItem = DispatchWorkItem { [weak tab] in
-                tab?.loadingProgress = 0
-            }
-            progressResetWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: workItem)
         }
 
         MainActor.assumeIsolated {
@@ -417,9 +408,40 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         }
     }
 
+    func browserPage(
+        _ page: BrowserPage, authenticate challenge: URLAuthenticationChallenge,
+        completion: @escaping (URLCredential?) -> Void
+    ) {
+        let alert = NSAlert()
+        alert.messageText = "Sign in to \(challenge.protectionSpace.host)"
+        alert.informativeText = challenge.previousFailureCount > 0 ? "The username or password was not accepted." : "This site requires a username and password."
+        alert.addButton(withTitle: "Sign in")
+        alert.addButton(withTitle: "Cancel")
+        let user = NSTextField(frame: NSRect(x: 0, y: 34, width: 300, height: 24))
+        user.placeholderString = "Username"
+        user.setAccessibilityLabel("Username")
+        user.stringValue = challenge.proposedCredential?.user ?? ""
+        let password = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        password.placeholderString = "Password"
+        password.setAccessibilityLabel("Password")
+        let fields = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 58))
+        fields.addSubview(user)
+        fields.addSubview(password)
+        user.nextKeyView = password
+        alert.accessoryView = fields
+        alert.window.initialFirstResponder = user
+        present(alert, on: page) { accepted in
+            completion(accepted ? URLCredential(
+                user: user.stringValue,
+                password: password.stringValue,
+                persistence: .forSession
+            ) : nil)
+        }
+    }
+
     func browserPage(_ page: BrowserPage, runJavaScriptAlert message: String, completion: @escaping () -> Void) {
         let alert = NSAlert()
-        alert.messageText = "Alert"
+        alert.messageText = page.currentURL?.host ?? "This page"
         alert.informativeText = message
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
@@ -428,7 +450,7 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
 
     func browserPage(_ page: BrowserPage, runJavaScriptConfirm message: String, completion: @escaping (Bool) -> Void) {
         let alert = NSAlert()
-        alert.messageText = "Confirm"
+        alert.messageText = page.currentURL?.host ?? "This page"
         alert.informativeText = message
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
@@ -443,7 +465,7 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         completion: @escaping (String?) -> Void
     ) {
         let alert = NSAlert()
-        alert.messageText = "Prompt"
+        alert.messageText = page.currentURL?.host ?? "This page"
         alert.informativeText = prompt
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
@@ -452,6 +474,8 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         textField.stringValue = defaultText ?? ""
         alert.accessoryView = textField
+        alert.window.initialFirstResponder = textField
+        textField.selectText(nil)
 
         present(alert, on: page) { accepted in
             completion(accepted ? textField.stringValue : nil)

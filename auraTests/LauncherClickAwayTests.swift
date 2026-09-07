@@ -58,6 +58,7 @@ struct LauncherClickAwayTests {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
         let host = NSHostingView(rootView: Probe(measureInsideOffset: insideOffset, report: report))
         host.sizingOptions = []
         window.contentView = host

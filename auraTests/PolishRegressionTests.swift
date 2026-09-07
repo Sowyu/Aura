@@ -1,10 +1,26 @@
 import AppKit
 import SwiftUI
 import Testing
+import WebKit
 @testable import Aura
 
 @MainActor
 struct PolishRegressionTests {
+    @Test func onlyUserActivatedExternalSchemesLeaveTheBrowser() {
+        #expect(BrowserPage.opensExternally(URL(string: "mailto:hello@example.com"), navigationType: .linkActivated))
+        #expect(!BrowserPage.opensExternally(URL(string: "zoommtg://join"), navigationType: .other))
+        for scheme in ["https", "javascript", "data", "blob", "aura", "webkit-extension"] {
+            #expect(!BrowserPage.opensExternally(URL(string: "\(scheme):test"), navigationType: .linkActivated))
+        }
+    }
+
+    @Test func searchTemplatesRequireAWebHostAndQuery() {
+        #expect(CustomSearchEngine.isValidTemplate("https://example.com/?q={query}"))
+        for invalid in ["example.com/{query}", "javascript:{query}", "https:///", "https://example.com/"] {
+            #expect(!CustomSearchEngine.isValidTemplate(invalid))
+        }
+    }
+
     @Test func customDialogReturnKeepsOneConfirmationAction() throws {
         let manager = DialogManager()
         var confirmations = 0

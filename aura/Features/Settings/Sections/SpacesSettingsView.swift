@@ -3,6 +3,7 @@ import SwiftUI
 
 // swiftlint:disable type_body_length large_tuple
 struct SpacesSettingsView: View {
+    @Environment(DialogManager.self) private var dialogManager
     @Environment(\.theme) private var theme
     /// Creation order, so the paged space switcher lands on the same space every time.
     /// Unsorted, SwiftData returns store order, which can change after a save.
@@ -159,6 +160,7 @@ struct SpacesSettingsView: View {
                     }
                     Spacer(minLength: 0)
                 }
+                .frame(maxWidth: SettingsMetrics.contentMaxWidth, alignment: .leading)
                 .padding(SettingsMetrics.gutter)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
@@ -177,7 +179,7 @@ struct SpacesSettingsView: View {
     private func clearDataCard(for container: TabContainer) -> some View {
         SettingsCard(header: "Clear data") {
             VStack(spacing: 8) {
-                clearButton("Clear Cache") {
+                clearButton("Clear cache", in: container) {
                     PrivacyService.clearCache(container) {
                         DispatchQueue.main.async {
                             toastManager.show("Cache cleared", icon: .system("trash"))
@@ -185,7 +187,7 @@ struct SpacesSettingsView: View {
                     }
                 }
 
-                clearButton("Clear Cookies") {
+                clearButton("Clear cookies", in: container) {
                     PrivacyService.clearCookies(container) {
                         DispatchQueue.main.async {
                             toastManager.show("Cookies cleared", icon: .system("trash"))
@@ -193,7 +195,7 @@ struct SpacesSettingsView: View {
                     }
                 }
 
-                clearButton("Clear History") {
+                clearButton("Clear history", in: container) {
                     historyManager.clearContainerHistory(container)
                     toastManager.show("History cleared", icon: .system("trash"))
                 }
@@ -202,9 +204,16 @@ struct SpacesSettingsView: View {
         }
     }
 
-    private func clearButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    private func clearButton(_ title: String, in container: TabContainer, action: @escaping () -> Void) -> some View {
+        OraButton(label: title, variant: .destructive, size: .sm) {
+            dialogManager.confirm(
+                title: "\(title) for \"\(container.name)\"?",
+                message: "This cannot be undone. Other spaces keep their data.",
+                iconImage: Image(systemName: "trash"), confirmLabel: "Clear",
+                variant: .destructive, onConfirm: action
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Sites pinned to this space by "Always open … in this space".
@@ -269,7 +278,7 @@ struct SpacesSettingsView: View {
                     Text(policy.rawValue).tag(policy)
                 }
             }
-            .pickerStyle(.radioGroup)
+            .pickerStyle(.menu)
         }
     }
 

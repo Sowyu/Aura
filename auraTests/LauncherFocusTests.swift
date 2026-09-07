@@ -42,6 +42,7 @@ struct LauncherFocusTests {
             defer: false
         )
         defer { window.close() }
+        window.isReleasedWhenClosed = false
         let host = NSHostingView(rootView: Probe())
         host.sizingOptions = []
         window.contentView = host

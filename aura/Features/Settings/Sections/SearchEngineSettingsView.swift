@@ -12,11 +12,7 @@ struct SearchEngineSettingsView: View {
     @State private var newEngineAliases = ""
     @State private var newEngineIsAI = false
 
-    private var isValidURL: Bool {
-        newEngineURL
-            .contains("{query}")
-            && URL(string: newEngineURL.replacingOccurrences(of: "{query}", with: "test")) != nil
-    }
+    private var isValidURL: Bool { CustomSearchEngine.isValidTemplate(newEngineURL) }
 
     var body: some View {
         SettingsSection {
@@ -25,7 +21,7 @@ struct SearchEngineSettingsView: View {
                     Text("Search engine library")
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
-                    Button(showingAddForm ? "Cancel" : "Add Custom Engine") {
+                    OraButton(label: showingAddForm ? "Cancel" : "Add custom engine", variant: .secondary, size: .sm) {
                         if showingAddForm {
                             cancelForm()
                         } else {
@@ -38,43 +34,25 @@ struct SearchEngineSettingsView: View {
             if showingAddForm {
                 SettingsCard(header: "Add new search engine") {
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Name:")
-                                .frame(width: 80, alignment: .leading)
-                            TextField("Search Engine Name", text: $newEngineName)
-                        }
+                        OraInput(text: $newEngineName, placeholder: "Search engine name", label: "Name")
 
-                        HStack {
-                            Text("URL:")
-                                .frame(width: 80, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 4) {
-                                TextField(
-                                    "https://example.com/search?q={query}",
-                                    text: $newEngineURL
-                                )
-                                if !newEngineURL.isEmpty, !isValidURL {
-                                    Text("URL must contain {query} and be a valid URL")
-                                        .foregroundStyle(theme.destructive)
-                                        .font(.system(size: 11))
-                                }
-                            }
-                        }
+                        OraInput(
+                            text: $newEngineURL, placeholder: "https://example.com/search?q={query}", label: "URL",
+                            error: !newEngineURL
+                                .isEmpty && !isValidURL ? "Use an HTTP or HTTPS address containing {query}" : nil
+                        )
 
-                        HStack {
-                            Text("Aliases:")
-                                .frame(width: 80, alignment: .leading)
-                            TextField("e.g., ddg, duck", text: $newEngineAliases)
-                        }
+                        OraInput(text: $newEngineAliases, placeholder: "ddg, duck", label: "Aliases")
 
                         HStack {
                             Text("Type:")
                                 .frame(width: 80, alignment: .leading)
-                            Toggle("AI Chat Engine", isOn: $newEngineIsAI)
+                            Toggle("AI chat engine", isOn: $newEngineIsAI)
                         }
 
                         HStack {
                             Spacer()
-                            Button("Save") {
+                            OraButton(label: "Save", variant: .secondary, size: .sm) {
                                 saveSearchEngine()
                             }
                             .disabled(newEngineName.isEmpty || !isValidURL)
@@ -249,7 +227,7 @@ struct BuiltInSearchEngineRow: View {
 
             // Set as default button
             if !isDefault, let onSetAsDefault {
-                Button("Set as Default", action: onSetAsDefault)
+                OraButton(label: "Set as default", variant: .secondary, size: .sm, action: onSetAsDefault)
             }
         }
         .padding(.vertical, 4)
@@ -257,6 +235,7 @@ struct BuiltInSearchEngineRow: View {
 }
 
 struct CustomSearchEngineRow: View {
+    @Environment(DialogManager.self) private var dialogManager
     @Environment(\.theme) private var theme
     let engine: CustomSearchEngine
     let onDelete: () -> Void
@@ -270,10 +249,7 @@ struct CustomSearchEngineRow: View {
     @State private var editAliases = ""
     @State private var editIsAI = false
 
-    private var isValidEditURL: Bool {
-        editURL.contains("{query}")
-            && URL(string: editURL.replacingOccurrences(of: "{query}", with: "test")) != nil
-    }
+    private var isValidEditURL: Bool { CustomSearchEngine.isValidTemplate(editURL) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -302,43 +278,28 @@ struct CustomSearchEngineRow: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Name:")
-                                .frame(width: 80, alignment: .leading)
-                            TextField("Search Engine Name", text: $editName)
-                        }
+                        OraInput(text: $editName, placeholder: "Search engine name", label: "Name")
 
-                        HStack {
-                            Text("URL:")
-                                .frame(width: 80, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 4) {
-                                TextField("https://example.com/search?q={query}", text: $editURL)
-                                if !editURL.isEmpty, !isValidEditURL {
-                                    Text("URL must contain {query} and be a valid URL")
-                                        .foregroundStyle(theme.destructive)
-                                        .font(.system(size: 11))
-                                }
-                            }
-                        }
+                        OraInput(
+                            text: $editURL, placeholder: "https://example.com/search?q={query}", label: "URL",
+                            error: !editURL
+                                .isEmpty && !isValidEditURL ? "Use an HTTP or HTTPS address containing {query}" : nil
+                        )
 
-                        HStack {
-                            Text("Aliases:")
-                                .frame(width: 80, alignment: .leading)
-                            TextField("e.g., ddg, duck", text: $editAliases)
-                        }
+                        OraInput(text: $editAliases, placeholder: "ddg, duck", label: "Aliases")
 
                         HStack {
                             Text("Type:")
                                 .frame(width: 80, alignment: .leading)
-                            Toggle("AI Chat Engine", isOn: $editIsAI)
+                            Toggle("AI chat engine", isOn: $editIsAI)
                         }
 
                         HStack {
                             Spacer()
-                            Button("Cancel") {
+                            OraButton(label: "Cancel", variant: .secondary, size: .sm) {
                                 cancelEdit()
                             }
-                            Button("Update") {
+                            OraButton(label: "Update", variant: .secondary, size: .sm) {
                                 saveEdit()
                             }
                             .disabled(editName.isEmpty || !isValidEditURL)
@@ -401,17 +362,21 @@ struct CustomSearchEngineRow: View {
                         // Same reason the built-in AI rows have no button: the only
                         // default it could set is the plain search one.
                         if !isDefault, !engine.isAIChat {
-                            Button("Set as Default") {
+                            OraButton(label: "Set as default", variant: .secondary, size: .sm) {
                                 onSetAsDefault()
                             }
                         }
 
-                        Button("Edit") {
+                        OraButton(label: "Edit", variant: .secondary, size: .sm) {
                             startEdit()
                         }
 
-                        Button("Delete", role: .destructive) {
-                            onDelete()
+                        OraButton(label: "Delete", variant: .destructive, size: .sm) {
+                            dialogManager.confirm(
+                                title: "Delete \"\(engine.name)\"?",
+                                message: "Its search shortcuts will stop working.",
+                                confirmLabel: "Delete", variant: .destructive, onConfirm: onDelete
+                            )
                         }
                     }
                 }

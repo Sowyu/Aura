@@ -4,6 +4,11 @@ import Foundation
 protocol BrowserPageDelegate: AnyObject {
     func browserPage(
         _ page: BrowserPage,
+        authenticate challenge: URLAuthenticationChallenge,
+        completion: @escaping (URLCredential?) -> Void
+    )
+    func browserPage(
+        _ page: BrowserPage,
         decidePolicyFor navigationAction: BrowserNavigationAction
     ) -> BrowserNavigationActionDisposition
     func browserPage(_ page: BrowserPage, didRequestOpenInNewTab url: URL)
@@ -45,6 +50,14 @@ protocol BrowserPageDelegate: AnyObject {
 }
 
 extension BrowserPageDelegate {
+    func browserPage(
+        _ page: BrowserPage,
+        authenticate challenge: URLAuthenticationChallenge,
+        completion: @escaping (URLCredential?) -> Void
+    ) {
+        completion(nil)
+    }
+
     func browserPage(
         _ page: BrowserPage,
         decidePolicyFor navigationAction: BrowserNavigationAction

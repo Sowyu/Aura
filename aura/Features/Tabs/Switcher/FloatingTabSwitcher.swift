@@ -127,9 +127,11 @@ struct FloatingTabSwitcher: View {
                 focusedTab = tab.id
             }
         }
-        .onTapGesture {
-            activateTab(tab)
-        }
+        .onTapGesture { activateTab(tab) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(tab.title))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { activateTab(tab) }
     }
 
     @ViewBuilder
@@ -292,24 +294,13 @@ struct FloatingTabSwitcher: View {
     }
 
     private func takeSnapshot(for tab: Tab, url: String, group: DispatchGroup) {
-        DispatchQueue.global(qos: .userInteractive).async {
-            let config = BrowserSnapshotConfiguration(rect: nil, afterScreenUpdates: false)
-
-            DispatchQueue.main.async {
-                tab.takeSnapshot(configuration: config) { image, _ in
-                    defer { group.leave() }
-
-                    guard let cgImage = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-                        return
-                    }
-
-                    // Preserve the original aspect ratio of the snapshot
-                    let originalSize = CGSize(width: cgImage.width, height: cgImage.height)
-                    let nsImage = NSImage(cgImage: cgImage, size: originalSize)
-
-                    self.tabSnapshots[tab] = TabSnapshot(image: nsImage, url: url)
-                }
-            }
+        let config = BrowserSnapshotConfiguration(
+            rect: nil, afterScreenUpdates: false, snapshotWidth: Constants.previewWidth * 2
+        )
+        tab.takeSnapshot(configuration: config) { image, _ in
+            defer { group.leave() }
+            guard let image else { return }
+            self.tabSnapshots[tab] = TabSnapshot(image: image, url: url)
         }
     }
 

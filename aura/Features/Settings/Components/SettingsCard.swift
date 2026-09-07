@@ -26,6 +26,8 @@ struct SettingsCard<Content: View>: View {
             }
 
             content()
+                .toggleStyle(.switch)
+                .tint(theme.accent)
         }
         .padding(SettingsMetrics.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)

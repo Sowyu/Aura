@@ -127,6 +127,8 @@ final class ExtensionManager {
     /// and internal rather than private, because `ExtensionManager+Updates` is an
     /// extension: it can hold no state of its own and writes through this.
     var updatingIDs: Set<String> = []
+    var isCheckingForUpdates = false
+    var updateCheckFailed = false
 
     /// The local key-down monitor `ExtensionManager+Commands` installs, for the same
     /// reason.
@@ -543,7 +545,7 @@ final class ExtensionManager {
 
     /// Copies an unpacked extension folder into the extensions directory and loads it.
     /// `source` is only what the consent sheet names as the origin of the files.
-    func installExtension(from sourceURL: URL, source: ExtensionInstallSource? = nil) throws {
+    func installExtension(from sourceURL: URL, source: ExtensionInstallSource? = nil) async throws {
         start()
         finishScanNow()
 
@@ -569,7 +571,9 @@ final class ExtensionManager {
         let id = Self.sanitizedID(from: name)
         let destination = extensionsDirectory.appendingPathComponent(id, isDirectory: true)
         try? FileManager.default.createDirectory(at: extensionsDirectory, withIntermediateDirectories: true)
-        try FileManager.default.copyItem(at: sourceURL, to: destination)
+        try await Task.detached(priority: .userInitiated) {
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+        }.value
         registerExtension(at: destination, source: source ?? .folder(sourceURL.lastPathComponent))
     }
 
@@ -584,7 +588,7 @@ final class ExtensionManager {
 
         let archive = try await FirefoxAddonStore.shared.downloadXPI(from: downloadURL)
         defer { try? FileManager.default.removeItem(at: archive) }
-        try installArchive(at: archive, source: Self.installSource(for: addon))
+        try await installArchive(at: archive, source: Self.installSource(for: addon))
     }
 
     /// What the consent sheet calls an AMO install. The guid is the id the add-on runs
@@ -595,34 +599,34 @@ final class ExtensionManager {
     }
 
     /// A folder holding manifest.json, or a packaged extension (.xpi, .zip, .crx).
-    func installExtension(fromFile url: URL) throws {
+    func installExtension(fromFile url: URL) async throws {
         if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
-            try installExtension(from: url, source: .folder(url.lastPathComponent))
+            try await installExtension(from: url, source: .folder(url.lastPathComponent))
             return
         }
         start()
         finishScanNow()
         let source = ExtensionInstallSource.archive(url.lastPathComponent)
         guard url.pathExtension.lowercased() == "crx" else {
-            try installArchive(at: url, source: source)
+            try await installArchive(at: url, source: source)
             return
         }
         // Chrome packs the same zip behind a signature header; drop the header.
-        let zipURL = try XPIUnpacker.zipFromCRX(url)
+        let zipURL = try await Task.detached(priority: .userInitiated) { try XPIUnpacker.zipFromCRX(url) }.value
         defer { try? FileManager.default.removeItem(at: zipURL) }
-        try installArchive(at: zipURL, source: source)
+        try await installArchive(at: zipURL, source: source)
     }
 
     /// Unpacks a zip-shaped archive into a temporary folder and installs what it holds.
-    private func installArchive(at archive: URL, source: ExtensionInstallSource) throws {
+    private func installArchive(at archive: URL, source: ExtensionInstallSource) async throws {
         let staging = FileManager.default.temporaryDirectory
             .appendingPathComponent("ora-addon-unpack-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: staging) }
-        try XPIUnpacker.unpack(archive, to: staging)
+        try await Task.detached(priority: .userInitiated) { try XPIUnpacker.unpack(archive, to: staging) }.value
         guard let root = XPIUnpacker.manifestRoot(in: staging) else {
             throw ExtensionInstallError.missingManifest
         }
-        try installExtension(from: root, source: source)
+        try await installExtension(from: root, source: source)
     }
 
     /// The installed entry an AMO listing produced.

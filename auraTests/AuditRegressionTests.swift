@@ -96,7 +96,7 @@ struct MotionSettingSynchronizationTests {
         AnimationSettings.reduceMotionDidChange(to: true)
         #expect(AnimationSettings.duration(1) == 0)
         AnimationSettings.reduceMotionDidChange(to: false)
-        #expect(AnimationSettings.duration(1) == 1)
+        #expect(AnimationSettings.duration(1) == (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 1))
     }
 }
 

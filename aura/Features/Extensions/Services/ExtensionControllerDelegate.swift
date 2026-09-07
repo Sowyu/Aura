@@ -117,7 +117,7 @@ extension ExtensionEngine: WKWebExtensionControllerDelegate {
         else { return completion(false) }
         let alert = NSAlert()
         alert.messageText = "Allow additional access for \(context.webExtension.displayName ?? "this extension")?"
-        alert.informativeText = permissions.sorted().joined(separator: "\n")
+        alert.informativeText = permissions.sorted().map(ExtensionCompatibility.humanPermission).joined(separator: "\n")
         alert.addButton(withTitle: "Don't Allow")
         alert.addButton(withTitle: "Allow")
         alert.beginSheetModal(for: window) { response in
