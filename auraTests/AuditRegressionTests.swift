@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 import WebKit
@@ -153,8 +154,17 @@ struct PasswordWorldTests {
             configuration: .oraDefault(userScripts: scripts, privacySettings: SpacePrivacySettings()),
             delegate: nil
         )
-        defer { page.teardown() }
         let view = page.auraWebView
+        // WebKit throttles views without a window, including document-end scripts.
+        let frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        view.frame = frame
+        window.contentView = view
+        window.makeKeyAndOrderFront(nil)
+        defer {
+            window.orderOut(nil)
+            page.teardown()
+        }
         view.loadHTMLString("<html><title>audit fixture</title><input type='password'></html>", baseURL: nil)
         var ready = false
         for _ in 0 ..< 100 {

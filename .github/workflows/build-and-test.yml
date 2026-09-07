@@ -86,6 +86,8 @@ jobs:
           -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee build.log | xcbeautify
 
     - name: Unit tests
+      id: tests
+      continue-on-error: true
       run: |
         set -o pipefail
         xcodebuild test-without-building -project Aura.xcodeproj -scheme aura \
@@ -94,6 +96,8 @@ jobs:
           -only-testing:auraTests CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee tests.log | xcbeautify
 
     - name: Injected WebKit bundle tests
+      id: webbundle
+      continue-on-error: true
       run: |
         set -o pipefail
         TEST_RUNNER_AURA_BUNDLE=1 xcodebuild test-without-building \
@@ -127,6 +131,6 @@ jobs:
         if-no-files-found: ignore
         retention-days: 7
 
-    - name: Require lint and formatting checks
-      if: ${{ !cancelled() && (steps.lint.outcome == 'failure' || steps.format.outcome == 'failure') }}
+    - name: Require all validation checks
+      if: ${{ !cancelled() && (steps.lint.outcome == 'failure' || steps.format.outcome == 'failure' || steps.tests.outcome == 'failure' || steps.webbundle.outcome == 'failure') }}
       run: exit 1
