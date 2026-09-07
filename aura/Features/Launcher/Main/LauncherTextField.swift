@@ -17,6 +17,10 @@ struct LauncherTextField: NSViewRepresentable {
     // `isEditing` drives focus from the outside (shortcut, dismiss, tab switch).
     var displayText: String?
     var isEditing: Bool?
+    /// Changing this re-runs `updateNSView`, which asks AppKit for first responder again
+    /// whenever `isEditing` says the field should have it and it does not. The launcher
+    /// bumps it on every ⌘T, so a panel that lost the caret gets it back.
+    var focusToken = 0
     var onBeginEditing: (() -> Void)?
     var onEndEditing: (() -> Void)?
     var onEscape: (() -> Void)?

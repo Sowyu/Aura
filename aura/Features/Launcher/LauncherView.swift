@@ -197,7 +197,8 @@ struct LauncherView: View {
             isFocused: $isTextFieldFocused,
             onTabPress: onTabPress,
             onEscape: dismiss,
-            viewModel: viewModel
+            viewModel: viewModel,
+            focusToken: appState.launcherFocusToken
         )
         .opacity(isVisible ? 1.0 : 0.0)
         .animation(AnimationSettings.easeOut(0.12), value: isVisible)

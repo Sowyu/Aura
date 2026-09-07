@@ -375,11 +375,16 @@ extension OraRoot {
     fileprivate var events: [WindowEvent] {
         [
             WindowEvent(.quitRequested, .exactWindow) { _ in confirmQuit() },
-            WindowEvent(.showLauncher) { _ in
+            // `.windowOrKey`: the sidebar's menus post with a window that is nil inside
+            // an `NSHostingView`, and `.window` dropped those posts on the floor.
+            WindowEvent(.showLauncher, .windowOrKey) { _ in
                 Task { @MainActor in
                     // No active-tab guard: the launcher floats over the start page
-                    // too, so ⌘T works on any page including the homepage.
-                    appState.showLauncher.toggle()
+                    // too, so ⌘T works on any page including the homepage. Never a
+                    // toggle: a second ⌘T used to close the panel and send the next
+                    // keystrokes to the page.
+                    appState.showLauncher = true
+                    appState.launcherFocusToken += 1
                 }
             },
             WindowEvent(.newTab) { _ in
@@ -394,7 +399,9 @@ extension OraRoot {
             WindowEvent(.closeActiveTab) { _ in
                 Task { @MainActor in tabManager.closeActiveTab() }
             },
-            WindowEvent(.restoreLastTab) { _ in
+            // `.windowOrKey` for the same reason as `.showLauncher`: the sidebar's
+            // background menu posts it with a nil window.
+            WindowEvent(.restoreLastTab, .windowOrKey) { _ in
                 Task { @MainActor in tabManager.restoreLastTab() }
             },
             WindowEvent(.findInPage) { _ in

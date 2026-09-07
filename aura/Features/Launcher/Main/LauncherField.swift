@@ -20,6 +20,8 @@ struct LauncherField: View {
     /// pulses `isEditing` instead, because it must not hold first responder forever.
     var isFocused: FocusState<Bool>.Binding?
     var isEditing: Bool?
+    /// See `LauncherTextField.focusToken`.
+    var focusToken = 0
     var onTextChange: (String) -> Void
     /// The floating launcher draws one panel around field and suggestions, so its field
     /// has no chrome of its own; the home page shows the field alone and keeps it.
@@ -92,6 +94,7 @@ struct LauncherField: View {
             textColor: theme.foreground,
             placeholder: placeholder,
             isEditing: isEditing,
+            focusToken: focusToken,
             onEscape: onEscape
         )
         .textFieldStyle(PlainTextFieldStyle())

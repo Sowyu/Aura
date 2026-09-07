@@ -7,6 +7,8 @@ struct LauncherMain: View {
     let onTabPress: () -> Void
     let onEscape: () -> Void
     @ObservedObject var viewModel: LauncherViewModel
+    /// See `LauncherTextField.focusToken`.
+    var focusToken = 0
 
     @Environment(\.theme) private var theme
 
@@ -44,6 +46,7 @@ struct LauncherMain: View {
                 // above, did not reliably land the caret on ⌘T. Constant while mounted:
                 // the launcher is modal and nothing else in it takes focus.
                 isEditing: true,
+                focusToken: focusToken,
                 onTextChange: { newValue in
                     viewModel.currentText = newValue
                     viewModel.searchHandler(newValue)

@@ -557,7 +557,9 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
         // Any site or subframe can send a forged listener payload.
         guard let url = page.currentURL else { return }
         let oldTitle = tab.title
-        let title = page.title ?? tab.title
+        // WebKit reports "" until the <title> is parsed, and this message can arrive
+        // before that; an empty title left the sidebar row blank for the whole visit.
+        let title = page.title.flatMap { $0.isEmpty ? nil : $0 } ?? tab.title
         tab.title = title
         tab.updateURL(url)
         tab.setFavicon()

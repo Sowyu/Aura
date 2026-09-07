@@ -126,6 +126,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 final class AppState {
     var showLauncher: Bool = false
+    /// Bumped by every request to open the launcher, including one made while it is
+    /// already up, so the field asks for first responder again instead of the panel
+    /// toggling closed under the user's hands.
+    var launcherFocusToken = 0
     var launcherSearchText: String = ""
     var showFinderIn: UUID?
     var isFloatingTabSwitchVisible: Bool = false
