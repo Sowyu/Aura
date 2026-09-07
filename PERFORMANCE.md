@@ -1,7 +1,7 @@
 # Performance work, 7 September 2026
 
-Ten portable bridge tests pass. Native compilation and the favicon and media
-regression tests passed on macOS CI. Full validation is still in progress.
+Ten portable bridge tests pass. Native compilation, the full default test suite and
+the WebKit integration suite pass on macOS CI. The Release build also passes.
 There is no measured whole-browser CPU, memory or startup improvement yet.
 
 ## Work removed
@@ -47,8 +47,14 @@ The tests count work; actual display latency still needs WebKit verification.
 Native tests cover timer start/stop and title freshness, plus 20 display requests
 concurrent with 20 saves sharing one download. They also check recovery after original
 bytes leave the cache. Both regression tests passed on the Apple Silicon macOS
-runner with Xcode 26.0.1 in [run 34094144077](https://github.com/Sowyu/Aura/actions/runs/34094144077).
-That run failed a separate password isolation test, so it is not a passing release gate.
+runner with Xcode 26.0.1 in [run 34097390651](https://github.com/Sowyu/Aura/actions/runs/34097390651),
+code commit `341294a72b58b4313079f225a585e77cedaadb53`.
+
+The same run measured a 1.30 ms median request-broker round trip over six samples,
+while checking that blocked requests never reached the local server and allowed
+requests still loaded. Fifty extension page opens ended with zero retained relay
+ports. These are Debug integration measurements with no before-change baseline;
+they establish neither a speedup nor whole-browser CPU or memory savings.
 
 ## Reproduce the checks
 

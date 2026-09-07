@@ -1,13 +1,14 @@
 # Code audit, 7 September 2026
 
-Status: fixes implemented, portable checks passing, macOS CI validation in progress.
+Status: portable checks and macOS CI passing, including Debug and Release builds.
 Baseline commit: `73f9b86`. Changes are committed on `audit/native-validation-20260907`.
 No release or deployment was made.
 
 The subsequent [performance pass](PERFORMANCE.md) records reduced bridge work and
 native changes awaiting profiling. The portable suite now contains ten tests.
-The first macOS runs caught a generic static-property compile error, formatting
-failures and an unhosted WebKit test fixture. Those fixes are included on the branch.
+The macOS runs caught a generic static-property compile error, formatting failures,
+test window ownership errors and use of WebKit's callback overload where the test
+needed its async result. Those fixes are included on the branch.
 
 The largest problems were trust boundaries and lifecycle handling. Page JavaScript
 could influence trusted browser state, optional extension permissions were granted
@@ -23,10 +24,10 @@ implementations. It was not an exhaustive manual reading of every source line.
 
 | Area | Reviewed | Verification still needed |
 | --- | --- | --- |
-| Security | Password bridge, trusted navigation state, camera/microphone grants, extension permissions, request broker, archive and download entry points | Real WebKit isolation, permission revocation, malicious archive fixtures |
+| Security | Password bridge, trusted navigation state, camera/microphone grants, extension permissions, request broker, archive and download entry points | Autofill during navigation and authentication, permission revocation, malicious archive fixtures |
 | Privacy | Private profiles, extension visibility, source captures, suggestions, favicons, session/history guards | Inspect on-disk artifacts after private browsing and quitting |
 | Correctness | Async tab/page ownership, callback completion, file grants, settings imports, persistence error paths | SwiftData failures, Keychain authentication, native dialogs |
-| Architecture and tooling | Duplicate origin logic, dead flags/types, cache keys, port ownership, dependencies, CI and release scripts | Xcode build, SwiftLint, SwiftFormat, dependency resolution and vulnerability review |
+| Architecture and tooling | Duplicate origin logic, dead flags/types, cache keys, port ownership, dependencies, CI and release scripts | Reproducible dependency resolution and vulnerability review |
 | Interface | Sidebar accessibility actions and motion helpers, reviewed in source | VoiceOver, keyboard navigation, system Reduce Motion, visual and performance checks in the running app |
 
 This Debian environment has no Swift compiler, Xcode or macOS frameworks. Native
@@ -113,13 +114,39 @@ and regression coverage; reducing total line count was not the acceptance criter
    extension resource boundaries, file grants, motion synchronization and bridge
    encoding. The macOS CI suite now executes these checks.
 
+## macOS CI results
+
+[Run 34097390651](https://github.com/Sowyu/Aura/actions/runs/34097390651) validates
+code commit `341294a72b58b4313079f225a585e77cedaadb53` on Apple Silicon with Xcode 26.0.1.
+Documentation updates after that commit do not change the tested code.
+
+- Debug compilation passes. The two XCTest cases pass, and Swift Testing reports a
+  passing 656-test suite with 17 opt-in tests skipped in the default run.
+- The separate integration run passes 26 tests, including all 14 opt-in WebKit and
+  popup checks. The three long performance benchmarks remain disabled.
+- The password test verifies that website JavaScript cannot replace the isolated
+  bridge or access its message handler. Extension tests exercise cancellation,
+  redirects, resource types, unloading, timeouts, messaging and popup rendering.
+- Fifty extension page opens finish with zero retained tunnelled ports. This is a
+  relay ownership check, not a whole-process memory measurement.
+- Release compilation, SwiftFormat and SwiftLint pass. SwiftLint reports 156
+  warnings and zero serious violations; a successful exit does not mean the
+  repository is warning-free.
+
+The test window fixes follow Apple's [ARC ownership requirement](https://developer.apple.com/documentation/appkit/nswindow/isreleasedwhenclosed).
+The password test now awaits the [content-world evaluation overload](https://developer.apple.com/documentation/webkit/wkwebview/evaluatejavascript(_:in:contentworld:)).
+The callback overload returns `Void`; awaiting it did not return JavaScript's value.
+
+CI disables code signing. These checks do not validate notarization, signed sandbox
+behavior, biometric prompts, VoiceOver or whole-browser CPU and memory use.
+
 ## Open findings
 
 These are remaining work, not claims that the affected paths are safe.
 
 | Priority | Finding | Required follow-up |
 | --- | --- | --- |
-| Release gate | macOS CI validation is in progress. | Require native tests, injected-bundle tests, Release compilation, lint and formatting before release. |
+| Release gate | Automated macOS checks pass; signed-app and manual platform checks remain. | Verify notarization, signed sandbox behavior, authentication during navigation, permission revocation and private data on disk before release. |
 | High | [XPIUnpacker](aura/Features/Extensions/Services/FirefoxAddonStore.swift) delegates extraction to ditto without application-level entry/size limits. Local CRX signatures are explicitly not verified. | Test traversal, symlinks and oversized archives on macOS; define and enforce the supported trust and size limits. Do not treat HTTPS status checks as signature verification. |
 | Medium | [BookmarkPortability.apply](aura/Features/Importer/Services/BookmarkPortability.swift) returns an added-count summary after `saveOrLog`, even if saving failed. [HistoryManager](aura/Features/History/Services/HistoryManager.swift) also discards some save errors. | Add persistence failure tests and propagate save failures without rolling back unrelated edits in the shared context. |
 | Medium | [ExtensionVersion](aura/Features/Extensions/Services/ExtensionUpdates.swift) compares suffixes lexically. For example, `1.0` is not considered newer than `1.0b2`. | Adopt the supported Firefox version ordering and test prerelease-to-release updates. |
