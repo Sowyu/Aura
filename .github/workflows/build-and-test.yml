@@ -99,7 +99,8 @@ jobs:
         TEST_RUNNER_AURA_BUNDLE=1 xcodebuild test-without-building \
           -project Aura.xcodeproj -scheme aura -destination "platform=macOS" \
           -derivedDataPath DerivedData -resultBundlePath WebBundleResults.xcresult \
-          -only-testing:auraTests/WebBundleTests CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee webbundle.log | xcbeautify
+          -only-testing:auraTests/WebBundleTests -only-testing:auraTests/WebRequestBrokerTests \
+          CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= | tee webbundle.log | xcbeautify
 
     - name: Build Release
       run: |

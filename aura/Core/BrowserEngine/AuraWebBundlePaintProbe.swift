@@ -186,8 +186,7 @@ extension AuraWebBundle {
                 let blue = Int(pixels[index + 2])
                 if abs(red - fixtureLevel) <= tolerance,
                    abs(green - fixtureLevel) <= tolerance,
-                   abs(blue - fixtureLevel) <= tolerance
-                {
+                   abs(blue - fixtureLevel) <= tolerance {
                     fixture += 1
                 }
                 let bucket = (red >> 4) << 8 | (green >> 4) << 4 | (blue >> 4)

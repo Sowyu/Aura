@@ -34,7 +34,7 @@ private struct OnboardingPage<Content: View>: View {
 
     @Environment(\.theme) private var theme
 
-    private static let copyWidth: CGFloat = 300
+    private static var copyWidth: CGFloat { 300 }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -220,10 +220,12 @@ private struct OnboardingBring: View {
                             .font(.system(size: 11))
                             .foregroundColor(theme.success)
                     } else {
-                        Text("Export them from your old browser first; both are a file picker away. Skipping is fine, Settings › Bookmarks has the same buttons.")
-                            .font(.system(size: 11))
-                            .foregroundColor(theme.mutedForeground)
-                            .fixedSize(horizontal: false, vertical: true)
+                        Text(
+                            "Export them from your old browser first; both are a file picker away. Skipping is fine, Settings › Bookmarks has the same buttons."
+                        )
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.mutedForeground)
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 

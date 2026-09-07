@@ -241,7 +241,7 @@ final class PasswordAutofillCoordinator {
                   self.activeDocumentID == documentID,
                   self.tab?.passwordTriggerOverlayState?.focus == overlay.focus,
                   page.currentURL.flatMap(PasswordManagerService.normalizedOrigin)
-                    == PasswordManagerService.normalizedOrigin(from: url),
+                  == PasswordManagerService.normalizedOrigin(from: url),
                   let password = try? self.passwordManager.revealPassword(for: entry)
             else {
                 return

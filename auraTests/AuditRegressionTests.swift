@@ -14,8 +14,12 @@ struct SettingsImportValidationTests {
             ["format": 1, "app": "Other", "values": [:], "data": [:]],
             ["format": 0, "app": "Aura", "values": [:], "data": [:]],
             ["format": 1, "app": "Aura", "values": ["nested": [NSNull()]], "data": [:]],
-            ["format": 1, "app": "Aura", "values": ["browser.homePage": "after"],
-             "data": ["invalid": "not base64!"]],
+            [
+                "format": 1,
+                "app": "Aura",
+                "values": ["browser.homePage": "after"],
+                "data": ["invalid": "not base64!"]
+            ],
             ["format": 1, "app": "Aura", "values": ["duplicate": 1], "data": ["duplicate": "eA=="]]
         ]
         for document in invalid {
@@ -43,7 +47,12 @@ struct AddonResponseValidationTests {
     @Test func failedDownloadsAreRejectedBeforeInstallation() throws {
         let secure = try #require(URL(string: "https://addons.mozilla.org/file.xpi"))
         for code in [200, 404, 500] {
-            let response = try #require(HTTPURLResponse(url: secure, statusCode: code, httpVersion: nil, headerFields: nil))
+            let response = try #require(HTTPURLResponse(
+                url: secure,
+                statusCode: code,
+                httpVersion: nil,
+                headerFields: nil
+            ))
             if code == 200 {
                 try FirefoxAddonStore.validate(response)
             } else {
@@ -51,7 +60,12 @@ struct AddonResponseValidationTests {
             }
         }
         let insecure = try #require(URL(string: "http://example.test/file.xpi"))
-        let response = try #require(HTTPURLResponse(url: insecure, statusCode: 200, httpVersion: nil, headerFields: nil))
+        let response = try #require(HTTPURLResponse(
+            url: insecure,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        ))
         #expect(throws: URLError.self) { try FirefoxAddonStore.validate(response) }
     }
 }
@@ -61,7 +75,10 @@ struct ExtensionResourceBoundaryTests {
         let root = URL(fileURLWithPath: "/tmp/aura-audit-extension", isDirectory: true)
         #expect(ExtensionShim.containsResource(root.appendingPathComponent("pages/popup.html"), in: root))
         #expect(!ExtensionShim.containsResource(root.appendingPathComponent("../victim.html"), in: root))
-        #expect(!ExtensionShim.containsResource(URL(fileURLWithPath: "/tmp/aura-audit-extension-other/page.html"), in: root))
+        #expect(!ExtensionShim.containsResource(
+            URL(fileURLWithPath: "/tmp/aura-audit-extension-other/page.html"),
+            in: root
+        ))
         #expect(!ExtensionShim.containsResource(root, in: root))
     }
 }
@@ -95,7 +112,9 @@ struct FileGrantLifetimeTests {
             defaults: defaults,
             makeBookmark: { _ in Data([1]) },
             resolveBookmark: { _ in (file, false) },
-            start: { _ in starts += 1; return true },
+            start: { _ in starts += 1
+                return true
+            },
             stop: { _ in stops += 1 }
         )
         store.remember(file)
@@ -142,7 +161,9 @@ struct PasswordWorldTests {
             let value = try? await view.evaluateJavaScript(
                 "typeof window.__oraPasswordManager", in: nil, in: BrowserPage.passwordWorld
             )
-            if value as? String == "object" { ready = true; break }
+            if value as? String == "object" { ready = true
+                break
+            }
             try await Task.sleep(for: .milliseconds(100))
         }
         try #require(ready, "Password script did not load")

@@ -31,10 +31,11 @@ struct FaviconDecoderTests {
                     #expect(result === image)
                     completed()
                 }
-                service.downloadAndSaveFavicon(for: "example.test", faviconURL: sourceURL, to: destination) { _, success in
-                    #expect(!success)
-                    completed()
-                }
+                service
+                    .downloadAndSaveFavicon(for: "example.test", faviconURL: sourceURL, to: destination) { _, success in
+                        #expect(!success)
+                        completed()
+                    }
             }
         }
         #expect(fetches.withLock { $0 } == 1)
