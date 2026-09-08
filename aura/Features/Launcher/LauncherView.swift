@@ -85,6 +85,13 @@ struct LauncherView: View {
         appState.showLauncher = false
     }
 
+    private func consumePendingInput(_ pendingInput: String?) {
+        guard let pendingInput else { return }
+        match = nil
+        input = pendingInput
+        appState.launcherSearchText = nil
+    }
+
     var body: some View {
         GeometryReader { geo in
             let windowBounds = windowBounds(host: geo.frame(in: .global), fallback: geo.size)
@@ -195,10 +202,7 @@ struct LauncherView: View {
         )
         .accessibilityAddTraits(.isModal)
         .onAppear {
-            if !appState.launcherSearchText.isEmpty {
-                input = appState.launcherSearchText
-                appState.launcherSearchText = ""
-            }
+            consumePendingInput(appState.launcherSearchText)
             viewModel.searchEngineService.setTheme(theme)
             viewModel.configure(
                 tabManager: tabManager,
@@ -221,6 +225,9 @@ struct LauncherView: View {
                 }
                 return event
             }
+        }
+        .onChange(of: appState.launcherSearchText) { _, pendingInput in
+            consumePendingInput(pendingInput)
         }
         .onDisappear {
             stopClickAway()

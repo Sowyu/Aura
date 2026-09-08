@@ -1,9 +1,9 @@
 {
   "base": "acf8501",
   "validation": {
-    "local": "10 bridge tests pass",
-    "macosRun": 34171142506,
-    "status": "Build and launch benchmark pass. 27 gated WebKit tests pass. Unit run found system-motion expectation and NSWindow ownership crash; fixes queued."
+    "local": "13 bridge tests pass",
+    "macosRun": 34173100882,
+    "status": "Renamed app and Release launch test pass; 27 gated WebKit tests pass. Native suite: 681 tests, four hibernation fixture failures; fixture lifetimes corrected for rerun."
   },
   "findings": {
     "settings-4": {
@@ -1078,5 +1078,10 @@
       "package": "extensions",
       "status": "implemented"
     }
+  },
+  "finalPass": {
+    "naming": "implemented; preserved OraData.sqlite, LegacyDataMigrator, AuraSchema and ora:// compatibility",
+    "documentation": "updated; stale handoffs moved to Trash",
+    "release": "owner only; not run"
   }
 }

@@ -14,9 +14,10 @@
 ## Review status
 
 Aura is experimental. The [code audit](AUDIT.md) records security and correctness
-fixes, checks that ran, and remaining work. The audit changes pass
+fixes, checks that ran, and remaining work. The last recorded audit run passed
 [macOS CI](https://github.com/Sowyu/Aura/actions/runs/34097390651), including Debug and
-Release builds and native WebKit tests. Manual platform checks remain before release.
+Release builds and native WebKit tests. Validation for the current development branch
+is still in progress, and manual platform checks remain before release.
 
 ## Install
 
@@ -36,11 +37,14 @@ Runs on macOS 15 or later, Apple Silicon and Intel.
 
 - Spaces: sidebar workspaces, each with its own set of tabs
 - Vertical tab sidebar with folders, pinned tabs and favourites
-- Launcher over search, history, open tabs and commands (type `>` for commands)
+- Responsive launcher over search, history, open tabs and commands (type `>` for
+  commands)
 - Bookmarks and reading list, with import from Chrome, Firefox, Edge and Safari, and
   HTML export
 - Session restore with crash recovery
 - Per-site zoom, find in page, picture in picture, history panel
+- Reload changes to a stop button while a page is loading
+- Interface animation follows the system Reduce Motion setting
 
 ### Privacy and extensions
 
@@ -61,9 +65,12 @@ Runs on macOS 15 or later, Apple Silicon and Intel.
 
 ### Keyboard
 
-- Every shortcut is rebindable in Settings
-- Defaults include ⌘T for the launcher, ⌘D to bookmark, ⇧⌘B for the bookmarks bar,
-  ⌥⌘B for the bookmark manager, ⌥⌘R for reader mode, ⌥⌘U for view source
+- Aura-defined shortcuts are rebindable in Settings. macOS-owned Quit, Hide and
+  standard Edit commands remain system shortcuts
+- Defaults include ⌘T for the launcher, ⌘L for the address bar and ⌘P to print. In
+  compact mode, ⌘L opens the launcher with the current URL
+- Page shortcuts include per-site zoom, bookmarking, the bookmarks bar, reader mode
+  and view source
 
 ## Updates
 

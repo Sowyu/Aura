@@ -22,7 +22,7 @@ Edit `project.yml` when changing targets, dependencies or build settings, then r
 
 | Change | Start here |
 | --- | --- |
-| Launch, windows and command routing | `aura/App/OraApp.swift`, `aura/App/OraRoot.swift` |
+| Launch, windows and command routing | `aura/App/AuraApp.swift`, `aura/App/AuraRoot.swift` |
 | Tabs, spaces and session restoration | `aura/Features/Tabs/State/`, `aura/Features/Tabs/Models/` |
 | Page loading and native WebKit callbacks | `aura/Core/BrowserEngine/` |
 | Extension APIs and injected request handling | `aura/Features/Extensions/`, `auraWebBundle/` |

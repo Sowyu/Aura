@@ -1,8 +1,38 @@
-# Code audit, 7 September 2026
+# Code audit, September 2026
 
-Status: portable checks and macOS CI passing, including Debug and Release builds.
+Status: the earlier security pass passed macOS CI. The 8 September polish pass is undergoing native regression checks.
 Baseline commit: `73f9b86`. Changes are committed on `audit/native-validation-20260907`.
 No release or deployment was made.
+
+## Polish pass, 8 September
+
+The retained review contains 273 entries, including duplicate reports of the same
+issue. All 268 routed entries now have implementation changes. The remaining five
+cover the Aura rename and documentation. [polish/progress.json](polish/progress.json)
+tracks implementation status separately from validation. The original evidence and
+suggested fixes remain in [polish/packages.json](polish/packages.json).
+
+The pass fixes address and launcher focus, window-scoped commands, tab ordering and
+restore, download feedback, extension update failures and messaging cleanup. Dialogs
+and sidebar panels use shared controls, destructive actions ask for confirmation,
+and animation helpers respect the macOS Reduce Motion setting. Native accessibility
+labels and actions cover rows, pickers and transport buttons.
+
+Chrome types, internal URL helpers, injected script globals and logo assets now use
+Aura names. `OraData.sqlite`, the legacy migration code, frozen SwiftData schemas and
+the readable `ora://` URL alias retain their compatibility identities.
+
+Location requests use the public macOS 27
+[WebKit delegate](https://developer.apple.com/documentation/webkit/wkuidelegate/webview(_:requestgeolocationpermissionfor:initiatedbyframe:decisionhandler:)).
+The explicit Objective-C selector also builds with the Xcode 26 CI SDK. Runtime
+location prompting still needs a macOS 27 check.
+
+The 13 portable bridge tests pass. macOS CI built the renamed application, passed
+the Release launch check and all 27 gated WebKit tests. Four hibernation fixture
+failures in the 681-test suite have corrections queued for a final run.
+No manual VoiceOver, populated-profile UI review, notarization or release is claimed.
+
+## Earlier security and startup validation
 
 The subsequent startup cleanup is validated at `05a12f9` in
 [run 34109366660](https://github.com/Sowyu/Aura/actions/runs/34109366660).
@@ -47,7 +77,7 @@ No visual quality score or whole-browser CPU or memory measurement is claimed.
 
 | Priority | Finding and change | Main files |
 | --- | --- | --- |
-| High | The password bridge and handler shared the website's JavaScript world. They now use an isolated content world. Native messages must originate in that world, in the main frame, at the current web origin. | [BrowserPage.swift](aura/Core/BrowserEngine/BrowserPage.swift), [OraBrowserScripts.swift](aura/Core/BrowserEngine/Scripts/OraBrowserScripts.swift) |
+| High | The password bridge and handler shared the website's JavaScript world. They now use an isolated content world. Native messages must originate in that world, in the main frame, at the current web origin. | [BrowserPage.swift](aura/Core/BrowserEngine/BrowserPage.swift), [AuraBrowserScripts.swift](aura/Core/BrowserEngine/Scripts/AuraBrowserScripts.swift) |
 | High | Authentication could finish after navigation and fill a different document. Each document now creates a random ID. Fill requests must carry it, and the native coordinator rechecks the page, origin, focus, provider and privacy settings after authentication. Synthetic keyboard events cannot activate autofill. | [PasswordAutofillCoordinator.swift](aura/Features/Passwords/Services/PasswordAutofillCoordinator.swift), [password-manager.js](aura/Resources/WebScripts/password-manager.js) |
 | High | A forged `listener` message could supply the displayed address and history URL. The delegate now reads URL and title from its current BrowserPage; the message only triggers a refresh. | [TabBrowserPageDelegate.swift](aura/Features/Tabs/Browser/TabBrowserPageDelegate.swift) |
 | High | A camera/microphone decision covered the registrable domain and its subdomains. Grants now distinguish scheme, host and port. Cancelled prompts cannot later write a grant. Old domain-only grants prompt again because their original origin was never stored. | [SettingsStore+Collections.swift](aura/Core/Utilities/SettingsStore+Collections.swift), [SitePermissionCoordinator.swift](aura/Features/Browser/Permissions/SitePermissionCoordinator.swift) |
@@ -162,7 +192,7 @@ These are remaining work, not claims that the affected paths are safe.
 | Medium | [SettingsBackup](aura/Features/Importer/Services/SettingsBackup.swift) validates property-list compatibility, but not every preference's expected type or allowed range. | Add a preference schema or reject unknown/type-mismatched settings at import. |
 | Medium | The custom blocker relies on private WebKit interfaces and synchronous waits. Removing its invalid cache can increase work. | Exercise the injected bundle tests and measure navigation latency, hangs and extension timeout behavior. |
 | Medium | `Package.resolved` is ignored; several dependencies use minimum-version constraints. Lint tools are also installed without a pinned version. | Produce and retain a reproducible dependency resolution, pin CI tooling, and perform a vulnerability review of the resolved versions. |
-| Accessibility | AnimationSettings reads Aura's preference but does not incorporate macOS's system Reduce Motion preference. No running-app VoiceOver or keyboard audit was possible. | Connect the system preference and test the native controls with VoiceOver and keyboard input. |
+| Accessibility | System Reduce Motion now feeds AnimationSettings. No running-app VoiceOver audit was possible. | Test the native controls with VoiceOver, keyboard input and system accessibility settings. |
 
 Behavior changes to review: old camera/microphone grants ask again, additional
 extension access needs consent, private tabs use default favicons, and full uBlock

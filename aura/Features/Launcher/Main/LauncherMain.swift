@@ -39,6 +39,7 @@ struct LauncherMain: View {
                 onMoveDown: { viewModel.moveFocusedElement(.down) },
                 onEscape: onEscape,
                 placeholder: getPlaceholder(match: match),
+                accessibilityIdentifier: "launcherField",
                 // The modal field keeps focus until the launcher closes.
                 isEditing: true,
                 focusToken: focusToken,

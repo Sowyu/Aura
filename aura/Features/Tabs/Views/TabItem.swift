@@ -84,7 +84,7 @@ struct TabItem: View {
 
     @Environment(\.theme) private var theme
     @State private var isHovering = false
-    @ObservedObject private var rowPointer = TabRowPointer.shared
+    private let rowPointer = TabRowPointer.shared
 
     var body: some View {
         HStack {

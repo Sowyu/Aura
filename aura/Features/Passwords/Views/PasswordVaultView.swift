@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Unlock, search, reveal, copy and delete for the built-in credential vault.
@@ -19,6 +20,7 @@ struct PasswordVaultView: View {
     @StateObject private var passwordManager = PasswordManagerService.shared
 
     @State private var searchText = ""
+    @State private var spaceAnchor: NSView?
     @State private var isUnlocked = false
     @State private var isAuthenticating = false
     @State private var selectedContainerId: UUID?
@@ -133,17 +135,23 @@ struct PasswordVaultView: View {
         HStack {
             Text("Space")
             Spacer()
-            Picker("Space", selection: Binding(
-                get: { selectedContainerId ?? containers.first?.id },
-                set: { selectedContainerId = $0 }
-            )) {
-                ForEach(containers) { container in
-                    Text("\(container.emoji) \(container.name)").tag(Optional(container.id))
-                }
+            AuraButton(
+                label: selectedContainer?.name ?? "Choose space",
+                variant: .secondary,
+                size: .sm,
+                trailingIcon: "chevron.down"
+            ) {
+                spaceAnchor?.presentAuraMenu(containers.map { container in
+                    .item(
+                        "\(container.emoji) \(container.name)",
+                        state: selectedContainer?.id == container.id ? .radioOn : .none
+                    ) {
+                        selectedContainerId = container.id
+                    }
+                })
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(maxWidth: 220, alignment: .trailing)
+            .background(AuraMenuAnchorView { spaceAnchor = $0 })
+            .accessibilityLabel(Text("Space, \(selectedContainer?.name ?? "none")"))
         }
     }
 

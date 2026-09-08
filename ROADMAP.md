@@ -4,9 +4,9 @@ Aura is in active development. This page shows the direction, not an exhaustive 
 tracker. The feature list in [README.md](README.md) is the source of truth for what
 already works.
 
-## Available today
+## Latest release
 
-v1.0 shipped the daily-driver set:
+v1.2.3 is the latest tagged release. It includes:
 
 - Spaces, containers, vertical tabs with folders and pinning, a launcher, rebindable
   shortcuts
@@ -19,6 +19,13 @@ v1.0 shipped the daily-driver set:
 - Reader mode, view source, web archives, full-page screenshots, local files and
   inline PDFs
 - Signed DMG releases with in-app automatic updates
+
+## Current development branch
+
+The September polish work is still under validation and has not been released. It
+adds responsive launcher and address-bar focus, compact-mode ⌘L behavior, native
+Print with ⌘P, a stop-loading control, per-site zoom commands, and system Reduce
+Motion support. It also completes Aura naming across app types and shared controls.
 
 ## Near term
 
@@ -42,4 +49,4 @@ v1.0 shipped the daily-driver set:
 Open an issue to discuss priorities or propose a feature. For the contribution
 workflow, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-_Last updated: August 2026_
+_Last updated: September 2026_

@@ -27,7 +27,7 @@
     const RELAY_BACKGROUND = 'app.aurabrowser.relay.background';
     const RELAY_PAGE = 'app.aurabrowser.relay.page';
     // Bumped when the protocol changes so a stale patched extension is repatched.
-    const SHIM_VERSION = 7;
+    const SHIM_VERSION = 8;
 
     const api = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
     if (!api || globalThis.__auraShimInstalled) { return; }
@@ -243,7 +243,20 @@
         relayPort = opened;
         relayPort.onMessage.addListener(onRelayFrame);
         if (relayPort.onDisconnect) {
-            relayPort.onDisconnect.addListener(() => { relayPort = null; });
+            relayPort.onDisconnect.addListener(() => {
+                if (relayPort !== opened) { return; }
+                relayPort = null;
+                relayQueue.length = 0;
+                // A native disconnect can arrive before the host's final response.
+                // Settle outstanding one-shots and ports even when that reply is lost.
+                for (const resolve of relayReplies.values()) { resolve(null); }
+                relayReplies.clear();
+                for (const entry of relayPorts.values()) {
+                    entry.close();
+                    entry.onDisconnect.fire([entry.port]);
+                }
+                relayPorts.clear();
+            });
         }
         const queued = relayQueue.splice(0, relayQueue.length);
         for (const frame of queued) { relaySend(frame); }

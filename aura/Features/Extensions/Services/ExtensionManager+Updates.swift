@@ -45,16 +45,16 @@ extension ExtensionManager {
         }
     }
 
-    private func adoptUpdateCheck(_ found: [String: String]?) {
+    private func adoptUpdateCheck(_ result: ExtensionUpdates.CheckResult) {
         updateCheckTask = nil
         isCheckingForUpdates = false
-        guard let found else { updateCheckFailed = true
-            return
+        updateCheckFailed = !result.allSucceeded
+        if result.allSucceeded {
+            SettingsStore.shared.extensionUpdateLastCheck = Date()
         }
-        SettingsStore.shared.extensionUpdateLastCheck = Date()
-        // Replaced wholesale: an id that no longer has an update must not keep an offer
-        // from an earlier check, and neither must one that was removed.
-        SettingsStore.shared.extensionAvailableUpdates = found
+        // Successful lookups replace their old offer. Failed lookups keep it until a
+        // retry can say whether it is still current.
+        SettingsStore.shared.extensionAvailableUpdates = result.updates
     }
 
     /// Re-downloads an add-on over its own directory.

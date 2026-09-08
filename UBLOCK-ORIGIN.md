@@ -2,7 +2,7 @@
 
 Status: Track 1 shipped and hardened (2026-08-24); Track 2's two most promising
 levers are in the code behind env switches, awaiting A/B on a real macOS build
-(`HANDOFF-MACOS.md`). Track 3 remains the endgame.
+([AUDIT.md](AUDIT.md)). Track 3 remains the endgame.
 
 ## Status update, 2026-08-24: why the shipped Track 1 presented as broken
 

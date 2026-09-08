@@ -83,7 +83,8 @@ struct ExtensionUpdatesTests {
             return self.addon(version: guid == "old@example.com" ? "1.1" : "3.0")
         }
 
-        #expect(found == ["old": "1.1"])
+        #expect(found.updates == ["old": "1.1"])
+        #expect(found.allSucceeded)
         #expect(asked == ["old@example.com", "current@example.com"], "no id, no listing to ask about")
     }
 
@@ -173,19 +174,41 @@ struct ExtensionUpdatesTests {
             }
             return self.addon(version: "2.0")
         }
-        #expect(found == ["fine": "2.0"])
+        #expect(found.updates == ["fine": "2.0"])
+        #expect(!found.allSucceeded)
 
         // A listing with no version at all says nothing about what is installed.
         let versionless = await ExtensionUpdates.check([self.installed(
             id: "fine", version: "1.0", geckoID: "fine@example.com"
         )]) { _ in self.addon(version: nil) }
-        #expect(versionless?.isEmpty == true)
+        #expect(versionless.updates.isEmpty)
+        #expect(versionless.allSucceeded)
     }
 
     @Test func offlineChecksKeepExistingOffersAndRemainRetryable() async {
         struct Offline: Error {}
         let entries = [installed(id: "one", version: "1", geckoID: "one@example.com")]
         let result = await ExtensionUpdates.check(entries, previous: ["one": "2"]) { _ in throw Offline() }
-        #expect(result == nil)
+        #expect(result.updates == ["one": "2"])
+        #expect(!result.allSucceeded)
+    }
+
+    @Test func partialFailureKeepsTheFailedOfferAndAdoptsSuccessfulResults() async {
+        struct Offline: Error {}
+        let entries = [
+            installed(id: "failed", version: "1", geckoID: "failed@example.com"),
+            installed(id: "updated", version: "1", geckoID: "updated@example.com"),
+            installed(id: "current", version: "2", geckoID: "current@example.com")
+        ]
+        let result = await ExtensionUpdates.check(
+            entries,
+            previous: ["failed": "1.5", "updated": "1.5", "current": "1.5"]
+        ) { guid in
+            if guid == "failed@example.com" { throw Offline() }
+            return self.addon(version: "2")
+        }
+
+        #expect(result.updates == ["failed": "1.5", "updated": "2"])
+        #expect(!result.allSucceeded)
     }
 }

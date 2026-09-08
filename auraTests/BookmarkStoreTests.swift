@@ -221,6 +221,22 @@ struct BookmarkStoreTests {
         #expect(try store.bookmark(for: url("https://example.com/a")) == nil)
     }
 
+    @Test func menuDeletionRequiresConfirmation() throws {
+        let store = try makeStore()
+        let saved = try #require(try store.add(title: "Example", url: url("https://example.com/a")))
+        let dialogs = DialogManager()
+        let items = BookmarkRowMenu.items(for: saved, store: store, open: { _ in }, edit: {}, dialogManager: dialogs)
+        let deletion = try #require(items.first { $0.title == "Delete" })
+        deletion.action?()
+        #expect(store.rootBookmarks.count == 1)
+        let cancelled = try #require(dialogs.dialogs.last)
+        dialogs.dismiss(id: cancelled.id)
+        #expect(store.rootBookmarks.count == 1)
+        deletion.action?()
+        try #require(dialogs.dialogs.last).onConfirm?()
+        #expect(store.rootBookmarks.isEmpty)
+    }
+
     // MARK: - Row menu
 
     /// The menu the bar and the manager share. Named actions rather than a count, so

@@ -137,8 +137,8 @@ whole-browser memory or reopening through the Dock.
 
 The `macos-launch-measurements` artifact includes the hardware and OS, raw logs and
 XCTest result bundles. Runner contention and test instrumentation affect timings.
-The target machine is the user's M5 Pro MacBook on macOS 27; CI hardware and OS are
-recorded separately and cannot predict its launch time.
+CI hardware and OS are recorded with each artifact. Results from those runners do
+not predict launch time on other hardware.
 
 ### Recorded launch results, 7 September 2026
 
@@ -171,10 +171,12 @@ do not establish that the code changes caused this difference. The final revisio
 18.2% variation and different runner OS also prevent attributing its lower time to
 the ownership fix. These are initial measurements, not an instant-launch claim.
 
-The latest native suite also passed the manager-deallocation regression, startup
+The native suite at `05a12f9` also passed the manager-deallocation regression, startup
 selection checks, 659 Swift Testing cases with 17 opt-in skips, two XCTest cases and
 a separate 26-test WebKit run. Fourteen of the skipped opt-in cases run in that
 separate integration pass; three longer performance workloads remain opt-in.
 
-All three jobs in [run 34109366660](https://github.com/Sowyu/Aura/actions/runs/34109366660)
-passed at `05a12f9`, including Debug and Release builds, formatting and lint.
+All three jobs in the historical
+[run 34109366660](https://github.com/Sowyu/Aura/actions/runs/34109366660) passed at
+`05a12f9`, including Debug and Release builds, formatting and lint. Validation for
+the current development branch is pending.

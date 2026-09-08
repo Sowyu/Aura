@@ -143,7 +143,9 @@ final class AppState {
     /// toggling closed under the user's hands.
     var launcherFocusToken = 0
     var addressFocusToken = 0
-    var launcherSearchText: String = ""
+    /// A pending value for the launcher. `nil` means no request; an empty string is a
+    /// valid request from the home page or an empty window.
+    var launcherSearchText: String?
     var showFinderIn: UUID?
     var isFloatingTabSwitchVisible: Bool = false
     var isFullscreen: Bool = false

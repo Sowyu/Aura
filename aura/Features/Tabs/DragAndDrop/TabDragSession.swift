@@ -172,11 +172,12 @@ final class TabDragSession: ObservableObject {
     }
 }
 
+@Observable
 @MainActor
-final class TabRowPointer: ObservableObject {
+final class TabRowPointer {
     static let shared = TabRowPointer()
-    @Published private(set) var pointerOnRow = false
-    @Published var pressedRowID: UUID?
+    private(set) var pointerOnRow = false
+    var pressedRowID: UUID?
     private var hoveredRowID: UUID?
 
     /// Moving from one row to the next can report the new row first, so a row only

@@ -399,12 +399,16 @@ extension AuraRoot {
         [
             WindowEvent(.focusAddressBar, .windowOrKey) { _ in
                 if toolbarManager.isToolbarHidden {
-                    appState.launcherSearchText = tabManager.activeTab?.url
+                    let address = tabManager.activeTab?.url
                         .isAuraHome == true ? "" : (tabManager.activeTab?.url.absoluteString ?? "")
+                    appState.launcherSearchText = address
                     appState.showLauncher = true
                     appState.launcherFocusToken += 1
                 } else {
-                    appState.addressFocusToken += 1
+                    // The launcher is modal. Remove it before its hidden sibling field
+                    // asks AppKit for first responder.
+                    appState.showLauncher = false
+                    DispatchQueue.main.async { appState.addressFocusToken += 1 }
                 }
             },
             WindowEvent(.printPage, .windowOrKey) { _ in PageTools.printPage(tabManager.activeTab) },

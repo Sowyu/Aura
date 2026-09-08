@@ -140,10 +140,18 @@ struct TabHibernationPolicyTests {
         let previous = store.hibernationPreset
         defer { store.hibernationPreset = previous }
 
+        // SwiftData may refault unretained models after save, losing synthetic live-view state.
+        var liveTabs: [Tab] = []
+        defer { withExtendedLifetime((manager, space, liveTabs)) {} }
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         for index in 0 ..< 8 {
             // Older index means longer idle, so index 7 is the freshest.
-            try makeTab(manager, space, index: index, lastAccessedAt: now.addingTimeInterval(-Double(8 - index) * 60))
+            liveTabs.append(try makeTab(
+                manager,
+                space,
+                index: index,
+                lastAccessedAt: now.addingTimeInterval(-Double(8 - index) * 60)
+            ))
         }
 
         store.hibernationPreset = .balanced
@@ -160,9 +168,12 @@ struct TabHibernationPolicyTests {
         defer { store.hibernationPreset = previous }
         store.hibernationPreset = .aggressive
 
+        // SwiftData may refault unretained models after save, losing synthetic live-view state.
+        var liveTabs: [Tab] = []
+        defer { withExtendedLifetime((manager, space, liveTabs)) {} }
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         for index in 0 ..< 4 {
-            try makeTab(manager, space, index: index, lastAccessedAt: now.addingTimeInterval(-3600))
+            liveTabs.append(try makeTab(manager, space, index: index, lastAccessedAt: now.addingTimeInterval(-3600)))
         }
 
         let policy = manager.hibernationPolicy
@@ -180,9 +191,12 @@ struct TabHibernationPolicyTests {
         let previous = store.unloadTabsOnResign
         defer { store.unloadTabsOnResign = previous }
 
+        // SwiftData may refault unretained models after save, losing synthetic live-view state.
+        var liveTabs: [Tab] = []
+        defer { withExtendedLifetime((manager, space, liveTabs)) {} }
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         for index in 0 ..< 3 {
-            try makeTab(manager, space, index: index, lastAccessedAt: now.addingTimeInterval(-3600))
+            liveTabs.append(try makeTab(manager, space, index: index, lastAccessedAt: now.addingTimeInterval(-3600)))
         }
 
         let policy = manager.hibernationPolicy

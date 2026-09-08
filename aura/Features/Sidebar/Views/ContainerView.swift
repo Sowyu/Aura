@@ -163,7 +163,7 @@ struct ContainerView: View {
 }
 
 private struct AuraWindowDragGesture: ViewModifier {
-    @ObservedObject private var pointer = TabRowPointer.shared
+    private let pointer = TabRowPointer.shared
     @ObservedObject private var dragSession = TabDragSession.shared
 
     private var mask: GestureMask {

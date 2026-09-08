@@ -40,11 +40,15 @@ enum ExtensionVersion {
 ///
 /// Only extensions carrying a gecko id can be checked: that id is what AMO knows a
 /// listing by, and an add-on installed from a folder or a .crx has no listing to
-/// compare against. The fetch is injected so the check is testable without the
-/// network, and every failure is per-extension: AMO being unreachable means no
-/// updates were found, never an error in the user's face.
+/// compare against. Failed lookups retain previous offers and keep the batch due
+/// for retry. The fetch is injected for offline tests.
 enum ExtensionUpdates {
     typealias Fetch = (String) async throws -> FirefoxAddon
+
+    struct CheckResult: Equatable, Sendable {
+        let updates: [String: String]
+        let allSucceeded: Bool
+    }
 
     /// How long an answer is good for. Extensions do not ship hourly, and a browser
     /// that talks to AMO on every launch is a browser that talks to AMO too much.
@@ -64,20 +68,27 @@ enum ExtensionUpdates {
     /// nothing newer on AMO are simply absent.
     static func check(
         _ installed: [InstalledExtension], previous: [String: String] = [:], fetch: Fetch
-    ) async -> [String: String]? {
+    ) async -> CheckResult {
         let installedIDs = Set(installed.map(\.id))
         var found = previous.filter { installedIDs.contains($0.key) }
-        var reachedServer = false
+        var allSucceeded = true
         for entry in installed {
-            guard !Task.isCancelled else { break }
+            guard !Task.isCancelled else { allSucceeded = false
+                break
+            }
             guard let geckoID = entry.geckoID, let current = entry.displayVersion else { continue }
-            guard let addon = try? await fetch(geckoID) else { continue }
-            reachedServer = true
+            let addon: FirefoxAddon
+            do {
+                addon = try await fetch(geckoID)
+            } catch {
+                allSucceeded = false
+                continue
+            }
             guard let latest = addon.version else { continue }
             found[entry.id] = nil
             guard ExtensionVersion.isNewer(latest, than: current) else { continue }
             found[entry.id] = latest
         }
-        return reachedServer ? found : nil
+        return CheckResult(updates: found, allSucceeded: allSucceeded)
     }
 }

@@ -1,6 +1,6 @@
 import XCTest
 
-final class OraUITestsLaunchTests: XCTestCase {
+final class AuraUITestsLaunchTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
@@ -24,7 +24,7 @@ final class OraUITestsLaunchTests: XCTestCase {
         // Check a real keyboard action after launch, outside the launch metric.
         XCTAssertTrue(app.windows.firstMatch.exists)
         app.typeKey("t", modifierFlags: .command)
-        let field = app.textFields.firstMatch
+        let field = app.textFields["launcherField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.click()
         app.typeKey("a", modifierFlags: .command)

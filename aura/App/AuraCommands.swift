@@ -29,7 +29,7 @@ struct AuraCommands: Commands {
             }.keyboardShortcut(KeyboardShortcuts.Tabs.new.keyboardShortcut)
 
             Button("Open Location…") {
-                NotificationCenter.default.post(name: .focusAddressBar, object: browserWindow)
+                focusAddressBar()
             }.keyboardShortcut(KeyboardShortcuts.Address.focus.keyboardShortcut)
 
             // MARK: - Open local files
@@ -372,6 +372,14 @@ struct AuraCommands: Commands {
             return
         }
         NotificationCenter.default.post(name: .showLauncher, object: browserWindow)
+    }
+
+    private func focusAddressBar() {
+        guard AppDelegate.browserWindow(in: NSApp.windows) != nil else {
+            _ = WindowFactory.makeMainWindow(rootView: AuraRoot(initialShowLauncher: true))
+            return
+        }
+        NotificationCenter.default.post(name: .focusAddressBar, object: browserWindow)
     }
 
     private func openSettings(_ section: SettingsTab) {

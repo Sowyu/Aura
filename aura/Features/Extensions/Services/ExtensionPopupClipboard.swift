@@ -68,7 +68,7 @@ final class ExtensionPopupClipboard: NSObject, WKScriptMessageHandler {
         function selectedText() {
             var el = document.activeElement;
             if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && typeof el.value === 'string') {
-                return el.value.substring(el.selectionStart, el.selectionEnd) || el.value;
+                return el.value.substring(el.selectionStart, el.selectionEnd);
             }
             var selection = window.getSelection();
             return selection ? selection.toString() : '';
@@ -87,7 +87,11 @@ final class ExtensionPopupClipboard: NSObject, WKScriptMessageHandler {
         var originalExec = document.execCommand.bind(document);
         document.execCommand = function(command) {
             if (command === 'copy' && copy(selectedText())) return true;
-            if (command === 'cut' && copy(selectedText())) return originalExec.apply(document, arguments) || true;
+            if (command === 'cut' && copy(selectedText())) {
+                // The native clipboard command can be denied in a popup; deletion itself
+                // still uses the editor so selection, input events and undo stay native.
+                return originalExec.apply(document, arguments) || originalExec('delete');
+            }
             return originalExec.apply(document, arguments);
         };
 

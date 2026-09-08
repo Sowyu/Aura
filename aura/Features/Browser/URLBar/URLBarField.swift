@@ -204,6 +204,7 @@ struct URLBarField: View {
                     cursorColor: textColor,
                     textColor: isEditing ? textColor : foregroundColor,
                     placeholder: "Search or enter address",
+                    accessibilityIdentifier: "addressField",
                     displayText: displayText,
                     isEditing: isEditing,
                     focusToken: appState.addressFocusToken,

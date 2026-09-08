@@ -11,6 +11,7 @@ struct LauncherTextField: NSViewRepresentable {
     var cursorColor: Color
     var textColor: Color?
     var placeholder: String
+    var accessibilityIdentifier: String?
 
     // URL-bar mode. `displayText` is shown while the field is not focused; focusing
     // swaps in `text`, selects it all, and reports the change through the callbacks.
@@ -152,6 +153,7 @@ struct LauncherTextField: NSViewRepresentable {
         // The field draws no label of its own, and this one view is both the address bar
         // and the launcher, so the placeholder is the only thing that says which.
         textField.setAccessibilityLabel(placeholder.isEmpty ? "Search or enter address" : placeholder)
+        textField.setAccessibilityIdentifier(accessibilityIdentifier)
         if let textColor {
             textField.textColor = NSColor(textColor)
         }
@@ -205,6 +207,7 @@ struct LauncherTextField: NSViewRepresentable {
         nsView.cursorColor = NSColor(cursorColor)
         nsView.placeholderString = placeholder
         nsView.setAccessibilityLabel(placeholder.isEmpty ? "Search or enter address" : placeholder)
+        nsView.setAccessibilityIdentifier(accessibilityIdentifier)
         if let textColor {
             nsView.textColor = NSColor(textColor)
         }

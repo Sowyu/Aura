@@ -160,6 +160,7 @@ final class ExtensionMessageRelay {
         let orphaned = owned.filter { $0.value === port }.map(\.key)
         for portID in orphaned {
             owned.removeValue(forKey: portID)
+            oneShotIDs[extensionID]?.remove(portID)
             sendToBackground(["op": "disconnect", "portId": portID], extensionID: extensionID)
         }
         owners[extensionID] = owned.isEmpty ? nil : owned
@@ -191,6 +192,7 @@ final class ExtensionMessageRelay {
         guard !dead.isEmpty else { return }
         for portID in dead {
             owned.removeValue(forKey: portID)
+            oneShotIDs[extensionID]?.remove(portID)
             sendToBackground(["op": "disconnect", "portId": portID], extensionID: extensionID)
         }
         owners[extensionID] = owned.isEmpty ? nil : owned

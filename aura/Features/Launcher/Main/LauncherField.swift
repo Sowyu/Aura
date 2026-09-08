@@ -16,6 +16,7 @@ struct LauncherField: View {
     /// swallows the key, so SwiftUI's `onExitCommand` never runs and nothing closes.
     var onEscape: (() -> Void)?
     let placeholder: String
+    var accessibilityIdentifier = "homeSearchField"
     var isEditing: Bool?
     /// See `LauncherTextField.focusToken`.
     var focusToken = 0
@@ -85,6 +86,7 @@ struct LauncherField: View {
             cursorColor: match?.color ?? theme.foreground.opacity(0.8),
             textColor: theme.foreground,
             placeholder: placeholder,
+            accessibilityIdentifier: accessibilityIdentifier,
             isEditing: isEditing,
             focusToken: focusToken,
             onEscape: onEscape

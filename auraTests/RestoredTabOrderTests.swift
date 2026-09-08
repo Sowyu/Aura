@@ -44,12 +44,25 @@ struct RestoredTabOrderTests {
         return tab
     }
 
-    /// `closeTab` deletes the row from a main-queue block, so anything asserting on the
-    /// tab list has to let that block run first.
+    /// Let deferred lifecycle callbacks settle before inspecting the model.
     private func settle() async {
         await withCheckedContinuation { continuation in
             DispatchQueue.main.async { continuation.resume() }
         }
+    }
+
+    @Test func batchedCloseReportsEachDeletedTabOnce() throws {
+        let (manager, space) = try makeManager()
+        let first = try makeTab(manager, space, order: 1)
+        let second = try makeTab(manager, space, order: 2)
+        let expected = Set([first.id, second.id])
+        let deleted = [first, second]
+            .flatMap { manager.closeTab(tab: $0, shouldTrackForRestore: false, persist: false) }
+        try manager.modelContext.save()
+        manager.announceDeletedTabs(deleted)
+        #expect(Set(deleted) == expected)
+        #expect(deleted.count == 2)
+        #expect(space.tabs.isEmpty)
     }
 
     @Test func restoringANormalTabPushesFoldersDownTheSameWayItPushesTabs() async throws {

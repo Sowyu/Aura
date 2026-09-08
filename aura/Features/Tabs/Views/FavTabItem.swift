@@ -23,7 +23,7 @@ struct FavTabItem: View {
     @EnvironmentObject var privacyMode: PrivacyMode
 
     @State private var isHovering = false
-    @ObservedObject private var rowPointer = TabRowPointer.shared
+    private let rowPointer = TabRowPointer.shared
 
     var body: some View {
         ZStack {
