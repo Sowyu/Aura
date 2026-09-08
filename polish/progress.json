@@ -24,7 +24,7 @@
     },
     "skeptic-slop-3": {
       "package": "tabs-engine",
-      "status": "pending"
+      "status": "implemented"
     },
     "skeptic-slop-5": {
       "package": "tabs-engine",
@@ -92,7 +92,7 @@
     },
     "engine-7": {
       "package": "tabs-engine",
-      "status": "pending"
+      "status": "implemented"
     },
     "engine-8": {
       "package": "tabs-engine",
@@ -140,7 +140,7 @@
     },
     "extensions-scripts-12": {
       "package": "tabs-engine",
-      "status": "pending"
+      "status": "implemented"
     },
     "onboarding-home-3": {
       "package": "tabs-engine",
@@ -148,7 +148,7 @@
     },
     "onboarding-home-12": {
       "package": "tabs-engine",
-      "status": "pending"
+      "status": "implemented"
     },
     "tabs-state-1": {
       "package": "tabs-engine",
@@ -296,7 +296,7 @@
     },
     "shortcuts-menus-18": {
       "package": "core",
-      "status": "pending"
+      "status": "implemented"
     },
     "shortcuts-menus-19": {
       "package": "core",
@@ -440,11 +440,11 @@
     },
     "panels-11": {
       "package": "panels",
-      "status": "pending"
+      "status": "implemented"
     },
     "panels-12": {
       "package": "panels",
-      "status": "pending"
+      "status": "implemented"
     },
     "panels-13": {
       "package": "panels",
@@ -644,7 +644,7 @@
     },
     "sidebar-15": {
       "package": "sidebar",
-      "status": "pending"
+      "status": "implemented"
     },
     "sidebar-16": {
       "package": "sidebar",
@@ -1004,7 +1004,7 @@
     },
     "settings-12": {
       "package": "settings",
-      "status": "pending"
+      "status": "implemented"
     },
     "settings-13": {
       "package": "settings",
@@ -1012,7 +1012,7 @@
     },
     "settings-14": {
       "package": "settings",
-      "status": "pending"
+      "status": "implemented"
     },
     "settings-15": {
       "package": "settings",
@@ -1036,7 +1036,7 @@
     },
     "extensions-scripts-11": {
       "package": "settings",
-      "status": "pending"
+      "status": "implemented"
     },
     "extensions-scripts-m1": {
       "package": "settings",

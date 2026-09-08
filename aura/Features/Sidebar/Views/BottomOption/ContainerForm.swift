@@ -11,7 +11,6 @@ struct ContainerForm: View {
 
     @Environment(\.theme) private var theme
     @State private var isIconPickerHovering = false
-    @FocusState private var isNameFocused: Bool
 
     private var isEmpty: Bool { iconSymbol == nil && emoji.isEmpty }
 
@@ -20,7 +19,6 @@ struct ContainerForm: View {
             iconPickerButton
             nameTextField
         }
-        .onAppear { isNameFocused = true }
     }
 
     private var iconPickerButton: some View {
@@ -86,9 +84,9 @@ struct ContainerForm: View {
     private var nameTextField: some View {
         OraInput(
             text: $name,
-            placeholder: "e.g. work, streaming, finance...",
-            onSubmit: onSubmit
+            placeholder: "e.g. work, streaming, finance…",
+            onSubmit: onSubmit,
+            autofocus: true
         )
-        .focused($isNameFocused)
     }
 }

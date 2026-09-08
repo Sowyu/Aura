@@ -94,8 +94,6 @@ final class MediaController {
                 idx = 0
             }
             if let wasPlayed = event.wasPlayed { sessions[idx].wasPlayed = wasPlayed }
-//        case "ready":
-            // Session is already ensured in other cases
 
         case "volume":
             if let idx = sessions.firstIndex(where: { $0.tabID == id }), let vol = event.volume {

@@ -28,6 +28,7 @@ extension BrowserPermissionKind {
     /// given the microphone is still asked about the camera.
     var siteKinds: [SitePermissionKind] {
         switch self {
+        case .location: return [.location]
         case .camera: return [.camera]
         case .microphone: return [.microphone]
         case .cameraAndMicrophone: return [.camera, .microphone]

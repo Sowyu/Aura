@@ -30,10 +30,9 @@ struct BrowserOpenPanelOptions {
     let allowsMultipleSelection: Bool
 }
 
-/// What a page asked for. Media capture is the whole list because it is the whole list
-/// WebKit routes through `WKUIDelegate`: geolocation and web notifications have no
-/// public hook, so a page asking for those is answered by WebKit itself.
+/// Permissions WebKit delegates to Aura. Location requests use the macOS 27 hook.
 enum BrowserPermissionKind {
+    case location
     case camera
     case microphone
     case cameraAndMicrophone
@@ -52,7 +51,6 @@ struct BrowserNavigationAction {
     var buttonNumber = 0
     /// A nil target frame means a brand-new frame or window, which counts as main frame.
     var isMainFrame = true
-    /// True for a link click or a form submission, as opposed to a redirect or a reload.
 }
 
 /// Where a clicked link should land. Middle button or command opens a tab behind the

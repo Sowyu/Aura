@@ -75,6 +75,6 @@ implicitly_unwrapped_optional:
 custom_rules:
   no_print_statements:
     name: "No Print Statements"
-    regex: "print\\("
+    regex: "\\bprint\\("
     message: "Use logger instead of print statements"
     severity: error

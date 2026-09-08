@@ -84,6 +84,7 @@ struct TabItem: View {
 
     @Environment(\.theme) private var theme
     @State private var isHovering = false
+    @ObservedObject private var rowPointer = TabRowPointer.shared
 
     var body: some View {
         HStack {
@@ -148,6 +149,8 @@ struct TabItem: View {
     private var backgroundColor: Color {
         if isDragging {
             return theme.activeTabBackground.opacity(0.1)
+        } else if rowPointer.pressedRowID == tab.id {
+            return theme.activeTabBackground.opacity(colorScheme == .dark ? 0.45 : 0.2)
         } else if isSelected {
             return theme.activeTabBackground
         } else if isHovering {
@@ -185,7 +188,7 @@ struct TabItem: View {
                 action: onPinToggle
             )
             AuraMenuItem.item(
-                tab.type == .fav ? "Remove from Favorites" : "Add to Favorites",
+                tab.type == .fav ? "Remove from Favourites" : "Add to Favourites",
                 icon: tab.type == .fav ? "star.slash" : "star",
                 action: onFavoriteToggle
             )

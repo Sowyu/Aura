@@ -826,8 +826,9 @@ final class TabManager {
 
     var orderedTabs: [Tab] {
         guard let container = activeContainer else { return [] }
-        let favorites = container.tabs.filter { $0.type == .fav }.sorted { $0.order > $1.order }
-        let pinned = container.tabs.filter { $0.type == .pinned }.sorted { $0.order > $1.order }
+        let isPrivate = activeTab?.isPrivate ?? container.tabs.first?.isPrivate ?? false
+        let favorites = container.tabs.filter { !isPrivate && $0.type == .fav }.sorted { $0.order > $1.order }
+        let pinned = container.tabs.filter { !isPrivate && $0.type == .pinned }.sorted { $0.order > $1.order }
         let normal = container.tabs.filter { $0.type == .normal && $0.folder == nil }
             .map { (order: $0.order, tabs: [$0]) }
         let folders = container.folders.map { folder in

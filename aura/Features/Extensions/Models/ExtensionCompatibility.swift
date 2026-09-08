@@ -57,7 +57,7 @@ enum ExtensionCompatibility: Equatable {
             // Blocking webRequest is the one gap the user can close, so it gets its
             // own sentence instead of being listed as something WebKit lacks.
             if missing == ["webRequestBlocking"] {
-                return "It blocks requests only with Settings > Privacy > Extension request blocking "
+                return "It blocks requests only with Settings › Privacy > Extension request blocking "
                     + "turned on, which is experimental. Everything else works."
             }
             return "WebKit has no: " + missing.joined(separator: ", ") + ". Everything else works."
@@ -130,7 +130,7 @@ extension ExtensionCompatibility {
                 "Theming the browser chrome is the point of this add-on, and WebKit has no API for it."
             )
         }
-        // Blocking webRequest is available behind Settings > Privacy > Extension request
+        // Blocking webRequest is available behind Settings › Privacy > Extension request
         // blocking. Until that is on, the add-on installs and runs everything else.
         return .partial(missing)
     }

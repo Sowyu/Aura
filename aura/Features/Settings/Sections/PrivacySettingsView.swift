@@ -40,8 +40,8 @@ struct PrivacySettingsView: View {
                 clearScope = .allSpaces
             }
         }
-        // Full uBlock Origin installs from the switch above, and it is not
-        // pre-consented, so this section has to be able to show the sheet.
+        // Bundled uBlock Origin and Lite are pre-consented. Keep the presenter for
+        // other pending installs requested while this section is open.
         .extensionConsentPrompt()
         // A refused sheet has to take the switch back with it. The queue emptying is
         // the only signal that the answer, whichever it was, has landed.
@@ -150,8 +150,7 @@ struct PrivacySettingsView: View {
         return ExtensionManager.shared.optionsPageURL(for: id)
     }
 
-    /// Settings can be a tab or its own window, so the tab has to be asked for by
-    /// notification: only a browser window's root knows how to open one.
+    /// Route the dashboard to a browser window, creating one when none is registered.
     private func openUBlockDashboard() {
         guard let url = uBlockDashboardURL else { return }
         var host: NSWindow?

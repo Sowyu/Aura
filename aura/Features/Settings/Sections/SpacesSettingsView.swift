@@ -58,7 +58,7 @@ struct SpacesSettingsView: View {
                                             set: { settings.setDefaultSearchEngineId($0, for: container.id) }
                                         )
                                     ) {
-                                        Text("Use Global Default").tag(nil as String?)
+                                        Text("Use global default").tag(nil as String?)
                                         Divider()
                                         ForEach(
                                             searchService.searchEngines.filter { !$0.isAIChat },
@@ -84,7 +84,7 @@ struct SpacesSettingsView: View {
                                             set: { settings.setDefaultAIEngineId($0, for: container.id) }
                                         )
                                     ) {
-                                        Text("Use Global Default").tag(nil as String?)
+                                        Text("Use global default").tag(nil as String?)
                                         Divider()
                                         ForEach(
                                             searchService.searchEngines.filter(\.isAIChat),

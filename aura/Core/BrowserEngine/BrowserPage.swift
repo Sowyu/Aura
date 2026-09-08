@@ -719,6 +719,28 @@ final class BrowserPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptM
         }
     }
 
+    // Explicit selector keeps this public macOS 27 hook callable when built with the older CI SDK.
+    // https://developer.apple.com/documentation/webkit/wkuidelegate/webview(_:requestgeolocationpermissionfor:initiatedbyframe:decisionhandler:)
+    @available(macOS 27.0, *)
+    @objc(webView:requestGeolocationPermissionForOrigin:initiatedByFrame:decisionHandler:)
+    func webView(
+        _ webView: WKWebView,
+        requestGeolocationPermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        decisionHandler: @escaping @MainActor @Sendable (WKPermissionDecision) -> Void
+    ) {
+        guard let delegate else { decisionHandler(.deny)
+            return
+        }
+        delegate.browserPage(self, requestPermission: .location, origin: Self.originURL(origin)) { decision in
+            switch decision {
+            case .grant: decisionHandler(.grant)
+            case .deny: decisionHandler(.deny)
+            case .prompt: decisionHandler(.prompt)
+            }
+        }
+    }
+
     /// `WKSecurityOrigin` reports port 0 for a scheme's default port, so the port is
     /// only spelled out when the page really is on an unusual one.
     private static func originURL(_ origin: WKSecurityOrigin) -> URL? {

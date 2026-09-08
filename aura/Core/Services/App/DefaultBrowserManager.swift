@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CoreServices
 
+/// Tracks and requests Aura as the handler for HTTP and HTTPS.
 class DefaultBrowserManager: ObservableObject {
     static let shared = DefaultBrowserManager()
 

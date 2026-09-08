@@ -16,7 +16,7 @@ struct BrowsingSettingsView: View {
                     HStack {
                         Text("Make Aura the default browser.")
                         Spacer()
-                        Button("Set as Default") {
+                        Button("Set as default") {
                             DefaultBrowserManager.requestSetAsDefault()
                             defaultBrowserManager.updateIsDefault()
                         }

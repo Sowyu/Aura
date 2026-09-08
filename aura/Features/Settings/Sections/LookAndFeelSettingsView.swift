@@ -30,7 +30,7 @@ struct LookAndFeelSettingsView: View {
 
 /// Where the window chrome sits, what it shows, and when it gets out of the way. Split
 /// out of Look and Feel: sidebar side and compact mode are layout, not styling. It shares
-/// that file because the app target lists its sources explicitly.
+/// this file with the appearance section because both configure browser chrome.
 struct WindowSettingsView: View {
     @Environment(SidebarManager.self) private var sidebarManager
     @Environment(ToolbarManager.self) private var toolbarManager

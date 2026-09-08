@@ -31,21 +31,7 @@ struct DownloadsHistoryView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 0) {
-            // Match SidebarHeader traffic light spacing when sidebar is primary
-            // (the top toolbar draws them itself when it is visible).
-            if sidebarManager.sidebarPosition != .secondary, !toolbarManager.isRowUp {
-                WindowControls(isFullscreen: appState.isFullscreen)
-                    .frame(height: 30)
-            }
-
-            Text("Downloads")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(theme.foreground)
-                .lineLimit(1)
-
-            Spacer()
-
+        SidebarPanelHeader(title: "Downloads") {
             if hasNonActiveDownloads {
                 Button(action: {
                     downloadManager.clearNonActiveDownloads()
@@ -66,8 +52,6 @@ struct DownloadsHistoryView: View {
                 .animation(AnimationSettings.easeOut(0.1), value: isClearHovered)
             }
         }
-        .padding(.horizontal, 12)
-        .frame(height: 38)
     }
 
     // MARK: - Search Bar
@@ -85,26 +69,7 @@ struct DownloadsHistoryView: View {
 
     // MARK: - Footer
 
-    private var footer: some View {
-        HStack {
-            Button(action: dismissDownloads) {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("Spaces")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundColor(theme.foreground.opacity(0.7))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
-            }
-            .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
-
-            Spacer()
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 16)
-    }
+    private var footer: some View { SidebarPanelFooter() }
 
     // MARK: - Content
 
@@ -255,12 +220,6 @@ struct DownloadsHistoryView: View {
     private var hasNonActiveDownloads: Bool {
         downloadManager.recentDownloads.contains {
             $0.status == .completed || $0.status == .failed || $0.status == .cancelled
-        }
-    }
-
-    private func dismissDownloads() {
-        withAnimation(AnimationSettings.easeOut(0.15)) {
-            sidebarManager.panel = .none
         }
     }
 }

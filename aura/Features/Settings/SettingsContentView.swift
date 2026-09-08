@@ -435,8 +435,7 @@ struct SettingsContentView: View {
         }
     }
 
-    /// Extensions live on `aura://extensions`, not in Settings, so this row leaves the
-    /// window instead of selecting a section. The arrow is what says so.
+    /// Open the extension store in its own tab.
     private var extensionsLinkRow: some View {
         Button(action: ExtensionsSettingsView.openStore) {
             HStack(spacing: 6) {

@@ -66,6 +66,7 @@ final class TabDragSourceRegistry {
             // pointer travel there cancelled the close button's press and dragged
             // the tab instead, which is most of the "close click didn't register".
             if let source = pressedSource(for: event), source.pressArmsDrag(at: event.locationInWindow) {
+                TabRowPointer.shared.pressedRowID = source.rowID
                 pressedView = source
                 pressedPoint = event.locationInWindow
             }
@@ -78,6 +79,7 @@ final class TabDragSourceRegistry {
                 event.locationInWindow.y - pressedPoint.y
             )
             guard moved >= Self.threshold else { return event }
+            TabRowPointer.shared.pressedRowID = nil
             didStart = true
             source.initiateDrag(with: event)
             return nil
@@ -113,6 +115,7 @@ final class TabDragSourceRegistry {
     }
 
     private func reset() {
+        TabRowPointer.shared.pressedRowID = nil
         pressedView = nil
         pressedPoint = nil
         didStart = false
@@ -366,6 +369,9 @@ extension View {
             trailingClickWidth: trailingClickWidth
         ))
         .onHover { TabRowPointer.shared.setPointerOnRow(id, $0) }
-        .onDisappear { TabRowPointer.shared.setPointerOnRow(id, false) }
+        .onDisappear {
+            TabRowPointer.shared.setPointerOnRow(id, false)
+            if TabRowPointer.shared.pressedRowID == id { TabRowPointer.shared.pressedRowID = nil }
+        }
     }
 }

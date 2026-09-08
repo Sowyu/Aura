@@ -23,6 +23,7 @@ struct FavTabItem: View {
     @EnvironmentObject var privacyMode: PrivacyMode
 
     @State private var isHovering = false
+    @ObservedObject private var rowPointer = TabRowPointer.shared
 
     var body: some View {
         ZStack {
@@ -66,7 +67,7 @@ struct FavTabItem: View {
 
     private var contextMenuItems: [AuraMenuItem] {
         Array {
-            AuraMenuItem.item("Remove from Favorites", icon: "star.slash", action: onFavoriteToggle)
+            AuraMenuItem.item("Remove from Favourites", icon: "star.slash", action: onFavoriteToggle)
             AuraMenuItem.item(
                 "Reset to Pinned URL",
                 icon: "arrow.counterclockwise",
@@ -108,7 +109,7 @@ struct FavTabItem: View {
                 ) { containerManager.move(tab, to: $0) }
             )
             // No "Close Tab" here on purpose: a favourite is not closable, it is
-            // removable. ⌘W parks it (reset + unload); "Remove from Favorites" is the
+            // removable. ⌘W parks it (reset + unload); "Remove from Favourites" is the
             // way out of the grid.
         }
     }
@@ -118,6 +119,8 @@ struct FavTabItem: View {
     private var backgroundColor: Color {
         if isDragging {
             return theme.activeTabBackground.opacity(0.1)
+        } else if rowPointer.pressedRowID == tab.id {
+            return theme.activeTabBackground.opacity(colorScheme == .dark ? 0.45 : 0.2)
         } else if isSelected {
             return theme.activeTabBackground
         } else if isHovering {

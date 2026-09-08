@@ -196,6 +196,7 @@ extension ExtensionManager {
                         """)
                     }
                 }
+                actionDidUpdate()
                 if let context = engine.context(for: entry.id) {
                     announceOpenTabs(to: context)
                 }

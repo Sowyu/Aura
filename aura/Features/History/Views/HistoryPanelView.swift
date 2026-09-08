@@ -64,21 +64,7 @@ struct HistoryPanelView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 0) {
-            // Match SidebarHeader traffic light spacing when the sidebar is primary
-            // (the top toolbar draws them itself when it is visible).
-            if sidebarManager.sidebarPosition != .secondary, !toolbarManager.isRowUp {
-                WindowControls(isFullscreen: appState.isFullscreen)
-                    .frame(height: 30)
-            }
-
-            Text("History")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(theme.foreground)
-                .lineLimit(1)
-
-            Spacer()
-
+        SidebarPanelHeader(title: "History") {
             if !items.isEmpty, searchText.isEmpty {
                 Button(action: confirmClearRange) {
                     HStack(spacing: 4) {
@@ -97,8 +83,6 @@ struct HistoryPanelView: View {
                 .help(range == .all ? "Clear all history in this space" : "Clear \(range.title.lowercased())")
             }
         }
-        .padding(.horizontal, 12)
-        .frame(height: 38)
     }
 
     // MARK: - Search and filters
@@ -197,30 +181,7 @@ struct HistoryPanelView: View {
             .padding(.bottom, 4)
     }
 
-    private var footer: some View {
-        HStack {
-            Button {
-                withAnimation(AnimationSettings.easeOut(0.15)) {
-                    sidebarManager.panel = .none
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("Spaces")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundColor(theme.foreground.opacity(0.7))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
-            }
-            .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
-
-            Spacer()
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 16)
-    }
+    private var footer: some View { SidebarPanelFooter() }
 
     // MARK: - Paging
 

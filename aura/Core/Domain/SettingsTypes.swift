@@ -2,10 +2,8 @@ import Foundation
 
 /// A capability a page can ask the browser for.
 ///
-/// Only the media-capture kinds ever reach Aura. WebKit routes camera and microphone
-/// through `WKUIDelegate`; it exposes no public delegate for geolocation or web
-/// notifications, so those two are carried here (the stored blob has always had them)
-/// but nothing asks for them yet.
+/// Camera and microphone are delegated on all supported systems, location on macOS 27.
+/// Notifications remain stored for compatibility but have no public permission hook.
 enum SitePermissionKind: String, CaseIterable, Codable, Sendable, Identifiable {
     case camera
     case microphone
@@ -13,9 +11,6 @@ enum SitePermissionKind: String, CaseIterable, Codable, Sendable, Identifiable {
     case notifications
 
     var id: String { rawValue }
-
-    /// The kinds a prompt can actually be raised for today.
-    static let promptable: [SitePermissionKind] = [.camera, .microphone]
 
     var title: String {
         switch self {

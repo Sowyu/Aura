@@ -71,6 +71,14 @@ struct AuraColorPicker: View {
             )
         }
         .frame(height: Self.squareHeight)
+        .accessibilityRepresentation {
+            VStack {
+                Slider(value: $saturation, in: 0 ... 1) { Text("Saturation") }
+                    .onChange(of: saturation) { _, _ in commit() }
+                Slider(value: $value, in: 0 ... 1) { Text("Brightness") }
+                    .onChange(of: value) { _, _ in commit() }
+            }
+        }
     }
 
     // MARK: - Bars

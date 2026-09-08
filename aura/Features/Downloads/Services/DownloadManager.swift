@@ -171,7 +171,7 @@ final class DownloadManager {
         activeDownloads.removeAll { $0.id == download.id }
         releaseSlot(download.id)
 
-        toastManager?.show("Download failed \(download.fileName)", type: .error)
+        toastManager?.show("Download failed: \(download.fileName)", type: .error)
     }
 
     func cancelDownload(_ download: Download) {
@@ -195,7 +195,7 @@ final class DownloadManager {
         activeDownloads.removeAll { $0.id == download.id }
         releaseSlot(download.id)
 
-        toastManager?.show("Download cancelled \(fileName)", type: .info, icon: .system("xmark.circle"))
+        toastManager?.show("Download cancelled: \(fileName)", type: .info, icon: .system("xmark.circle"))
     }
 
     func handleDownload(_ task: BrowserDownloadTask) {

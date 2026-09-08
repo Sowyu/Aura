@@ -92,7 +92,7 @@ struct SearchEngineSettingsView: View {
                     }
                 }
 
-                // AI Search Engines. No "Set as Default" here: the only default these
+                // AI Search Engines. No "Set as default" here: the only default these
                 // rows could write is `globalDefaultSearchEngine`, which is the plain
                 // search default, so picking ChatGPT sent every ordinary query to it.
                 // The AI default is per space, under Spaces.

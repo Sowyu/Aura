@@ -153,13 +153,10 @@ class SettingsStore {
         didSet { saveCodable(sitePermissions, forKey: sitePermissionsKey) }
     }
 
-    // MARK: - Search
+    // MARK: - Extensions
 
-    /// The floating launcher sits mid-window and slides up when suggestions appear.
-    /// Loads the injected web bundle that gives extensions a blocking `webRequest`.
-    /// Off by default: WebKit runs bundle-hosting pages in its Development WebContent
-    /// service, which cannot take RunningBoard foreground assertions, and the page's
-    /// layers get purged a second after they paint. Takes effect on the next launch.
+    /// On by default. `BundledExtensions.plan(for:)` selects the blocking mode for each
+    /// launch, with a paint probe to detect broken WebKit bundle rendering.
     var extensionRequestBlocking: Bool {
         didSet { defaults.set(extensionRequestBlocking, forKey: extensionRequestBlockingKey) }
     }
@@ -174,14 +171,13 @@ class SettingsStore {
     /// Session-only for the same reason as the flag above.
     var requestBlockingUnavailableReason: String?
 
-    /// Full uBlock Origin instead of the Lite build. Off by default, and not
-    /// pre-consented: full uBO blocks through `webRequest`, which only answers with
-    /// the injected bundle loaded, and that moves every page onto WebKit's Development
-    /// WebContent service. `BundledExtensions.plan(for:)` decides what this means for a
-    /// given launch. Takes effect on the next launch, like the setting above.
+    /// Full uBlock Origin is pre-consented like Lite. Its injected bundle is checked
+    /// at launch before Aura enables request blocking for the session.
     var extensionFullAdBlocking: Bool {
         didSet { defaults.set(extensionFullAdBlocking, forKey: Self.extensionFullAdBlockingKey) }
     }
+
+    // MARK: - Search
 
     /// Blur the window behind the Cmd+T launcher.
     var launcherBlur: Bool {

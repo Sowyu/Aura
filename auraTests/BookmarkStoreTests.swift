@@ -230,7 +230,13 @@ struct BookmarkStoreTests {
         let saved = try #require(try store.add(title: "Example", url: url("https://example.com/a")))
         let work = store.createFolder(named: "Work")
 
-        let items = BookmarkRowMenu.items(for: saved, store: store, open: { _ in }, edit: {})
+        let items = BookmarkRowMenu.items(
+            for: saved,
+            store: store,
+            open: { _ in },
+            edit: {},
+            dialogManager: DialogManager()
+        )
         let titles = items.map(\.title)
         #expect(titles.contains("Open"))
         #expect(titles.contains("Open in New Tab"))
@@ -244,8 +250,14 @@ struct BookmarkStoreTests {
         #expect(move.items.first?.state == .radioOn)
 
         store.setUnread(saved, true)
-        let unreadTitles = BookmarkRowMenu.items(for: saved, store: store, open: { _ in }, edit: {})
-            .map(\.title)
+        let unreadTitles = BookmarkRowMenu.items(
+            for: saved,
+            store: store,
+            open: { _ in },
+            edit: {},
+            dialogManager: DialogManager()
+        )
+        .map(\.title)
         #expect(unreadTitles.contains("Mark as Read"))
     }
 
@@ -256,7 +268,13 @@ struct BookmarkStoreTests {
         let saved = try #require(try store.add(title: "Example", url: url("https://example.com/a")))
         store.createFolder(named: "Work")
 
-        let rows = BookmarkRowMenu.items(for: saved, store: store, open: { _ in }, edit: {})
+        let rows = BookmarkRowMenu.items(
+            for: saved,
+            store: store,
+            open: { _ in },
+            edit: {},
+            dialogManager: DialogManager()
+        )
         for icon in (rows + rows.flatMap(\.items)).compactMap(\.icon) {
             #expect(
                 NSImage(systemSymbolName: icon, accessibilityDescription: nil) != nil,
