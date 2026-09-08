@@ -1,6 +1,6 @@
 # Code audit, September 2026
 
-Status: the earlier security pass passed macOS CI. The 8 September polish pass is undergoing native regression checks.
+Status: the 8 September polish pass passed macOS CI at `554bf6e`.
 Baseline commit: `73f9b86`. Changes are committed on `audit/native-validation-20260907`.
 No release or deployment was made.
 
@@ -27,9 +27,13 @@ Location requests use the public macOS 27
 The explicit Objective-C selector also builds with the Xcode 26 CI SDK. Runtime
 location prompting still needs a macOS 27 check.
 
-The 13 portable bridge tests pass. macOS CI built the renamed application, passed
-the Release launch check and all 27 gated WebKit tests. Four hibernation fixture
-failures in the 681-test suite have corrections queued for a final run.
+At `554bf6e`, the 13 portable bridge tests pass. The native suite reports 684 Swift
+Testing cases with 17 opt-in skips, plus two passing XCTest cases. The separate
+27-test WebKit run covers 14 of those skipped cases; three performance workloads
+remain opt-in. Debug and Release builds, lint, formatting and the Release launch
+UI test also pass. All three jobs passed in
+[run 34173768812](https://github.com/Sowyu/Aura/actions/runs/34173768812).
+SwiftLint reports 151 warnings and no serious violations.
 No manual VoiceOver, populated-profile UI review, notarization or release is claimed.
 
 ## Earlier security and startup validation
@@ -43,7 +47,7 @@ launch samples and their limits; [CONTRIBUTING.md](CONTRIBUTING.md) covers setup
 code locations and the commands to repeat the checks.
 
 The subsequent [performance pass](PERFORMANCE.md) records reduced bridge work and
-native changes awaiting profiling. The portable suite now contains ten tests.
+native changes awaiting profiling. The portable suite now contains 13 tests.
 The macOS runs caught a generic static-property compile error, formatting failures,
 test window ownership errors and use of WebKit's callback overload where the test
 needed its async result. Those fixes are included on the branch.

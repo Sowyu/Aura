@@ -178,5 +178,10 @@ separate integration pass; three longer performance workloads remain opt-in.
 
 All three jobs in the historical
 [run 34109366660](https://github.com/Sowyu/Aura/actions/runs/34109366660) passed at
-`05a12f9`, including Debug and Release builds, formatting and lint. Validation for
-the current development branch is pending.
+`05a12f9`, including Debug and Release builds, formatting and lint.
+
+The 8 September polish revision, `554bf6e`, passes the Release launch UI test in
+[run 34173768812](https://github.com/Sowyu/Aura/actions/runs/34173768812). Its five warm
+launches average 0.852 seconds with 12.5% relative standard deviation. This run has
+no same-run baseline, so it does not establish a speedup. The keyboard interaction
+check after launch also passes.

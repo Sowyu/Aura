@@ -22,10 +22,11 @@ v1.2.3 is the latest tagged release. It includes:
 
 ## Current development branch
 
-The September polish work is still under validation and has not been released. It
-adds responsive launcher and address-bar focus, compact-mode ⌘L behavior, native
-Print with ⌘P, a stop-loading control, per-site zoom commands, and system Reduce
-Motion support. It also completes Aura naming across app types and shared controls.
+The September polish work passed
+[macOS CI](https://github.com/Sowyu/Aura/actions/runs/34173768812) and has not been
+released. It adds responsive launcher and address-bar focus, compact-mode ⌘L
+behavior, native Print with ⌘P, a stop-loading control, per-site zoom commands, and
+system Reduce Motion support. It also completes Aura naming across app types and shared controls.
 
 ## Near term
 

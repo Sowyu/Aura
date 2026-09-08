@@ -2,8 +2,13 @@
   "base": "acf8501",
   "validation": {
     "local": "13 bridge tests pass",
-    "macosRun": 34173100882,
-    "status": "Renamed app and Release launch test pass; 27 gated WebKit tests pass. Native suite: 681 tests, four hibernation fixture failures; fixture lifetimes corrected for rerun."
+    "macosRun": 34173768812,
+    "codeCommit": "554bf6e6f499113e3f88ec549bc013bceeb3f140",
+    "status": "All three jobs passed: Debug and Release builds, lint, formatting, native suite (684 Swift Testing cases with 17 opt-in skips and two XCTest cases), 27 gated WebKit tests, and Release launch UI test. Fourteen skipped cases run in the gated pass; three performance workloads remain opt-in.",
+    "manualRemaining": [
+      "VoiceOver and populated-profile UI review",
+      "macOS 27 location prompt runtime check"
+    ]
   },
   "findings": {
     "settings-4": {
