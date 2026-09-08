@@ -142,6 +142,7 @@ final class AppState {
     /// already up, so the field asks for first responder again instead of the panel
     /// toggling closed under the user's hands.
     var launcherFocusToken = 0
+    var addressFocusToken = 0
     var launcherSearchText: String = ""
     var showFinderIn: UUID?
     var isFloatingTabSwitchVisible: Bool = false

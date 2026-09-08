@@ -114,7 +114,7 @@ struct AuraMenuPanel: View {
         }
     }
 
-    private func symbol(_ name: String, size: CGFloat = 12.5) -> some View {
+    private func symbol(_ name: String, size: CGFloat = 13) -> some View {
         Image(systemName: name)
             .font(.system(size: size))
             .frame(width: AuraMenuMetrics.iconSize, height: AuraMenuMetrics.iconSize)

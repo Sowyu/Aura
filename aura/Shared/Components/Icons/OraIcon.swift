@@ -40,16 +40,8 @@ enum OraIconType {
     case star
     case circle
     case spaceCards
-    case spaceCardsDelete
-    case spaceCardsEdit
-    case autofill
     case copy
     case brush1
-    case brush2
-    case downloadBox
-    case downloadBox2
-    case shieldLock
-    case shieldBan
     case custom(AnyOraShape)
 
     var shape: AnyOraShape {
@@ -57,16 +49,8 @@ enum OraIconType {
         case .star:             AnyOraShape(StarIcon())
         case .circle:           AnyOraShape(Circle())
         case .spaceCards:       AnyOraShape(SpaceCardsIcon())
-        case .spaceCardsDelete: AnyOraShape(SpaceCardsDeleteIcon())
-        case .spaceCardsEdit:   AnyOraShape(SpaceCardsEditIcon())
-        case .autofill:         AnyOraShape(AutofillIcon())
         case .copy:             AnyOraShape(CopyIcon())
         case .brush1:           AnyOraShape(Brush1())
-        case .brush2:           AnyOraShape(Brush2())
-        case .downloadBox:      AnyOraShape(DownloadBox())
-        case .downloadBox2:     AnyOraShape(DownloadBox2())
-        case .shieldLock:       AnyOraShape(ShieldLockIcon())
-        case .shieldBan:        AnyOraShape(ShieldBanIcon())
         case let .custom(shape): shape
         }
     }

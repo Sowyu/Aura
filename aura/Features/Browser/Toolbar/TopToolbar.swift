@@ -156,12 +156,14 @@ struct TopToolbar: View {
 
     private var historyGroup: some View {
         HStack(spacing: Self.groupSpacing) {
-            toolbarButton(
-                .reload,
-                isEnabled: tabManager.activeTab != nil,
-                action: { tabManager.activeTab?.reload() }
-            )
-            .oraShortcutHelp("Reload This Page", for: KeyboardShortcuts.Navigation.reload)
+            if tabManager.activeTab?.isLoading == true {
+                toolbarButton("xmark", isEnabled: true) { tabManager.activeTab?.browserPage?.stopLoading() }
+                    .help("Stop loading")
+                    .accessibilityLabel(Text("Stop loading"))
+            } else {
+                toolbarButton(.reload, isEnabled: tabManager.activeTab != nil) { tabManager.activeTab?.reload() }
+                    .oraShortcutHelp("Reload This Page", for: KeyboardShortcuts.Navigation.reload)
+            }
 
             HStack(spacing: Self.pairSpacing) {
                 historyMenu
@@ -279,7 +281,9 @@ struct TopToolbar: View {
             historyAnchor?.presentAuraMenu(historyItems())
         } label: {
             ToolbarIconView(icon: .history)
-                .foregroundColor(buttonForegroundColor.opacity(URLBarButton.enabledOpacity))
+                .foregroundColor(buttonForegroundColor
+                    .opacity(extensionManager.isActionReady(for: item.id) ? URLBarButton.enabledOpacity : URLBarButton
+                        .disabledOpacity))
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .contentShape(Rectangle())
         }
@@ -358,6 +362,7 @@ private struct UpdatePill: View {
             }
             .buttonStyle(.interactive(cornerRadius: URLBarButton.cornerRadius, tint: theme.accent))
             .disabled(updateService.phase.buttonAction == .busy)
+            .opacity(updateService.phase.buttonAction == .busy ? 0.5 : 1)
             .help(title)
             .accessibilityLabel(Text(title))
         }
@@ -406,13 +411,17 @@ private struct ExtensionIconButton: View {
             icon
                 // The one muting the rest of the row carries, applied to the extension's
                 // own artwork as well as the fallback glyph.
-                .opacity(URLBarButton.enabledOpacity)
+                .opacity(extensionManager.isActionReady(for: item.id) ? URLBarButton.enabledOpacity : URLBarButton
+                    .disabledOpacity)
                 .frame(width: TopToolbar.buttonSize, height: TopToolbar.buttonSize)
                 .overlay(alignment: .topTrailing) { badge }
         }
         .buttonStyle(.interactive(cornerRadius: URLBarButton.cornerRadius, tint: foregroundColor))
         .background(ExtensionActionAnchor { anchor = $0 })
-        .help(item.displayName)
+        .disabled(!extensionManager.isActionReady(for: item.id))
+        .help(item.loadError
+            .map { "\(item.displayName): \($0)" } ??
+            (extensionManager.isActionReady(for: item.id) ? item.displayName : "\(item.displayName): loading"))
         .accessibilityLabel(Text(item.displayName))
     }
 
@@ -426,7 +435,8 @@ private struct ExtensionIconButton: View {
 
     private func liveBadgeText() -> String? {
         _ = extensionManager.actionRevision
-        return extensionManager.actionBadgeText(for: item.id)
+        guard let text = extensionManager.actionBadgeText(for: item.id) else { return nil }
+        return text.count > 4 ? "999+" : text
     }
 
     @ViewBuilder private var icon: some View {
@@ -450,8 +460,9 @@ private struct ExtensionIconButton: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 3)
                 .padding(.vertical, 0.5)
+                .lineLimit(1)
+                .frame(maxWidth: 22)
                 .background(Capsule().fill(theme.accent))
-                .fixedSize()
                 .offset(x: 4, y: -2)
         }
     }

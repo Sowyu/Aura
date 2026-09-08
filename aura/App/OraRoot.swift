@@ -131,6 +131,18 @@ struct OraRoot: View {
                 )
                 recordStoreFailure(error, attempt: attempt)
                 guard StoreOpenFailure.action(for: attempt) == .retry else {
+                    if !isPrivate {
+                        let alert = NSAlert()
+                        alert.messageText = "Aura could not open your browsing data"
+                        alert.informativeText = "Your data is still on disk. Quit Aura and try again. \(reason)"
+                        alert.addButton(withTitle: "Quit")
+                        alert.addButton(withTitle: "Reveal error file")
+                        if alert.runModal() == .alertSecondButtonReturn {
+                            NSWorkspace.shared.activateFileViewerSelecting([
+                                URL.applicationSupportDirectory.appending(path: "Aura/last-store-error.txt")
+                            ])
+                        }
+                    }
                     fatalError("Failed to initialize ModelContainer: \(error)")
                 }
                 attempt += 1
@@ -385,6 +397,17 @@ extension OraRoot {
     /// run inline on the notification's main-queue delivery.
     fileprivate var events: [WindowEvent] {
         [
+            WindowEvent(.focusAddressBar, .windowOrKey) { _ in
+                if toolbarManager.isToolbarHidden {
+                    appState.launcherSearchText = tabManager.activeTab?.url
+                        .isOraHome == true ? "" : (tabManager.activeTab?.url.absoluteString ?? "")
+                    appState.showLauncher = true
+                    appState.launcherFocusToken += 1
+                } else {
+                    appState.addressFocusToken += 1
+                }
+            },
+            WindowEvent(.printPage, .windowOrKey) { _ in PageTools.printPage(tabManager.activeTab) },
             WindowEvent(.copyAddressURL, .windowOrKey) { _ in
                 if let tab = tabManager.activeTab {
                     ClipboardUtils.copyWithToast(tab.url.absoluteString, toastManager: toastManager)

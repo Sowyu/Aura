@@ -14,6 +14,16 @@ struct PolishRegressionTests {
         }
     }
 
+    @Test func internalPagesHaveNoSitePermissionsOrSecurityWarning() {
+        for address in ["aura://home", "file:///tmp/page.html", "about:blank", "data:text/plain,test"] {
+            let url = URL(string: address)!
+            #expect(!SiteInfoSummary.hasSite(url))
+            #expect(SiteInfoSummary.securitySymbol(for: url) == "globe")
+        }
+        #expect(SiteInfoSummary.securitySymbol(for: URL(string: "http://example.com")!) == "exclamationmark.triangle")
+        #expect(SiteInfoSummary.securitySymbol(for: URL(string: "https://example.com")!) == "lock.shield")
+    }
+
     @Test func searchTemplatesRequireAWebHostAndQuery() {
         #expect(CustomSearchEngine.isValidTemplate("https://example.com/?q={query}"))
         for invalid in ["example.com/{query}", "javascript:{query}", "https:///", "https://example.com/"] {

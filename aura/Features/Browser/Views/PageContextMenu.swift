@@ -30,13 +30,23 @@ struct PageContextMenu {
 
     private var navigationItems: [AuraMenuItem] {
         [
-            .item("Back", icon: "chevron.left", shortcut: "⌘[", isDisabled: !page.canGoBack) {
+            .item(
+                "Back",
+                icon: "chevron.left",
+                shortcut: KeyboardShortcuts.Navigation.back,
+                isDisabled: !page.canGoBack
+            ) {
                 page.goBack()
             },
-            .item("Forward", icon: "chevron.right", shortcut: "⌘]", isDisabled: !page.canGoForward) {
+            .item(
+                "Forward",
+                icon: "chevron.right",
+                shortcut: KeyboardShortcuts.Navigation.forward,
+                isDisabled: !page.canGoForward
+            ) {
                 page.goForward()
             },
-            .item("Reload", icon: "arrow.clockwise", shortcut: "⌘R") { page.reload() }
+            .item("Reload", icon: "arrow.clockwise", shortcut: KeyboardShortcuts.Navigation.reload) { page.reload() }
         ]
     }
 
@@ -95,7 +105,12 @@ struct PageContextMenu {
             .item("Copy", icon: "doc.on.doc", shortcut: "⌘C", isDisabled: !info.hasSelection) {
                 sendToPage(#selector(NSText.copy(_:)))
             },
-            .item("Paste", icon: "doc.on.clipboard", shortcut: "⌘V") {
+            .item(
+                "Paste",
+                icon: "doc.on.clipboard",
+                shortcut: "⌘V",
+                isDisabled: NSPasteboard.general.pasteboardItems?.isEmpty ?? true
+            ) {
                 sendToPage(#selector(NSText.paste(_:)))
             },
             .item("Select All", icon: "selection.pin.in.out", shortcut: "⌘A") {
@@ -109,23 +124,30 @@ struct PageContextMenu {
             SpaceMenuItems.alwaysOpen(url: tab.url, in: tab.container)
             reopenInSpaceItems
             AuraMenuItem.separator
-            AuraMenuItem.item("Reader", icon: "doc.plaintext", shortcut: "⌥⌘R", isDisabled: !isPageToolAvailable) {
+            AuraMenuItem.item(
+                "Reader",
+                icon: "doc.plaintext",
+                shortcut: KeyboardShortcuts.Page.reader,
+                isDisabled: !isPageToolAvailable
+            ) {
                 PageTools.reader(for: tab)
             }
             AuraMenuItem.item(
                 "View Source",
                 icon: "chevron.left.forwardslash.chevron.right",
-                shortcut: "⌥⌘U",
+                shortcut: KeyboardShortcuts.Page.source,
                 isDisabled: !isPageToolAvailable
             ) {
                 PageTools.viewSource(for: tab)
             }
             AuraMenuItem.separator
-            AuraMenuItem.item("Save Page As…", icon: "square.and.arrow.down", shortcut: "⇧⌘S") {
+            AuraMenuItem.item("Save Page As…", icon: "square.and.arrow.down", shortcut: KeyboardShortcuts.Page.save) {
                 PageTools.savePageAs(tab)
             }
             AuraMenuItem.item("Save Screenshot…", icon: "camera") { PageTools.saveScreenshot(tab) }
-            AuraMenuItem.item("Print…", icon: "printer", shortcut: "⌘P") { page.printPage() }
+            AuraMenuItem
+                .item("Print…", icon: "printer", shortcut: KeyboardShortcuts.Page.printPage) { PageTools.printPage(tab)
+                }
             if let inspectElement {
                 AuraMenuItem.separator
                 // WebKit exposes no public inspector API, so this fires the one native menu

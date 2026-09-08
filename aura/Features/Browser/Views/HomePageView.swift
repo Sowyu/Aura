@@ -165,7 +165,9 @@ struct HomePageView: View {
                 input = ""
                 viewModel.reset()
             },
-            placeholder: "Search or enter address",
+            placeholder: LauncherField
+                .placeholder(engineName: viewModel.searchEngineService
+                    .getDefaultSearchEngine(for: tabManager.activeContainer?.id)?.name),
             // `true` asks for focus, `nil` leaves focus alone. A permanent `true`
             // would yank first responder back every time the view updated.
             isEditing: focusRequest ? true : nil,

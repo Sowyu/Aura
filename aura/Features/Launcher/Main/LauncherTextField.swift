@@ -129,16 +129,6 @@ struct LauncherTextField: NSViewRepresentable {
             }
             allowsFocus = true
             window.makeFirstResponder(self)
-            // `NSTextFieldCell` installs the field editor with the click that focused the
-            // field, and that drops the caret where the pointer is — undoing the
-            // `selectAll` in `becomeFirstResponder`. Re-select once that has settled.
-            DispatchQueue.main.async { [weak self] in
-                guard let self, currentEditor() != nil else { return }
-                // The button is still down: this is a drag, and the user is choosing a
-                // range. Selecting all here threw that selection away mid-gesture.
-                guard NSEvent.pressedMouseButtons == 0 else { return }
-                currentEditor()?.selectAll(nil)
-            }
         }
     }
 
@@ -171,6 +161,15 @@ struct LauncherTextField: NSViewRepresentable {
     func updateNSView(_ nsView: CustomTextField, context: Context) {
         context.coordinator.parent = self
         let focused = nsView.currentEditor() != nil
+        if isEditing == true, context.coordinator.lastFocusToken != focusToken {
+            context.coordinator.lastFocusToken = focusToken
+            DispatchQueue.main.async {
+                guard nsView.wantsFocus else { return }
+                nsView.allowsFocus = true
+                nsView.window?.makeFirstResponder(nsView)
+                nsView.currentEditor()?.selectAll(nil)
+            }
+        }
         let wanted = (displayText == nil || focused) ? text : (displayText ?? "")
         // Launcher and home-page fields have no display mode; they take focus freely.
         if displayText == nil { nsView.allowsFocus = true }
@@ -215,6 +214,7 @@ struct LauncherTextField: NSViewRepresentable {
     class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: LauncherTextField
         var isProgrammaticUpdate = false
+        var lastFocusToken: Int?
 
         init(_ parent: LauncherTextField) {
             self.parent = parent

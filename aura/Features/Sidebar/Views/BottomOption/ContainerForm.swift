@@ -29,7 +29,7 @@ struct ContainerForm: View {
             isIconPickerOpen.toggle()
         }) {
             ZStack {
-                RoundedRectangle(cornerRadius: ContainerConstants.UI.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: AuraRadius.row, style: .continuous)
                     .stroke(
                         theme.border,
                         style: isEmpty
@@ -42,7 +42,7 @@ struct ContainerForm: View {
                     )
                     .background(isIconPickerHovering ? theme.mutedBackground.opacity(0.8)
                         : theme.mutedBackground)
-                    .cornerRadius(ContainerConstants.UI.cornerRadius)
+                    .cornerRadius(AuraRadius.row)
 
                 if isEmpty {
                     Image(systemName: "plus")
@@ -60,8 +60,8 @@ struct ContainerForm: View {
             )
         }
         .frame(width: ContainerConstants.UI.emojiButtonSize, height: ContainerConstants.UI.emojiButtonSize)
-        .cornerRadius(ContainerConstants.UI.cornerRadius)
-        .buttonStyle(InteractiveButtonStyle(cornerRadius: ContainerConstants.UI.cornerRadius, hoverOpacity: 0))
+        .cornerRadius(AuraRadius.row)
+        .buttonStyle(InteractiveButtonStyle(cornerRadius: AuraRadius.row, hoverOpacity: 0))
         .accessibilityLabel(Text("Choose Space Icon"))
         .onHover { isIconPickerHovering = $0 }
         .animation(AnimationSettings.easeOut(0.1), value: isIconPickerHovering)

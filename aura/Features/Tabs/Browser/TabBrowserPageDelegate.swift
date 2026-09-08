@@ -530,7 +530,7 @@ final class TabBrowserPageDelegate: BrowserPageDelegate {
 
         page
             .takeSnapshot(configuration: HeaderColorSnapshot
-                .configuration(for: bounds.size)) { [weak self] image, error in
+                .configuration) { [weak self] image, error in
                     guard let self, let image, error == nil else { return }
                     guard let full = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
                     let strip = HeaderColorSnapshot.stripRect(

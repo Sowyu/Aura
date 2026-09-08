@@ -403,6 +403,12 @@ final class ExtensionManager {
 
     /// The action's current icon, which follows `browser.action.setIcon` and
     /// falls back to the manifest icon. Nil until the extension has loaded.
+    func isActionReady(for extensionID: String) -> Bool {
+        _ = actionRevision
+        guard #available(macOS 15.4, *) else { return false }
+        return loadedEngine?.context(for: extensionID) != nil
+    }
+
     func actionIcon(for extensionID: String, size: CGSize) -> NSImage? {
         guard #available(macOS 15.4, *), let context = loadedEngine?.context(for: extensionID) else { return nil }
         return context.action(for: currentTabAdapter(for: extensionID))?.icon(for: size)

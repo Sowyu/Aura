@@ -28,6 +28,10 @@ struct OraCommands: Commands {
                 showLauncher()
             }.keyboardShortcut(KeyboardShortcuts.Tabs.new.keyboardShortcut)
 
+            Button("Open Location…") {
+                NotificationCenter.default.post(name: .focusAddressBar, object: browserWindow)
+            }.keyboardShortcut(KeyboardShortcuts.Address.focus.keyboardShortcut)
+
             // MARK: - Open local files
 
             Button("Open File\u{2026}") {
@@ -301,6 +305,23 @@ struct OraCommands: Commands {
         // twelve top-level entries compile on SDKs with variadic builders and fail
         // on ones without, and CI's pinned Xcode is one of the latter.
         Group {
+            CommandGroup(replacing: .help) {
+                Button("Aura Help") {
+                    if AppDelegate.browserWindow(in: NSApp.windows) == nil {
+                        WindowFactory.openWindow(with: PageTools.helpURL)
+                    } else {
+                        NotificationCenter.default.post(
+                            name: .openURL,
+                            object: browserWindow,
+                            userInfo: ["url": PageTools.helpURL]
+                        )
+                    }
+                }
+            }
+            CommandGroup(replacing: .printItem) {
+                Button("Print…") { NotificationCenter.default.post(name: .printPage, object: browserWindow) }
+                    .oraShortcut(KeyboardShortcuts.Page.printPage)
+            }
             CommandMenu("History") {
                 Button("Show All History") {
                     NotificationCenter.default.post(name: .showHistoryPanel, object: browserWindow)

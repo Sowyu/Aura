@@ -32,14 +32,11 @@ struct URLBarButton: View {
 
     /// Set when a hold fired. The release that ends the hold still reaches the button, so
     /// exactly that one click is swallowed rather than also navigating.
-    @State private var didLongPress = false
+    @State private var lastLongPress = Date.distantPast
 
     var body: some View {
         Button {
-            guard !didLongPress else {
-                didLongPress = false
-                return
-            }
+            guard Date().timeIntervalSince(lastLongPress) > Self.longPressDuration else { return }
             action()
         } label: {
             content
@@ -51,7 +48,7 @@ struct URLBarButton: View {
         .simultaneousGesture(
             LongPressGesture(minimumDuration: Self.longPressDuration).onEnded { _ in
                 guard let longPressAction else { return }
-                didLongPress = true
+                lastLongPress = Date()
                 longPressAction()
             }
         )

@@ -80,7 +80,7 @@ struct LauncherMain: View {
             let engine = viewModel.searchEngineService.getDefaultSearchEngine(
                 for: viewModel.tabManager?.activeContainer?.id
             )
-            return "Search with \(engine?.name ?? "Google") or enter address"
+            return LauncherField.placeholder(engineName: engine?.name)
         }
 
         if let engine = viewModel.searchEngineService.getSearchEngine(byName: match.text) {

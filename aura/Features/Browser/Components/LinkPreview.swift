@@ -4,11 +4,6 @@ struct LinkPreview: View {
     let text: String
     @Environment(\.theme) private var theme
 
-    private func getAppVersion() -> String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        return "Aura \(version)"
-    }
-
     var body: some View {
         VStack {
             Spacer()
@@ -33,23 +28,14 @@ struct LinkPreview: View {
                 )
 
                 Spacer()
-
-                Text(getAppVersion())
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.foreground)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: AuraRadius.button, style: .continuous)
-                            .fill(theme.mutedBackground)
-                    )
-                    .padding(.trailing, 12)
             }
             .padding(.bottom, 8)
             .padding(.leading, 8)
         }
         .transition(.opacity)
         .animation(AnimationSettings.easeOut(0.1), value: text)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
         .zIndex(900)
     }
 }

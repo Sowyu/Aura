@@ -1,6 +1,8 @@
 import Foundation
 
 extension Notification.Name {
+    static let focusAddressBar = Notification.Name("FocusAddressBar")
+    static let printPage = Notification.Name("PrintPage")
     static let toggleSidebar = Notification.Name("ToggleSidebar")
     static let toggleSidebarPosition = Notification.Name("ToggleSidebarPosition")
     static let copyAddressURL = Notification.Name("CopyAddressURL")

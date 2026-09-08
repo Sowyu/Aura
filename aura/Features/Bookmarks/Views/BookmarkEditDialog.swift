@@ -14,7 +14,7 @@ struct BookmarkEditDialog: View {
 
     var body: some View {
         BookmarkDialogCard(width: Self.width, heading: "Edit Bookmark") {
-            OraInput(text: $title, placeholder: "Title", label: "Title", onSubmit: save)
+            OraInput(text: $title, placeholder: "Title", label: "Title", onSubmit: save, autofocus: true)
             OraInput(text: $urlString, placeholder: "https://", label: "Address", onSubmit: save)
         } footer: {
             OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
@@ -55,7 +55,7 @@ struct BookmarkFolderDialog: View {
             width: Self.width,
             heading: folder == nil ? "New Folder" : "Rename Folder"
         ) {
-            OraInput(text: $name, placeholder: "Folder name", label: "Name", onSubmit: save)
+            OraInput(text: $name, placeholder: "Folder name", label: "Name", onSubmit: save, autofocus: true)
         } footer: {
             OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
             Spacer()
@@ -95,7 +95,7 @@ private struct BookmarkDialogCard<Fields: View, Footer: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(heading)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundColor(theme.foreground)
 
             VStack(alignment: .leading, spacing: 10) {
@@ -107,14 +107,14 @@ private struct BookmarkDialogCard<Fields: View, Footer: View>: View {
         .frame(width: width)
         .padding(12)
         .background(theme.popoverMutedBackground)
-        .cornerRadius(11)
+        .cornerRadius(AuraRadius.row)
         .overlay {
-            ConditionallyConcentricRectangle(cornerRadius: 11)
+            ConditionallyConcentricRectangle(cornerRadius: AuraRadius.row)
                 .stroke(theme.border, lineWidth: 0.5)
         }
         .padding(3)
         .background(theme.popoverBackground)
-        .cornerRadius(14)
-        .shadow(color: .black.opacity(0.25), radius: 20, y: 8)
+        .cornerRadius(AuraRadius.pane)
+        .auraFloatingShadow()
     }
 }

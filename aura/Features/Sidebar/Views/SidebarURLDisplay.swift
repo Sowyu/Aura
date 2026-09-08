@@ -38,11 +38,10 @@ struct SidebarURLDisplay: View {
                             .scaleEffect(0.5)
                             .frame(width: 12, height: 12)
                     } else {
-                        if tab.url.scheme != "https" {
-                            Image(systemName: "shield.slash")
-                                .font(.system(size: 12))
-                                .foregroundColor(theme.mutedForeground)
-                        }
+                        Image(systemName: SiteInfoSummary.securitySymbol(for: tab.url))
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.mutedForeground)
+                            .accessibilityHidden(true)
                     }
 
                     ZStack(alignment: .leading) {
@@ -112,17 +111,6 @@ struct SidebarURLDisplay: View {
         .background(
             ConditionallyConcentricRectangle(cornerRadius: 10, style: .continuous)
                 .fill(theme.invertedSolidWindowBackgroundColor.opacity(isHovering ? 0.11 : 0.07))
-        )
-        .overlay(
-            Button("") { openLauncher() }
-                .oraShortcut(KeyboardShortcuts.Address.focus)
-                .opacity(0)
-                .allowsHitTesting(false)
-                // Unlabelled and unclickable: it exists only to own ⌘L.
-                .accessibilityHidden(true)
-                // Only while the pill stands in for the toolbar; the sidebar's side is
-                // irrelevant — with tabs on the right this is still the only ⌘L owner.
-                .disabled(!toolbarManager.isToolbarHidden)
         )
         .overlay(
             ConditionallyConcentricRectangle(cornerRadius: 10, style: .continuous)

@@ -10,29 +10,21 @@ enum ContainerConstants {
     /// with no catalog lookup, so a name outside both sets goes blank there.
     static let defaultIconSymbol = "heart"
 
-    /// Default time in seconds after which a tab is no longer considered alive
-    static let defaultTabAliveTimeout: TimeInterval = 60 * 60 // 1 hour
-
-    /// Default time in seconds after which normal tabs are completely removed
-    static let defaultTabRemovalTimeout: TimeInterval = 24 * 60 * 60 // 1 day
-
     // UI constants for container forms and displays.
     // swiftlint:disable:next type_name
     enum UI {
         static let normalButtonWidth: CGFloat = 28
         static let compactButtonWidth: CGFloat = 12
-        static let popoverWidth: CGFloat = 300
+
         static let newContainerDialogWidth: CGFloat = 450
         static let newContainerDialogHeight: CGFloat = 380
         static let minDialogWidth: CGFloat = 450
-        static let minDialogHeight: CGFloat = 250
+
         static let emojiButtonSize: CGFloat = 32
-        static let cornerRadius: CGFloat = 10
     }
 
     /// Animation constants for container interactions
     enum Animation {
-        static let hoverDuration: Double = 0.15
         static let emojiPickerDuration: Double = 0.1
     }
 }

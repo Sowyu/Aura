@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Address field shared by the top toolbar and the floating URL bar.
+/// Address field in the top toolbar.
 /// Shows the current URL and morphs into the inline launcher while editing.
 struct URLBarField: View {
     /// `nil` while no tab is active; the field still renders as an empty pill.
@@ -31,7 +31,7 @@ struct URLBarField: View {
     @State private var launcherInput = ""
     @State private var mouseHasMoved = false
     @State private var mouseMonitor: Any?
-    @State private var suppressInitialSearch = false
+    @State private var prefilledInput: String?
     /// Natural height of the suggestion list, measured so it can be capped to the window.
     @State private var suggestionsHeight: CGFloat = 0
 
@@ -82,7 +82,7 @@ struct URLBarField: View {
         )
     }
 
-    /// A floating URL bar near the bottom of the window would drop its list off-screen.
+    /// A short window may have more room above the field than below it.
     private var suggestionsFlipUp: Bool {
         guard let space = suggestionsSpace else { return false }
         return space.below < Self.suggestionsMinHeight && space.above > space.below
@@ -112,15 +112,6 @@ struct URLBarField: View {
                 }
             }
             .animation(AnimationSettings.easeOut(0.15), value: isEditing)
-            // Hidden button for the focus-address-bar shortcut. Hidden from assistive
-            // technology too: it carries no label, and it is only here to own ⌘L.
-            .overlay(
-                Button("") { startEditing() }
-                    .oraShortcut(KeyboardShortcuts.Address.focus)
-                    .opacity(0)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            )
             // Clicking anywhere outside the field or its suggestions ends the edit, the way
             // every browser's address bar behaves; AppKit alone only does it when the click
             // lands on something that takes first responder.
@@ -142,6 +133,12 @@ struct URLBarField: View {
                     NSEvent.removeMonitor(monitor)
                     clickAwayMonitor = nil
                 }
+            }
+            .onChange(of: appState.addressFocusToken) { _, _ in startEditing() }
+            .onDisappear {
+                if let clickAwayMonitor { NSEvent.removeMonitor(clickAwayMonitor) }
+                clickAwayMonitor = nil
+                cleanupInlineLauncher()
             }
             .onChange(of: isEditing) { _, editing in
                 if editing {
@@ -182,11 +179,12 @@ struct URLBarField: View {
                 .buttonStyle(.interactive(cornerRadius: 5, tint: foregroundColor))
                 // On an `aura://` page `SiteInfoMenu` has nothing to say and answers with
                 // one disabled row, and an empty menu is worse than no button.
-                .disabled(tab == nil || isEditing || tab?.url.isOraInternal == true)
+                .disabled(isEditing || !(tab.map { SiteInfoSummary.hasSite($0.url) } ?? false))
             }
             .background(AuraMenuAnchorView { siteInfoAnchor = $0 })
             .help("Site information")
-            .accessibilityLabel(Text("Site information"))
+            .accessibilityLabel(Text(tab?.url.scheme == "https" ? "Site information, connection is encrypted" : tab?.url
+                    .scheme == "http" ? "Site information, connection is not encrypted" : "Site information"))
 
             ZStack(alignment: .leading) {
                 CopiedURLOverlay(
@@ -203,11 +201,12 @@ struct URLBarField: View {
                     onDelete: { false },
                     onMoveUp: { launcherViewModel.moveFocusedElement(.up) },
                     onMoveDown: { launcherViewModel.moveFocusedElement(.down) },
-                    cursorColor: textColor.opacity(0.8),
-                    textColor: isEditing ? textColor.opacity(0.7) : foregroundColor,
+                    cursorColor: textColor,
+                    textColor: isEditing ? textColor : foregroundColor,
                     placeholder: "Search or enter address",
                     displayText: displayText,
                     isEditing: isEditing,
+                    focusToken: appState.addressFocusToken,
                     onBeginEditing: startEditing,
                     onEndEditing: dismissEditing,
                     onEscape: dismissEditing
@@ -223,7 +222,8 @@ struct URLBarField: View {
                 .onChange(of: launcherInput) { _, newValue in
                     guard isEditing else { return }
                     launcherViewModel.currentText = newValue
-                    guard !suppressInitialSearch else { return }
+                    guard newValue != prefilledInput else { return }
+                    prefilledInput = nil
                     launcherViewModel.searchHandler(newValue)
                 }
             }
@@ -292,7 +292,7 @@ struct URLBarField: View {
 
     private var securitySymbol: String {
         guard let tab else { return "magnifyingglass" }
-        return tab.url.scheme == "https" ? "shield.lefthalf.filled" : "globe"
+        return SiteInfoSummary.securitySymbol(for: tab.url)
     }
 
     private var editingSymbol: String {
@@ -300,7 +300,7 @@ struct URLBarField: View {
     }
 
     private var displayText: String {
-        guard let tab else { return "" }
+        guard let tab, !tab.url.isOraHome else { return "" }
         return URLDisplayUtils.displayString(url: tab.url, title: tab.title, showFull: toolbarManager.showFullURL)
     }
 
@@ -360,15 +360,15 @@ extension URLBarField {
     private func startEditing() {
         guard !isEditing else { return }
         // Pre-fill before flipping the flag so the field edits the URL, not the host.
-        suppressInitialSearch = true
-        launcherInput = tabManager.activeTab?.url.absoluteString ?? ""
+        launcherInput = tabManager.activeTab?.url
+            .isOraHome == true ? "" : (tabManager.activeTab?.url.absoluteString ?? "")
+        prefilledInput = launcherInput
         withAnimation(AnimationSettings.easeOut(0.1)) {
             appState.isURLBarEditing = true
         }
     }
 
     private func setupInlineLauncher() {
-        suppressInitialSearch = true
         launcherViewModel.searchEngineService.setTheme(theme)
         launcherViewModel.configure(
             tabManager: tabManager,
@@ -380,10 +380,6 @@ extension URLBarField {
             onDismiss: dismissEditing,
             navigateInCurrentTab: tabManager.activeTab != nil
         )
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            suppressInitialSearch = false
-        }
 
         mouseHasMoved = false
         if mouseMonitor == nil {
@@ -411,7 +407,7 @@ extension URLBarField {
         DispatchQueue.main.async {
             guard !appState.isURLBarEditing else { return }
             mouseHasMoved = false
-            suppressInitialSearch = false
+            prefilledInput = nil
             launcherInput = ""
             launcherViewModel.reset()
         }

@@ -19,6 +19,7 @@ struct OraInput: View {
     var leadingIcon: String?
     var trailingIcon: String?
     var onSubmit: (() -> Void)?
+    var autofocus = false
 
     @Environment(\.theme) private var theme
     @FocusState private var isFocused: Bool
@@ -146,6 +147,9 @@ struct OraInput: View {
             }
         }
         .animation(AnimationSettings.easeOut(0.15), value: error != nil)
+        .onAppear {
+            if autofocus { DispatchQueue.main.async { isFocused = true } }
+        }
     }
 }
 

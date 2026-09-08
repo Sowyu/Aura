@@ -369,7 +369,7 @@ extension KeyboardShortcuts {
         // Files
         Files.open,
 
-        Page.save, Page.reader, Page.source, Page.clearCookies,
+        Page.printPage, Page.save, Page.reader, Page.source, Page.clearCookies,
 
         // Zoom
         Zoom.zoomIn, Zoom.zoomOut, Zoom.reset,
@@ -391,6 +391,10 @@ extension KeyboardShortcuts {
 
 extension KeyboardShortcuts {
     enum Page {
+        static let printPage = KeyboardShortcutDefinition(
+            id: "page.print", name: "Print", category: "Page",
+            defaultChord: KeyChord(keyEquivalent: .init("p"), modifiers: [.command])
+        )
         // Command-S belongs to the sidebar.
         static let save = KeyboardShortcutDefinition(
             id: "page.save", name: "Save Page As", category: "Page",

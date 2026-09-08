@@ -288,7 +288,7 @@
     },
     "shortcuts-menus-14": {
       "package": "core",
-      "status": "pending"
+      "status": "implemented"
     },
     "shortcuts-menus-17": {
       "package": "core",
@@ -356,7 +356,7 @@
     },
     "tabs-state-8": {
       "package": "core",
-      "status": "pending"
+      "status": "implemented"
     },
     "tabs-state-14": {
       "package": "core",
@@ -540,7 +540,7 @@
     },
     "design-system-2": {
       "package": "panels",
-      "status": "pending"
+      "status": "implemented"
     },
     "design-system-23": {
       "package": "panels",
@@ -552,7 +552,7 @@
     },
     "slop-sweep-6": {
       "package": "sidebar",
-      "status": "pending"
+      "status": "implemented"
     },
     "slop-sweep-13": {
       "package": "sidebar",
@@ -616,7 +616,7 @@
     },
     "sidebar-8": {
       "package": "sidebar",
-      "status": "pending"
+      "status": "implemented"
     },
     "sidebar-9": {
       "package": "sidebar",
@@ -664,107 +664,107 @@
     },
     "urlbar-toolbar-1": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-3": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-4": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-5": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-7": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-8": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-9": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-10": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-11": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-12": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-13": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-15": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-16": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-17": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-18": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "urlbar-toolbar-m2": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "slop-sweep-16": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "shortcuts-menus-7": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "shortcuts-menus-8": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "shortcuts-menus-12": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "shortcuts-menus-13": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "a11y-keyboard-m2": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "extensions-scripts-7": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "extensions-scripts-10": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "onboarding-home-m1": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "design-system-17": {
       "package": "urlbar",
-      "status": "pending"
+      "status": "implemented"
     },
     "a11y-keyboard-2": {
       "package": "design",
@@ -828,7 +828,7 @@
     },
     "design-system-13": {
       "package": "design",
-      "status": "pending"
+      "status": "implemented"
     },
     "design-system-14": {
       "package": "design",
@@ -836,11 +836,11 @@
     },
     "design-system-15": {
       "package": "design",
-      "status": "pending"
+      "status": "implemented"
     },
     "design-system-18": {
       "package": "design",
-      "status": "pending"
+      "status": "implemented"
     },
     "design-system-19": {
       "package": "design",
@@ -848,11 +848,11 @@
     },
     "design-system-20": {
       "package": "design",
-      "status": "pending"
+      "status": "implemented"
     },
     "design-system-21": {
       "package": "design",
-      "status": "pending"
+      "status": "implemented"
     },
     "design-system-22": {
       "package": "design",
@@ -876,7 +876,7 @@
     },
     "urlbar-toolbar-2": {
       "package": "launcher",
-      "status": "pending"
+      "status": "implemented"
     },
     "slop-sweep-21": {
       "package": "launcher",
@@ -940,7 +940,7 @@
     },
     "launcher-13": {
       "package": "launcher",
-      "status": "pending"
+      "status": "implemented"
     },
     "launcher-14": {
       "package": "launcher",

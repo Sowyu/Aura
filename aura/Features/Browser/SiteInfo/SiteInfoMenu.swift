@@ -4,6 +4,18 @@ import SwiftUI
 /// Everything Aura has decided about the page in front of the user, gathered once so
 /// the panel's rows and its tests read the same values.
 struct SiteInfoSummary: Equatable {
+    static func securitySymbol(for url: URL) -> String {
+        switch url.scheme?.lowercased() {
+        case "https": return "lock.shield"
+        case "http": return "exclamationmark.triangle"
+        default: return "globe"
+        }
+    }
+
+    static func hasSite(_ url: URL) -> Bool {
+        ["http", "https"].contains(url.scheme?.lowercased() ?? "") && registrableDomain(from: url) != nil
+    }
+
     /// Registrable domain: the key every per-site rule in Aura is stored under, and the
     /// scope each of them applies to.
     let host: String
@@ -34,7 +46,7 @@ struct SiteInfoSummary: Equatable {
     ) {
         // `aura://home` parses with a host of "home", which would give the panel a site
         // to talk about that nobody can grant anything to.
-        guard !url.isOraInternal,
+        guard Self.hasSite(url),
               let host = registrableDomain(from: url),
               let scheme = url.scheme?.lowercased()
         else {

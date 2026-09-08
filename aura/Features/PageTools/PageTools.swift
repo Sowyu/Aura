@@ -6,6 +6,12 @@ import Foundation
 /// event table only ever names one function per row.
 @MainActor
 enum PageTools {
+    static let helpURL = URL(string: "https://github.com/Sowyu/Aura")!
+
+    static func printPage(_ tab: Tab?) {
+        tab?.browserPage?.printPage()
+    }
+
     /// A tab already showing an internal page has no web view, so there is nothing to
     /// take a source, an article, an archive or a screenshot of.
     static func isAvailable(for tab: Tab?) -> Bool {

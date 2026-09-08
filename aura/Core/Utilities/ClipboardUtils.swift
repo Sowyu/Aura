@@ -23,12 +23,12 @@ enum ClipboardUtils {
         // Prevent double-trigger if both Command and view shortcut fire
         if showCopiedAnimation.wrappedValue { return }
         copyToClipboard(text)
-        withAnimation {
+        withAnimation(AnimationSettings.easeOut(0.15)) {
             showCopiedAnimation.wrappedValue = true
             startWheelAnimation.wrappedValue = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            withAnimation {
+            withAnimation(AnimationSettings.easeOut(0.15)) {
                 showCopiedAnimation.wrappedValue = false
                 startWheelAnimation.wrappedValue = false
             }

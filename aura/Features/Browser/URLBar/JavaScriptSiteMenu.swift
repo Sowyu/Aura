@@ -8,7 +8,7 @@ enum JavaScriptSiteMenu {
     /// Builds rows reflecting the rule in force for `url` right now.
     static func items(for url: URL?) -> [AuraMenuItem] {
         let service = JavaScriptPolicyService.shared
-        guard let url, let host = url.host.map({ registrableDomain(from: $0) }), !host.isEmpty else {
+        guard let url, SiteInfoSummary.hasSite(url), let host = registrableDomain(from: url) else {
             return [.disabled("No site loaded")]
         }
 
@@ -49,7 +49,7 @@ struct JavaScriptBlockedBadge: View {
     @State private var anchor: NSView?
 
     private var isBlocked: Bool {
-        guard let url else { return false }
+        guard let url, SiteInfoSummary.hasSite(url) else { return false }
         return !policy.isAllowed(for: url)
     }
 

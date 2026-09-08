@@ -28,6 +28,10 @@ struct LauncherField: View {
 
     /// Row height, fill and corner are the whole point of this type: change them here and
     /// both call sites move together.
+    static func placeholder(engineName: String?) -> String {
+        "Search with \(engineName ?? "Google") or enter address"
+    }
+
     static let height: CGFloat = 56
     static let cornerRadius: CGFloat = AuraRadius.row
     static let hairline: CGFloat = 0.08

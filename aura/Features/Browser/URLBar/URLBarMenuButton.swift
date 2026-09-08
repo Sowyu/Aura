@@ -98,10 +98,17 @@ struct URLBarMenuButton: View {
 
     private func pageSection() -> [AuraMenuItem] {
         [
-            .item("Print…", icon: "printer", shortcut: "⌘P", isDisabled: webView == nil, action: printPage),
+            .item(
+                "Print…",
+                icon: "printer",
+                shortcut: KeyboardShortcuts.Page.printPage,
+                isDisabled: webView == nil,
+                action: printPage
+            ),
             .item(
                 "Save Page As…",
                 icon: "square.and.arrow.down",
+                shortcut: KeyboardShortcuts.Page.save,
                 isDisabled: webView == nil,
                 action: savePageAs
             ),
@@ -124,7 +131,7 @@ struct URLBarMenuButton: View {
                 shortcut: KeyboardShortcuts.Zoom.zoomIn,
                 isDisabled: webView == nil
             ) {
-                setZoom { min($0 + 0.1, 3.0) }
+                SiteZoomController.step(1, for: tabManager.activeTab)
             },
             .item(
                 "Zoom Out",
@@ -132,7 +139,7 @@ struct URLBarMenuButton: View {
                 shortcut: KeyboardShortcuts.Zoom.zoomOut,
                 isDisabled: webView == nil
             ) {
-                setZoom { max($0 - 0.1, 0.5) }
+                SiteZoomController.step(-1, for: tabManager.activeTab)
             },
             .item(
                 "Actual Size",
@@ -140,7 +147,7 @@ struct URLBarMenuButton: View {
                 shortcut: KeyboardShortcuts.Zoom.reset,
                 isDisabled: webView == nil
             ) {
-                setZoom { _ in 1.0 }
+                SiteZoomController.reset(tabManager.activeTab)
             }
         ]
     }
@@ -160,7 +167,7 @@ struct URLBarMenuButton: View {
 
     /// History submenu: the full panel first, then the space's recent entries.
     private func historyItem(hostWindow: NSWindow?) -> AuraMenuItem {
-        let showAll = AuraMenuItem.item("Show All History", icon: "clock", shortcut: "⌘Y") {
+        let showAll = AuraMenuItem.item("Show All History", icon: "clock", shortcut: KeyboardShortcuts.History.show) {
             NotificationCenter.default.post(name: .showHistoryPanel, object: hostWindow)
         }
         let entries = recentHistory()
@@ -188,17 +195,11 @@ struct URLBarMenuButton: View {
         )
     }
 
-    private func setZoom(_ transform: (CGFloat) -> CGFloat) {
-        guard let webView else { return }
-        webView.pageZoom = transform(webView.pageZoom)
-    }
-
     private func printPage() {
-        tabManager.activeTab?.browserPage?.printPage()
+        PageTools.printPage(tabManager.activeTab)
     }
 
     private func savePageAs() {
-        guard let tab = tabManager.activeTab else { return }
-        tab.browserPage?.saveWebArchive(named: tab.title.isEmpty ? (tab.url.host ?? "page") : tab.title)
+        PageTools.savePageAs(tabManager.activeTab)
     }
 }

@@ -7,7 +7,7 @@ struct CopiedURLOverlay: View {
 
     var body: some View {
         HStack {
-            Text("Copied Current URL")
+            Text("Link copied")
         }
         .font(.system(size: 14))
         .foregroundColor(foregroundColor)

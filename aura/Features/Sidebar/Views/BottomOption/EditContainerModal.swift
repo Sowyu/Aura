@@ -29,16 +29,16 @@ struct EditContainerModal: View {
             )
             .padding(12)
             .background(theme.popoverMutedBackground)
-            .cornerRadius(11)
+            .cornerRadius(AuraRadius.row)
             .overlay {
-                ConditionallyConcentricRectangle(cornerRadius: 11)
+                ConditionallyConcentricRectangle(cornerRadius: AuraRadius.row)
                     .stroke(theme.border, lineWidth: 0.5)
             }
         }
         .padding(3)
         .background(theme.popoverBackground)
-        .cornerRadius(14)
-        .shadow(color: .black.opacity(0.25), radius: 20, y: 8)
+        .cornerRadius(AuraRadius.pane)
+        .auraFloatingShadow()
         .onAppear { setupInitialValues() }
     }
 

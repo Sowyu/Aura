@@ -57,6 +57,8 @@ struct ExtensionsSettingsView: View {
                             OraButton(label: "Check for updates", variant: .secondary, size: .sm) {
                                 extensionManager.checkForUpdates(force: true)
                             }
+                            .disabled(!ExtensionManager.isSupported || installedCount == 0)
+                            .help("Check addons.mozilla.org for newer versions.")
                         }
                         if extensionManager.updateCheckFailed {
                             Text("Could not reach the add-on store. Try again.").foregroundStyle(theme.mutedForeground)
@@ -64,10 +66,6 @@ struct ExtensionsSettingsView: View {
                             Text("Last checked \(date.formatted(date: .abbreviated, time: .shortened))")
                                 .foregroundStyle(theme.mutedForeground)
                         }
-                        .controlSize(.regular)
-                        .fixedSize()
-                        .disabled(!ExtensionManager.isSupported || installedCount == 0)
-                        .help("Asks addons.mozilla.org whether anything installed has a newer version.")
                     }
                 }
 
