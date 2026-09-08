@@ -50,19 +50,15 @@ extension TabManager {
             renamingFolderID = nil
         }
         modelContext.delete(folder)
+        let deleted = closeTabs ? tabs.flatMap { closeTab(tab: $0, persist: false) } : []
         saveOrLog(modelContext)
-
-        if closeTabs {
-            for tab in tabs {
-                closeTab(tab: tab)
-            }
-        }
+        announceDeletedTabs(deleted)
     }
 
     func closeAllTabs(in folder: Folder) {
-        for tab in Array(folder.tabs) {
-            closeTab(tab: tab)
-        }
+        let deleted = Array(folder.tabs).flatMap { closeTab(tab: $0, persist: false) }
+        saveOrLog(modelContext)
+        announceDeletedTabs(deleted)
     }
 
     /// Moves a tab into `folder`, or back to the top level when `folder` is nil.

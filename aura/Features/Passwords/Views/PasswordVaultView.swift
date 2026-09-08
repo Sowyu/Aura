@@ -25,7 +25,7 @@ struct PasswordVaultView: View {
     @State private var revealedPasswordIDs: [String: String] = [:]
     /// One auto-hide task per revealed row, cancelled when the row is hidden by hand.
     @State private var revealTimers: [String: Task<Void, Never>] = [:]
-    @State private var pendingDelete: SavedPasswordSummary?
+    @State private var dialogManager = DialogManager()
 
     enum RevealPolicy {
         /// A plaintext password left on screen hides itself again after this long, which
@@ -73,8 +73,7 @@ struct PasswordVaultView: View {
             } else if isUnlocked {
                 spacePickerRow
 
-                TextField("Search saved passwords", text: $searchText)
-                    .textFieldStyle(.roundedBorder)
+                OraInput(text: $searchText, placeholder: "Search saved passwords…", leadingIcon: "magnifyingglass")
 
                 if filteredEntries.isEmpty {
                     emptyState(message: searchText.isEmpty
@@ -105,26 +104,7 @@ struct PasswordVaultView: View {
         // Relocking on the way out means a section switch or a window close does not
         // leave the vault open for whoever comes back to it.
         .onDisappear(perform: lockVault)
-        .alert("Delete saved password?", isPresented: Binding(
-            get: { pendingDelete != nil },
-            set: { if !$0 { pendingDelete = nil } }
-        )) {
-            Button("Delete", role: .destructive) {
-                if let pendingDelete {
-                    // A throw leaves the entry in place and puts the keychain's reason on
-                    // the banner, rather than closing the sheet as if it had worked.
-                    try? passwordManager.delete(pendingDelete)
-                }
-                pendingDelete = nil
-            }
-            Button("Cancel", role: .cancel) {
-                pendingDelete = nil
-            }
-        } message: {
-            if let pendingDelete {
-                Text("Remove the saved credential for \(pendingDelete.displayUsername) on \(pendingDelete.host)?")
-            }
-        }
+        .dialogs(manager: dialogManager)
     }
 
     // MARK: - Chrome
@@ -144,7 +124,7 @@ struct PasswordVaultView: View {
             Spacer()
 
             if isUnlocked {
-                Button("Lock", action: lockVault)
+                OraButton(label: "Lock", variant: .secondary, size: .sm, action: lockVault)
             }
         }
     }
@@ -153,7 +133,7 @@ struct PasswordVaultView: View {
         HStack {
             Text("Space")
             Spacer()
-            Picker("", selection: Binding(
+            Picker("Space", selection: Binding(
                 get: { selectedContainerId ?? containers.first?.id },
                 set: { selectedContainerId = $0 }
             )) {
@@ -196,7 +176,7 @@ struct PasswordVaultView: View {
             }
 
             OraButton(
-                label: isAuthenticating ? "Unlocking..." : "Unlock Passwords",
+                label: isAuthenticating ? "Unlocking…" : "Unlock Passwords",
                 variant: .outline,
                 isDisabled: isAuthenticating,
                 leadingIcon: passwordManager.canUseBiometricAuthentication() ? "touchid" : "lock.open"
@@ -321,7 +301,14 @@ struct PasswordVaultView: View {
 
             HStack {
                 Button(role: .destructive) {
-                    pendingDelete = entry
+                    dialogManager.confirm(
+                        title: "Delete saved password?",
+                        message: "Remove the saved credential for \(entry.displayUsername) on \(entry.host)?",
+                        confirmLabel: "Delete",
+                        variant: .destructive
+                    ) {
+                        do { try passwordManager.delete(entry) } catch { passwordManager.report(error) }
+                    }
                 } label: {
                     Image(systemName: "trash")
                         .frame(width: 22, height: 22)
@@ -350,6 +337,7 @@ struct PasswordVaultView: View {
         }
         .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
         .help(help)
+        .accessibilityLabel(Text(help))
     }
 
     // MARK: - Actions

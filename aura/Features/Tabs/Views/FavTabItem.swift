@@ -58,6 +58,7 @@ struct FavTabItem: View {
         .help(tab.title)
         .accessibilityElement(children: .ignore)
         .accessibilityAction { onTap() }
+        .accessibilityAction(named: Text("Close Tab")) { onClose() }
         .accessibilityLabel(Text(tab.title))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .auraContextMenu { contextMenuItems }

@@ -33,7 +33,7 @@ struct FilesPanelView: View {
 
     private var header: some View {
         HStack(spacing: 0) {
-            if sidebarManager.sidebarPosition != .secondary, toolbarManager.isToolbarHidden {
+            if sidebarManager.sidebarPosition != .secondary, !toolbarManager.isRowUp {
                 WindowControls(isFullscreen: appState.isFullscreen)
                     .frame(height: 30)
             }
@@ -62,7 +62,7 @@ struct FilesPanelView: View {
                 .help("Remove every file that is not pinned")
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .frame(height: 38)
     }
 

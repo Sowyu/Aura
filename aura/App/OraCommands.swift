@@ -45,7 +45,13 @@ struct OraCommands: Commands {
 
             Divider()
 
-            ImportDataButton()
+            Button("Import Data…") {
+                NotificationCenter.default.post(
+                    name: .openSettingsTab,
+                    object: browserWindow,
+                    userInfo: ["tab": SettingsTab.bookmarks.rawValue]
+                )
+            }
 
             Divider()
 

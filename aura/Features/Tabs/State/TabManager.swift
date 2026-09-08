@@ -630,13 +630,14 @@ final class TabManager {
             .first
     }
 
-    func closeTab(tab: Tab, shouldTrackForRestore: Bool = true) {
+    @discardableResult
+    func closeTab(tab: Tab, shouldTrackForRestore: Bool = true, persist: Bool = true) -> [UUID] {
         // A close on a pinned or favourite tab parks it instead of removing it: back to
         // its pinned URL, web view dropped, selection moved on. Removing the row is a
         // deliberate act — `deleteTab` — not what ⌘W or the row's close button does.
         guard tab.type == .normal else {
             parkPinnedTab(tab)
-            return
+            return []
         }
         FindManager.shared.endSession(for: tab.id)
         ExtensionManager.shared.tabDidClose(tab)
@@ -669,8 +670,11 @@ final class TabManager {
             let id = tab.id
             if deleteIfPresent(tab) { deleted.append(id) }
         }
-        saveOrLog(modelContext)
-        announceDeletedTabs(deleted)
+        if persist {
+            saveOrLog(modelContext)
+            announceDeletedTabs(deleted)
+        }
+        return deleted
     }
 
     /// What closing a pinned or favourite tab means: the row stays, the page goes. The

@@ -3,6 +3,7 @@ import SwiftUI
 struct NewTabButton: View {
     let addNewTab: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -22,6 +23,11 @@ struct NewTabButton: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .geometryGroup()
         }
-        .buttonStyle(.interactive(cornerRadius: AuraRadius.row, tint: theme.activeTabBackground))
+        .buttonStyle(InteractiveButtonStyle(
+            cornerRadius: AuraRadius.row,
+            hoverOpacity: colorScheme == .dark ? 0.3 : 0.1,
+            pressOpacity: colorScheme == .dark ? 0.45 : 0.2,
+            tint: theme.activeTabBackground
+        ))
     }
 }

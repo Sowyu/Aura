@@ -10,6 +10,7 @@ struct ViewSourceView: View {
 
     @State private var lines: [SourceLine] = []
     @State private var markup = ""
+    @State private var copied = false
     @State private var failure: String?
     @State private var isLoading = true
 
@@ -49,9 +50,13 @@ struct ViewSourceView: View {
                 Text(lines.count == 1 ? "1 line" : "\(lines.count) lines")
                     .font(.system(size: 11))
                     .foregroundStyle(theme.mutedForeground)
-                Button("Copy Source") { ClipboardUtils.copyToClipboard(markup) }
-                    .controlSize(.small)
-                    .fixedSize()
+                OraButton(label: copied ? "Copied" : "Copy source", variant: .secondary, size: .sm) {
+                    ClipboardUtils.copyToClipboard(markup)
+                    copied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { copied = false }
+                }
+                .controlSize(.small)
+                .fixedSize()
             }
         }
         .padding(.horizontal, Self.columnPadding)

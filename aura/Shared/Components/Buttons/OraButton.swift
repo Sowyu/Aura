@@ -111,7 +111,18 @@ struct OraButton: View {
 
     // MARK: - Body
 
+    @ViewBuilder
     var body: some View {
+        if keyboardShortcut == "return" {
+            button.keyboardShortcut(.defaultAction)
+        } else if keyboardShortcut == "esc" {
+            button.keyboardShortcut(.cancelAction)
+        } else {
+            button
+        }
+    }
+
+    private var button: some View {
         Button(action: action) {
             HStack(spacing: iconSpacing) {
                 if let icon = leadingIcon {

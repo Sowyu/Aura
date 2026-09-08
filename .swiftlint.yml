@@ -77,4 +77,4 @@ custom_rules:
     name: "No Print Statements"
     regex: "print\\("
     message: "Use logger instead of print statements"
-    severity: warning
+    severity: error

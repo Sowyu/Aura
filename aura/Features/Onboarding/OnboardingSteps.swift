@@ -8,6 +8,12 @@ struct OnboardingStepView: View {
     let finish: () -> Void
 
     var body: some View {
+        ScrollView {
+            page.frame(minHeight: 452)
+        }
+    }
+
+    @ViewBuilder private var page: some View {
         switch draft.step {
         case .welcome: OnboardingWelcome(draft: draft)
         case .bring: OnboardingBring(draft: draft)
@@ -58,7 +64,13 @@ private struct OnboardingPage<Content: View>: View {
                         action: onPrimary
                     )
                     .keyboardShortcut(.defaultAction)
-                    OraButton(label: "Back", variant: .ghost, action: onBack)
+                    HStack {
+                        OraButton(label: "Back", variant: .ghost, action: onBack)
+                        if primaryLabel == "Continue" {
+                            OraButton(label: "Skip", variant: .ghost) { SettingsStore.shared.onboardingCompleted = true
+                            }
+                        }
+                    }
                 }
             }
             .padding(36)
@@ -315,8 +327,7 @@ private struct OnboardingSpace: View {
                         iconSymbol: $draft.spaceIconSymbol,
                         iconColorHex: $draft.spaceIconColorHex,
                         isIconPickerOpen: $isIconPickerOpen,
-                        onSubmit: draft.advance,
-                        defaultEmoji: ContainerConstants.defaultEmoji
+                        onSubmit: draft.advance
                     )
                 }
                 VStack(alignment: .leading, spacing: 10) {
@@ -423,7 +434,7 @@ private struct OnboardingBlocking: View {
                     isSelected: draft.blockAds
                 ) { draft.blockAds = true }
                 OnboardingChoice(
-                    title: "No, I collect banner ads",
+                    title: "No, show pages as served",
                     subtitle: "Pages exactly as served. Settings › Privacy turns blocking back on any time.",
                     isSelected: !draft.blockAds
                 ) { draft.blockAds = false }

@@ -172,7 +172,6 @@ private struct ContainerRow: View {
         .buttonStyle(.interactive(cornerRadius: AuraRadius.button, tint: theme.foreground))
         // Laid out either way, so revealing a button never reflows the row.
         .opacity(isHovering || isEditing ? 1 : 0)
-        .allowsHitTesting(isHovering || isEditing)
     }
 
     private var palette: some View {
@@ -192,7 +191,8 @@ private struct ContainerRow: View {
                         }
                 }
                 .buttonStyle(.plain)
-                .help(hex)
+                .help(BrowsingContainer.colorName(for: hex))
+                .accessibilityLabel(Text(BrowsingContainer.colorName(for: hex)))
             }
         }
         .padding(.leading, 2)
@@ -216,6 +216,8 @@ private struct ContainerRow: View {
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text(BrowsingContainer.iconSymbols.first { $0.value == symbol }?.key
+                        .capitalized ?? symbol))
             }
         }
     }

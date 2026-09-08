@@ -218,9 +218,15 @@ struct BrowserPageView: NSViewRepresentable {
                 return
             }
 
+            let zoom = CGFloat(max(page.zoom, 0.01))
+            let point = CGPoint(
+                x: locationInContentView.x / zoom,
+                y: (contentView.isFlipped ? locationInContentView.y : contentView.bounds
+                    .height - locationInContentView.y) / zoom
+            )
             let script = """
             (function() {
-                var element = document.elementFromPoint(\(locationInContentView.x), \(locationInContentView.y));
+                var element = document.elementFromPoint(\(point.x), \(point.y));
                 while (element && element.tagName !== 'A') {
                     element = element.parentElement;
                 }

@@ -34,7 +34,7 @@ struct DownloadsHistoryView: View {
         HStack(spacing: 0) {
             // Match SidebarHeader traffic light spacing when sidebar is primary
             // (the top toolbar draws them itself when it is visible).
-            if sidebarManager.sidebarPosition != .secondary, toolbarManager.isToolbarHidden {
+            if sidebarManager.sidebarPosition != .secondary, !toolbarManager.isRowUp {
                 WindowControls(isFullscreen: appState.isFullscreen)
                     .frame(height: 30)
             }
@@ -66,7 +66,7 @@ struct DownloadsHistoryView: View {
                 .animation(AnimationSettings.easeOut(0.1), value: isClearHovered)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .frame(height: 38)
     }
 
@@ -75,7 +75,7 @@ struct DownloadsHistoryView: View {
     private var searchBar: some View {
         OraInput(
             text: $searchText,
-            placeholder: "Search files...",
+            placeholder: "Search files…",
             size: .md,
             leadingIcon: "magnifyingglass"
         )
@@ -198,10 +198,11 @@ struct DownloadsHistoryView: View {
         ))!
         let startOfLastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: startOfThisWeek)!
         let startOf2WeeksAgo = calendar.date(byAdding: .weekOfYear, value: -2, to: startOfThisWeek)!
-        let startOf1MonthAgo = calendar.date(byAdding: .month, value: -1, to: startOfToday)!
-        let startOf2MonthsAgo = calendar.date(byAdding: .month, value: -2, to: startOfToday)!
-        let startOf3MonthsAgo = calendar.date(byAdding: .month, value: -3, to: startOfToday)!
-        let startOf6MonthsAgo = calendar.date(byAdding: .month, value: -6, to: startOfToday)!
+        let startOfThisMonth = calendar.dateInterval(of: .month, for: now)!.start
+        let startOf1MonthAgo = calendar.date(byAdding: .month, value: -1, to: startOfThisMonth)!
+        let startOf2MonthsAgo = calendar.date(byAdding: .month, value: -2, to: startOfThisMonth)!
+        let startOf3MonthsAgo = calendar.date(byAdding: .month, value: -3, to: startOfThisMonth)!
+        let startOf6MonthsAgo = calendar.date(byAdding: .month, value: -6, to: startOfThisMonth)!
         let startOf1YearAgo = calendar.date(byAdding: .year, value: -1, to: startOfToday)!
 
         // Ordered buckets: (label, lowerBound). A download goes into the first bucket
@@ -212,6 +213,7 @@ struct DownloadsHistoryView: View {
             ("This Week", startOfThisWeek),
             ("Last Week", startOfLastWeek),
             ("2 Weeks Ago", startOf2WeeksAgo),
+            ("This Month", startOfThisMonth),
             ("Last Month", startOf1MonthAgo),
             ("2 Months Ago", startOf2MonthsAgo),
             ("3 Months Ago", startOf3MonthsAgo),

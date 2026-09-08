@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import os
 @preconcurrency import WebKit
+import UniformTypeIdentifiers
 
 /// One installed extension as shown in Settings. Mirrored from disk so the
 /// list renders even before WebKit finishes loading the extension (or on
@@ -383,6 +384,17 @@ final class ExtensionManager {
     /// Clicking an extension's toolbar icon. WebKit decides what happens next:
     /// a popup goes through `presentActionPopup`, otherwise the extension's
     /// `action.onClicked` event fires.
+    static func chooseFile() -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [UTType.zip] + ["xpi", "crx"].compactMap { UTType(filenameExtension: $0) }
+        panel.message = "Choose an unpacked extension folder, or an .xpi, .zip, or .crx file."
+        panel.prompt = "Install"
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
     func performAction(extensionID: String, anchor: NSView) {
         guard #available(macOS 15.4, *) else { return }
         actionAnchors[extensionID] = WeakAnchor(anchor)

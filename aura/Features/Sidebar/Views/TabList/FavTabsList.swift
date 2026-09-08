@@ -18,8 +18,7 @@ struct FavTabsGrid: View {
     let containers: [TabContainer]
 
     private var adaptiveColumns: [GridItem] {
-        let maxColumns = 3
-        let columnCount = min(max(1, tabs.count), maxColumns)
+        let columnCount = tabs.isEmpty ? 1 : 3
         return Array(repeating: GridItem(spacing: 10), count: columnCount)
     }
 

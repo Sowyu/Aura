@@ -6,6 +6,17 @@ import WebKit
 
 @MainActor
 struct PolishRegressionTests {
+    @Test func disappearingRowsOnlyClearTheirOwnPointerState() {
+        let pointer = TabRowPointer()
+        let first = UUID(), second = UUID()
+        pointer.setPointerOnRow(first, true)
+        pointer.setPointerOnRow(second, true)
+        pointer.setPointerOnRow(first, false)
+        #expect(pointer.pointerOnRow)
+        pointer.setPointerOnRow(second, false)
+        #expect(!pointer.pointerOnRow)
+    }
+
     @Test func onlyUserActivatedExternalSchemesLeaveTheBrowser() {
         #expect(BrowserPage.opensExternally(URL(string: "mailto:hello@example.com"), navigationType: .linkActivated))
         #expect(!BrowserPage.opensExternally(URL(string: "zoommtg://join"), navigationType: .other))

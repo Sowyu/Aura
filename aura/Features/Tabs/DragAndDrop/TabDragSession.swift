@@ -91,13 +91,8 @@ final class TabDragSession: ObservableObject {
     /// of the drag state by a turn, which is why it is not reset in `end()`.
     @Published var pendingDrop: PendingTabDrop?
 
-    /// Set from the rows' hover. The sidebar's window drag gesture reads it: a press
-    /// that lands on a row starts that row's drag, and the window must stay put.
-    @Published private(set) var pointerOnRow = false
-
     private(set) var draggedIsFolder = false
     private(set) var sourceZone: TabDragZone?
-    private var hoveredRowID: UUID?
 
     var isDragging: Bool { draggedID != nil }
 
@@ -118,18 +113,6 @@ final class TabDragSession: ObservableObject {
     func isFolderTarget(_ id: UUID) -> Bool {
         if case let .intoFolder(folderID) = target { return folderID == id }
         return false
-    }
-
-    /// Moving from one row to the next can report the new row first, so a row only
-    /// clears the flag when it is still the one holding it.
-    func setPointerOnRow(_ id: UUID, _ hovering: Bool) {
-        if hovering {
-            hoveredRowID = id
-        } else if hoveredRowID == id {
-            hoveredRowID = nil
-        }
-        let next = hoveredRowID != nil
-        if next != pointerOnRow { pointerOnRow = next }
     }
 
     // MARK: - Lifecycle
@@ -186,5 +169,24 @@ final class TabDragSession: ObservableObject {
         sourceZone = nil
         activeZone = nil
         target = nil
+    }
+}
+
+@MainActor
+final class TabRowPointer: ObservableObject {
+    static let shared = TabRowPointer()
+    @Published private(set) var pointerOnRow = false
+    private var hoveredRowID: UUID?
+
+    /// Moving from one row to the next can report the new row first, so a row only
+    /// clears the flag when it is still the one holding it.
+    func setPointerOnRow(_ id: UUID, _ hovering: Bool) {
+        if hovering {
+            hoveredRowID = id
+        } else if hoveredRowID == id {
+            hoveredRowID = nil
+        }
+        let next = hoveredRowID != nil
+        if next != pointerOnRow { pointerOnRow = next }
     }
 }

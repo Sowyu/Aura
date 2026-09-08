@@ -7,6 +7,7 @@ import SwiftUI
 /// SidebarMenuHistoryTab.swift`) by Maciek Bagiński, GPL-3.0. The layout follows Aura's
 /// downloads panel so the two read as one control, and the store queries stay Aura's.
 struct HistoryPanelView: View {
+    @Environment(DialogManager.self) private var dialogManager
     @Environment(HistoryManager.self) private var historyManager
     @Environment(TabManager.self) private var tabManager
     @Environment(DownloadManager.self) private var downloadManager
@@ -51,7 +52,11 @@ struct HistoryPanelView: View {
         .background(theme.chromeBackground)
         .background(BlurEffectView(material: .underWindowBackground, blendingMode: .behindWindow))
         .onAppear(perform: reload)
-        .onChange(of: searchText) { _, _ in reload() }
+        .task(id: searchText) {
+            do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
+            reload()
+        }
+        .onChange(of: historyManager.revision) { _, _ in reload() }
         .onChange(of: range) { _, _ in reload() }
         .onChange(of: containerId) { _, _ in reload() }
     }
@@ -62,7 +67,7 @@ struct HistoryPanelView: View {
         HStack(spacing: 0) {
             // Match SidebarHeader traffic light spacing when the sidebar is primary
             // (the top toolbar draws them itself when it is visible).
-            if sidebarManager.sidebarPosition != .secondary, toolbarManager.isToolbarHidden {
+            if sidebarManager.sidebarPosition != .secondary, !toolbarManager.isRowUp {
                 WindowControls(isFullscreen: appState.isFullscreen)
                     .frame(height: 30)
             }
@@ -74,8 +79,8 @@ struct HistoryPanelView: View {
 
             Spacer()
 
-            if !items.isEmpty {
-                Button(action: clearRange) {
+            if !items.isEmpty, searchText.isEmpty {
+                Button(action: confirmClearRange) {
                     HStack(spacing: 4) {
                         OraIcons(icon: .brush1, size: .sm, color: isClearHovered ? theme.foreground : .secondary)
                         Text("Clear")
@@ -92,7 +97,7 @@ struct HistoryPanelView: View {
                 .help(range == .all ? "Clear all history in this space" : "Clear \(range.title.lowercased())")
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .frame(height: 38)
     }
 
@@ -102,7 +107,7 @@ struct HistoryPanelView: View {
         HStack(spacing: 6) {
             OraInput(
                 text: $searchText,
-                placeholder: "Search history...",
+                placeholder: "Search history…",
                 size: .md,
                 leadingIcon: "magnifyingglass"
             )
@@ -278,6 +283,15 @@ struct HistoryPanelView: View {
         withAnimation(AnimationSettings.easeOut(0.1)) {
             items.removeAll { $0.id == id }
         }
+    }
+
+    private func confirmClearRange() {
+        guard searchText.isEmpty else { return }
+        dialogManager.confirm(
+            title: "Clear \(range == .all ? "all history in this space" : range.title.lowercased())?",
+            message: "These visits will be removed from history.",
+            confirmLabel: "Clear", variant: .destructive, onConfirm: clearRange
+        )
     }
 
     private func clearRange() {

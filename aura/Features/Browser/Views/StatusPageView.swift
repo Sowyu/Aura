@@ -14,26 +14,22 @@ struct StatusPageView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            // Error icon
             Image(systemName: errorIcon)
                 .font(.system(size: 64, weight: .ultraLight))
                 .foregroundColor(theme.foreground.opacity(0.4))
 
             VStack(spacing: 12) {
-                // Error title
                 Text(errorTitle)
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(theme.foreground)
                     .multilineTextAlignment(.center)
 
-                // Error description
                 Text(errorDescription)
                     .font(.system(size: 14))
                     .foregroundColor(theme.foreground.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
 
-                // Failed URL (if available)
                 if let url = failedURL {
                     Text(url.absoluteString)
                         .font(.system(size: 12, design: .monospaced))
@@ -42,20 +38,10 @@ struct StatusPageView: View {
                 }
             }
 
-            // Action buttons
             HStack(spacing: 16) {
-                Button("Try Again") {
-                    onRetry()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-
+                OraButton(label: "Try again", size: .lg, action: onRetry)
                 if let goBack = onGoBack {
-                    Button("Go Back") {
-                        goBack()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
+                    OraButton(label: "Go back", variant: .secondary, size: .lg, action: goBack)
                 }
             }
             .padding(.top, 8)
@@ -124,7 +110,6 @@ struct StatusPageView: View {
     private var errorType: ErrorType {
         let nsError = error as NSError
 
-        // Network-related errors
         if nsError.domain == NSURLErrorDomain {
             switch nsError.code {
             case NSURLErrorNotConnectedToInternet,
@@ -135,6 +120,9 @@ struct StatusPageView: View {
                  NSURLErrorBadURL:
                 return .notFound
             case NSURLErrorServerCertificateUntrusted,
+                 NSURLErrorServerCertificateHasBadDate,
+                 NSURLErrorServerCertificateHasUnknownRoot,
+                 NSURLErrorServerCertificateNotYetValid,
                  NSURLErrorClientCertificateRequired,
                  NSURLErrorSecureConnectionFailed:
                 return .security
@@ -145,7 +133,6 @@ struct StatusPageView: View {
             }
         }
 
-        // WebKit errors
         if nsError.domain == "WebKitErrorDomain" {
             return .notFound
         }

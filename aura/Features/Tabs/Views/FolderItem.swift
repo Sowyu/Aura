@@ -56,7 +56,7 @@ struct FolderItem: View {
         .onChange(of: isRenaming, initial: true) { _, renaming in
             if renaming {
                 draftName = folder.name
-                nameFieldFocused = true
+                DispatchQueue.main.async { nameFieldFocused = true }
             }
         }
         .animation(AnimationSettings.easeOut(0.12), value: isHovering)

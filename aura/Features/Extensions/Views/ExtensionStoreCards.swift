@@ -91,7 +91,7 @@ struct ExtensionStoreCard: View {
             HStack(spacing: 6) {
                 Text("Installed")
                     .font(.system(size: 11, weight: .medium))
-                Toggle("", isOn: Binding(
+                Toggle("Enable \(installed.displayName)", isOn: Binding(
                     get: { installed.isEnabled },
                     set: { extensionManager.setEnabled($0, for: installed.id) }
                 ))
@@ -99,18 +99,18 @@ struct ExtensionStoreCard: View {
                 .controlSize(.mini)
                 .labelsHidden()
                 .help(installed.isEnabled ? "Disable" : "Enable")
-                ExtensionRemoveButton(id: installed.id)
+                ExtensionRemoveButton(id: installed.id, name: installed.displayName)
             }
         } else if isInstalling {
             ProgressView()
-                .controlSize(.small)
+                .tint(theme.accent)
         } else if compatibility.allowsInstall {
-            Button("Install", action: install)
-                .controlSize(.small)
+            OraButton(label: "Install", size: .sm, action: install)
+                .tint(theme.accent)
                 .fixedSize()
         } else {
-            Button("Install") {}
-                .controlSize(.small)
+            OraButton(label: "Install", size: .sm, isDisabled: true) {}
+                .tint(theme.accent)
                 .fixedSize()
                 .disabled(true)
                 .help(compatibility.detail ?? "This add-on can't run under WebKit.")
@@ -199,19 +199,19 @@ struct InstalledExtensionRow: View {
             updateControl
 
             if let optionsURL {
-                Button("Open options") { openOptions(optionsURL) }
-                    .controlSize(.small)
+                OraButton(label: "Open options", variant: .secondary, size: .sm) { openOptions(optionsURL) }
+                    .tint(theme.accent)
                     .fixedSize()
             }
 
-            Toggle("", isOn: Binding(
+            Toggle("Enable \(item.displayName)", isOn: Binding(
                 get: { item.isEnabled },
                 set: { ExtensionManager.shared.setEnabled($0, for: item.id) }
             ))
             .toggleStyle(.switch)
             .labelsHidden()
 
-            ExtensionRemoveButton(id: item.id)
+            ExtensionRemoveButton(id: item.id, name: item.displayName)
         }
         .padding(.vertical, 8)
     }
@@ -223,9 +223,9 @@ struct InstalledExtensionRow: View {
     private var updateControl: some View {
         if manager.updatingIDs.contains(item.id) {
             ProgressView()
-                .controlSize(.small)
+                .tint(theme.accent)
         } else if let version = manager.availableUpdate(for: item.id) {
-            Button("Update to \(version)") {
+            OraButton(label: "Update to \(version)", variant: .secondary, size: .sm) {
                 updateError = nil
                 Task {
                     do {
@@ -235,7 +235,7 @@ struct InstalledExtensionRow: View {
                     }
                 }
             }
-            .controlSize(.small)
+            .tint(theme.accent)
             .fixedSize()
             .help("Version \(version) is on addons.mozilla.org.")
         }
@@ -261,18 +261,27 @@ struct InstalledExtensionRow: View {
 
 struct ExtensionRemoveButton: View {
     @Environment(\.theme) private var theme
+    @Environment(DialogManager.self) private var dialogManager
     let id: String
+    let name: String
 
     var body: some View {
         Button {
-            ExtensionManager.shared.removeExtension(id)
+            dialogManager.confirm(
+                title: "Remove \(name)?",
+                message: "Its settings and stored data will be deleted.",
+                confirmLabel: "Remove",
+                variant: .destructive
+            ) {
+                ExtensionManager.shared.removeExtension(id)
+            }
         } label: {
-            Image(systemName: "trash")
-                .frame(width: 22, height: 22)
+            Image(systemName: "trash").frame(width: 22, height: 22)
         }
         .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
         .foregroundStyle(theme.mutedForeground)
-        .help("Remove extension")
+        .help("Remove \(name)")
+        .accessibilityLabel(Text("Remove \(name)"))
     }
 }
 
@@ -446,7 +455,7 @@ struct ExtensionConsentSheet: View {
             }
         }
         .toggleStyle(.switch)
-        .controlSize(.small)
+        .tint(theme.accent)
     }
 
     private var buttons: some View {

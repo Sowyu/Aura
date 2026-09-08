@@ -43,11 +43,11 @@ struct ExtensionsSettingsView: View {
                     }
                     Spacer(minLength: 12)
                     VStack(alignment: .trailing, spacing: 8) {
-                        Button("Open Extension Store") { Self.openStore() }
+                        OraButton(label: "Open extension store", variant: .secondary, size: .sm) { Self.openStore() }
                             .controlSize(.regular)
                             .fixedSize()
                             .disabled(!ExtensionManager.isSupported)
-                        Button("Install from file…", action: promptForFile)
+                        OraButton(label: "Install from file…", variant: .secondary, size: .sm, action: promptForFile)
                             .controlSize(.regular)
                             .fixedSize()
                             .disabled(!ExtensionManager.isSupported)
@@ -101,15 +101,7 @@ struct ExtensionsSettingsView: View {
 
     private func promptForFile() {
         installError = nil
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [UTType.zip]
-            + ["xpi", "crx"].compactMap { UTType(filenameExtension: $0) }
-        panel.message = "Choose an unpacked extension folder, or an .xpi, .zip, or .crx file."
-        panel.prompt = "Install"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let url = ExtensionManager.chooseFile() else { return }
         Task {
             do {
                 try await extensionManager.installExtension(fromFile: url)

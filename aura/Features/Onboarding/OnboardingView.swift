@@ -71,7 +71,10 @@ struct OnboardingView: View {
             }
         }
         .ignoresSafeArea()
-        .onAppear(perform: installKeyGuard)
+        .onChange(of: window, initial: true) { _, _ in
+            removeKeyGuard()
+            installKeyGuard()
+        }
         .onDisappear(perform: removeKeyGuard)
     }
 
@@ -81,10 +84,9 @@ struct OnboardingView: View {
     /// what keeps the menu equivalents out too. Scoped to this window, and only to
     /// command chords: plain keys are the name field's and Return is the button's.
     private func installKeyGuard() {
-        guard keyGuard == nil else { return }
-        let window = window
+        guard keyGuard == nil, let window else { return }
         keyGuard = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard window == nil || event.window === window else { return event }
+            guard event.window === window else { return event }
             return OnboardingKeyGuard.swallows(event) ? nil : event
         }
     }

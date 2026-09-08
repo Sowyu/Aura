@@ -64,15 +64,14 @@ struct NewContainerDialog: View {
                         iconSymbol: $iconSymbol,
                         iconColorHex: $iconColorHex,
                         isIconPickerOpen: $isIconPickerOpen,
-                        onSubmit: createContainer,
-                        defaultEmoji: ContainerConstants.defaultEmoji
+                        onSubmit: createContainer
                     )
 
                     // Info text
                     HStack(spacing: 4) {
                         Image(systemName: "info.circle")
                             .font(.system(size: 11))
-                        Text("Spaces are an isolated profiles with their own history, passwords, configs, etc.")
+                        Text("Each space has its own history, passwords and settings.")
                             .font(.system(size: 11))
                     }
                     .foregroundColor(theme.mutedForeground)

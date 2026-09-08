@@ -88,6 +88,11 @@ struct DownloadHistoryRow: View {
             }
         }
         .onTapGesture(perform: activate)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("\(download.fileName), \(statusText)"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { activate() }
+        .help(download.status == .failed ? (download.error ?? "Download failed") : download.fileName)
         .auraContextMenu { downloadMenuItems }
         .onAppear(perform: resolveOpenAction)
         .onChange(of: download.status) { _, _ in resolveOpenAction() }
@@ -273,7 +278,7 @@ struct DownloadHistoryRow: View {
         case .completed:
             return timeAgo(from: download.completedAt ?? download.createdAt)
         case .failed:
-            return "Failed"
+            return download.error.map { "Failed: \($0)" } ?? "Failed"
         case .cancelled:
             return "Cancelled"
         case .pending:
@@ -283,9 +288,13 @@ struct DownloadHistoryRow: View {
         }
     }
 
-    private func timeAgo(from date: Date) -> String {
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return formatter
+    }()
+
+    private func timeAgo(from date: Date) -> String {
+        Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 }

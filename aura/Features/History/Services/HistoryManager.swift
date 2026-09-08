@@ -58,6 +58,7 @@ enum HistoryRange: String, CaseIterable, Identifiable {
 @Observable
 @MainActor
 final class HistoryManager {
+    private(set) var revision = 0
     let modelContainer: ModelContainer
     let modelContext: ModelContext
 
@@ -129,6 +130,7 @@ final class HistoryManager {
 
         guard changed else { return }
         try? modelContext.save()
+        revision &+= 1
     }
 
     /// Newest visits in one space. Bounded at the store, so the toolbar's history menu
@@ -162,7 +164,8 @@ final class HistoryManager {
             predicate: trimmedText.isEmpty ? inContainer : matchesText,
             sortBy: [SortDescriptor(\.lastAccessedAt, order: .reverse)]
         )
-        descriptor.fetchLimit = 200
+        // Rank the best six suggestions from twenty recent matches.
+        descriptor.fetchLimit = 20
 
         do {
             return try modelContext.fetch(descriptor)
@@ -220,6 +223,7 @@ final class HistoryManager {
     func delete(_ item: History) {
         modelContext.delete(item)
         try? modelContext.save()
+        revision &+= 1
     }
 
     /// Every visit in one space inside the range. `.all` clears the space, which is what
@@ -235,6 +239,7 @@ final class HistoryManager {
             let rows = try modelContext.fetch(descriptor)
             for row in rows { modelContext.delete(row) }
             try modelContext.save()
+            revision &+= 1
             return rows.count
         } catch {
             logger.error("Error deleting history range: \(String(describing: error), privacy: .public)")
@@ -256,6 +261,7 @@ final class HistoryManager {
             }
 
             try modelContext.save()
+            revision &+= 1
         } catch {
             logger.error("Failed to clear history for container \(container.id): \(error.localizedDescription)")
         }

@@ -124,7 +124,8 @@ struct BookmarksSettingsView: View {
                                 for: bookmark,
                                 store: store,
                                 open: { opener.open(bookmark, inNewTab: $0) },
-                                edit: { presentEdit(bookmark) }
+                                edit: { presentEdit(bookmark) },
+                                dialogManager: dialogManager
                             )
                         }
                     )
@@ -208,6 +209,10 @@ private struct BookmarkManagerRow: View {
             withAnimation(AnimationSettings.easeOut(0.1)) { isHovered = hovering }
         }
         .onTapGesture(perform: onOpen)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(bookmark.title))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onOpen() }
         .auraContextMenu(menu)
     }
 }

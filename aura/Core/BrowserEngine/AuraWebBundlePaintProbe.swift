@@ -22,16 +22,6 @@ import os
 /// images, but whether an offscreen probe window reproduces the purge at all is a
 /// question only a real run on a real build answers, and the answer changes with the OS.
 ///
-/// Measured on macOS 26 beta (build 26A5416b), 2026-08-22, through the gated test
-/// `WebBundleTests.thePaintProbeReachesAVerdict`: verdict `painted`, while the same run
-/// logged `Failed to acquire RBS assertion` for every WebProcess assertion. So either
-/// this build no longer purges the layers, or `takeSnapshot` re-renders in the web
-/// process and cannot see a purge that only affects what the window server composites.
-/// Until that is told apart, treat a `painted` verdict as "no evidence of the failure"
-/// rather than as proof the stack is healthy. The fallback that matters to a user is
-/// the same either way: a blank verdict restores uBO Lite, and so does a silent bundle.
-///
-/// Told apart on macOS 27 (Xcode 27.0 beta 27A5218g), 2026-08-25: it is the second.
 /// Pages on the bundle pool went blank for the user while the snapshot probe kept
 /// saying `painted`, and a page's own `requestAnimationFrame` loop stopped after two
 /// frames with `document.visibilityState` still `visible`. So the fixture now counts

@@ -171,11 +171,16 @@ enum BookmarkImportAction {
             guard let data = try await DataPortabilityPanels.read(format) else { return }
             let parsed = format.parse(data)
             guard !parsed.isEmpty else {
-                ToastManager.shared.show("No bookmarks in that file.", type: .error)
+                dialogManager.confirm(
+                    title: "No bookmarks in that file",
+                    message: "Choose a bookmarks HTML file or Safari Bookmarks.plist.",
+                    confirmLabel: "OK",
+                    onConfirm: {}
+                )
                 return
             }
             let summary = BookmarkPortability.apply(parsed, to: store)
-            report(summary)
+            report(summary, dialogManager: dialogManager)
         } catch {
             // The read is what fails here, and its reason is the useful part: a Safari
             // folder the panel could not hand over reads differently from a deleted file.
@@ -209,9 +214,14 @@ enum BookmarkImportAction {
         }
     }
 
-    private static func report(_ summary: BookmarkPortability.ImportSummary) {
+    private static func report(_ summary: BookmarkPortability.ImportSummary, dialogManager: DialogManager) {
         guard summary.added > 0 else {
-            ToastManager.shared.show("Everything in that file was already saved.", type: .info)
+            dialogManager.confirm(
+                title: "Bookmarks already saved",
+                message: "Everything in that file was already saved.",
+                confirmLabel: "OK",
+                onConfirm: {}
+            )
             return
         }
         var message = "Imported \(summary.added) bookmark\(summary.added == 1 ? "" : "s")"
@@ -393,7 +403,7 @@ struct SettingsBackupCard: View {
     private func confirmImport() {
         dialogManager.confirm(
             title: "Import settings?",
-            message: "Settings the file names are overwritten. Everything it does not "
+            message: "Settings named in the file are overwritten. Everything it does not "
                 + "name stays as it is.",
             confirmLabel: "Choose File…",
             onConfirm: { importSettings() }

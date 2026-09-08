@@ -57,6 +57,12 @@ struct HistoryPanelRow: View {
             }
         }
         .onTapGesture(perform: onOpen)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(displayTitle))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onOpen() }
+        .accessibilityAction(named: Text("Open in New Tab")) { onOpenInNewTab() }
+        .accessibilityAction(named: Text("Remove from History")) { onDelete() }
         .auraContextMenu { menuItems }
     }
 

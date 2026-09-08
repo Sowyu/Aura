@@ -66,7 +66,7 @@ struct SpaceHeaderRow: View {
         .onChange(of: isRenaming) { _, renaming in
             if renaming {
                 draftName = container.name
-                nameFieldFocused = true
+                DispatchQueue.main.async { nameFieldFocused = true }
             }
         }
     }
@@ -132,7 +132,6 @@ struct SpaceHeaderRow: View {
         .buttonStyle(.interactive(cornerRadius: AuraRadius.button, tint: theme.foreground))
         .background(AuraMenuAnchorView { menuAnchor = $0 })
         .opacity(isHovering ? 1 : 0)
-        .allowsHitTesting(isHovering)
         .help("Space Actions")
         .accessibilityLabel(Text("Space Actions"))
     }

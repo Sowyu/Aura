@@ -282,8 +282,7 @@ struct TopToolbar: View {
         } label: {
             ToolbarIconView(icon: .history)
                 .foregroundColor(buttonForegroundColor
-                    .opacity(extensionManager.isActionReady(for: item.id) ? URLBarButton.enabledOpacity : URLBarButton
-                        .disabledOpacity))
+                    .opacity(URLBarButton.enabledOpacity))
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .contentShape(Rectangle())
         }

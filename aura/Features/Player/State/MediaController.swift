@@ -85,7 +85,6 @@ final class MediaController {
             var idx = ensureSession()
             let playing = (event.state == "playing")
             sessions[idx].isPlaying = playing
-            // Update tab's isPlayingMedia property
             tabRefs[tab.id]?.value?.isPlayingMedia = playing
             if let vol = event.volume { sessions[idx].volume = clamp(vol) }
             // Update recency when it starts playing
@@ -112,17 +111,11 @@ final class MediaController {
         case "ended":
             if let idx = sessions.firstIndex(where: { $0.tabID == id }) {
                 sessions[idx].isPlaying = false
-                // Update tab's isPlayingMedia property
                 tabRefs[tab.id]?.value?.isPlayingMedia = false
             }
 
         case "removed":
-            if let idx = sessions.firstIndex(where: { $0.tabID == id }) {
-                sessions.remove(at: idx)
-            }
-            // Update tab's isPlayingMedia property
-            tabRefs[tab.id]?.value?.isPlayingMedia = false
-            self.removeSession(for: tab.id)
+            removeSession(for: id)
 
         default:
             break
@@ -184,7 +177,6 @@ final class MediaController {
         if let idx = sessions.firstIndex(where: { $0.tabID == id }) {
             sessions.remove(at: idx)
         }
-        // Update tab's isPlayingMedia property
         tabRefs[id]?.value?.isPlayingMedia = false
         tabRefs[id] = nil
         isVisible = !visibleSessions.isEmpty
@@ -195,7 +187,6 @@ final class MediaController {
         if let idx = sessions.firstIndex(where: { $0.tabID == tabID }) {
             sessions.remove(at: idx)
         }
-        // Update tab's isPlayingMedia property
         tabRefs[tabID]?.value?.isPlayingMedia = false
         tabRefs[tabID] = nil
         isVisible = !visibleSessions.isEmpty

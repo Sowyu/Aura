@@ -1,10 +1,3 @@
-//
-//  FindView.swift
-//  aura
-//
-//  Created by keni on 7/28/25.
-//
-
 import SwiftUI
 
 struct FindView: View {
@@ -125,6 +118,8 @@ struct FindView: View {
                 .frame(width: 26, height: 26)
         }
         .disabled(!isEnabled)
+        .accessibilityLabel(Text(forward ? "Next match" : "Previous match"))
+        .help(forward ? "Next match" : "Previous match")
         .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
     }
 
@@ -136,6 +131,8 @@ struct FindView: View {
                 .frame(width: 26, height: 26)
         }
         .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
+        .accessibilityLabel(Text("Close find bar"))
+        .help("Close find bar")
     }
 
     private func close() {

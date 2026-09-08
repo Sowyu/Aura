@@ -75,18 +75,22 @@ import SwiftUI
                 let selectionAnimation = selection.transaction.animation
                 let contextAnimation = context.transaction.animation
                 let animated = selectionAnimation != nil || contextAnimation != nil
-                logger.log(
+                logger.debug(
                     """
                     updateNSViewController new \(selection.wrappedValue), \
                     count: \(pageObjects.count), animated: \(animated)
                     """
                 )
-                logger.log(
+                logger.debug(
                     "updateNSViewController old \(controller.selectedIndex), count: \(controller.pageObjects.count)"
                 )
 
-                controller.pageObjects = pageObjects
-                controller.updateDataSource()
+                if controller.pageObjects != pageObjects {
+                    controller.pageObjects = pageObjects
+                    controller.objectToView = { contentView($0) }
+                    controller.updateDataSource()
+                    controller.refreshContent()
+                }
                 controller.updateSelectedIndex(selection.wrappedValue, animated: animated)
             }
         }
@@ -150,16 +154,24 @@ import SwiftUI
             }
         }
 
+        func refreshContent() {
+            for child in children.compactMap({ $0 as? NSPageViewContentController<T, V> }) {
+                child.content = objectToView
+                child.refreshContent()
+            }
+        }
+
         func updateDataSource() {
             self.arrangedObjects = pageObjects
-            logger.log("NSPageView updateDataSource \(self.arrangedObjects.count)")
+            logger.debug("NSPageView updateDataSource \(self.arrangedObjects.count)")
         }
 
         func updateSelectedIndex(_ index: Int, animated: Bool) {
-            logger.log("NSPageView updateSelectedIndex \(index), animated \(animated)")
+            logger.debug("NSPageView updateSelectedIndex \(index), animated \(animated)")
 
             if animated {
-                NSAnimationContext.runAnimationGroup { _ in
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = AnimationSettings.duration(0.25)
                     self.animator().selectedIndex = index
                 } completionHandler: {
                     self.completeTransition()
@@ -175,7 +187,7 @@ import SwiftUI
             identifierFor object: Any
         ) -> NSPageController.ObjectIdentifier {
             guard let typedObject = object as? T else {
-                logger.log("NSPageView identifierFor: unexpected object type")
+                logger.error("NSPageView identifierFor: unexpected object type")
                 return ""
             }
             return idFromObject?(typedObject) ?? ""
@@ -206,6 +218,11 @@ import SwiftUI
         var object: T?
 
         private var hostingView: NSHostingView<AnyView>?
+
+        func refreshContent() {
+            guard let object, let content else { return }
+            hostingView?.rootView = AnyView(content(object).ignoresSafeArea())
+        }
 
         override func loadView() {
             self.view = NSView()

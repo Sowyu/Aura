@@ -365,6 +365,7 @@ extension View {
             onMiddleClick: onMiddleClick,
             trailingClickWidth: trailingClickWidth
         ))
-        .onHover { TabDragSession.shared.setPointerOnRow(id, $0) }
+        .onHover { TabRowPointer.shared.setPointerOnRow(id, $0) }
+        .onDisappear { TabRowPointer.shared.setPointerOnRow(id, false) }
     }
 }

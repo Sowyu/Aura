@@ -61,7 +61,7 @@ struct ExtensionStoreView: View {
                         .foregroundStyle(theme.mutedForeground)
                 }
                 Spacer(minLength: 12)
-                Button("Install from file…", action: promptForFile)
+                OraButton(label: "Install from file…", variant: .secondary, size: .sm, action: promptForFile)
                     .controlSize(.regular)
                     .fixedSize()
             }
@@ -169,11 +169,13 @@ struct ExtensionStoreView: View {
             }
 
             if model.hasMore {
-                Button(model.isLoadingMore ? "Loading…" : "Load more") { model.loadMore() }
-                    .controlSize(.regular)
-                    .disabled(model.isLoadingMore)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 4)
+                OraButton(label: model.isLoadingMore ? "Loading…" : "Load more", variant: .secondary, size: .sm) {
+                    model.loadMore()
+                }
+                .controlSize(.regular)
+                .disabled(model.isLoadingMore)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
             }
         }
     }
@@ -193,15 +195,7 @@ struct ExtensionStoreView: View {
     /// zip behind a signature header, which the installer strips.
     private func promptForFile() {
         fileError = nil
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [UTType.zip]
-            + ["xpi", "crx"].compactMap { UTType(filenameExtension: $0) }
-        panel.message = "Choose an unpacked extension folder, or an .xpi, .zip, or .crx file."
-        panel.prompt = "Install"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let url = ExtensionManager.chooseFile() else { return }
         Task {
             do {
                 try await extensionManager.installExtension(fromFile: url)

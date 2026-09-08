@@ -6,7 +6,6 @@ struct ContainerView: View {
     let containers: [TabContainer]
 
     @Environment(\.window) private var window
-    @Environment(AppState.self) private var appState
     @Environment(HistoryManager.self) private var historyManager
     @Environment(DownloadManager.self) private var downloadManager
     @Environment(ToolbarManager.self) private var toolbarManager
@@ -15,7 +14,6 @@ struct ContainerView: View {
     @Environment(ToastManager.self) private var toastManager
     @Environment(\.theme) private var theme
 
-    @State var isDragging = false
     @ObservedObject private var dragSession = TabDragSession.shared
 
     var body: some View {
@@ -77,7 +75,7 @@ struct ContainerView: View {
                 .adaptiveScrollElasticity()
             }
         }
-        .modifier(OraWindowDragGesture(isDragging: $isDragging))
+        .modifier(OraWindowDragGesture())
         .onChange(of: dragSession.pendingDrop) { _, drop in
             guard let drop, drop.zone.containerID == container.id else { return }
             TabDropCommit.apply(drop, in: container, tabManager: tabManager)
@@ -165,53 +163,14 @@ struct ContainerView: View {
 }
 
 private struct OraWindowDragGesture: ViewModifier {
-    @Binding var isDragging: Bool
+    @ObservedObject private var pointer = TabRowPointer.shared
     @ObservedObject private var dragSession = TabDragSession.shared
 
-    /// Masking the gesture rather than swapping it out: the old `if` rebuilt the whole
-    /// sidebar the first time a tab was dragged, and never gave window dragging back.
     private var mask: GestureMask {
-        isDragging || dragSession.pointerOnRow || dragSession.isDragging ? .subviews : .all
+        pointer.pointerOnRow || dragSession.isDragging ? .subviews : .all
     }
 
     func body(content: Content) -> some View {
-        Group {
-            if #available(macOS 15.0, *) {
-                content.gesture(WindowDragGesture(), including: mask)
-            } else {
-                content.gesture(BackportWindowDragGesture(isDragging: $isDragging), including: mask)
-            }
-        }
-    }
-}
-
-private struct BackportWindowDragGesture: Gesture {
-    @Binding var isDragging: Bool
-
-    struct Value: Equatable {
-        static func == (lhs: Value, rhs: Value) -> Bool {
-            true
-        }
-    }
-
-    init(isDragging: Binding<Bool>) {
-        self._isDragging = isDragging
-    }
-
-    var body: some Gesture<Value> {
-        DragGesture()
-            .onChanged { _ in
-                // Makes intent cleaner, if we're dragging, then just return
-                // Maybe some other case needs to be watched for here
-                guard !isDragging else {
-                    return
-                }
-                guard let win = NSApp.keyWindow, let event = NSApp.currentEvent else {
-                    return
-                }
-
-                win.performDrag(with: event)
-            }
-            .map { _ in Value() }
+        content.gesture(WindowDragGesture(), including: mask)
     }
 }

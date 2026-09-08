@@ -77,8 +77,15 @@ extension BrowserPage {
 
         present(panel) { [weak self] destination in
             self?.auraWebView.createWebArchiveData { result in
-                guard case let .success(data) = result else { return }
-                try? data.write(to: destination)
+                do {
+                    let data = try result.get()
+                    try data.write(to: destination)
+                } catch {
+                    ToastManager.shared.show(
+                        "Could not save \(destination.lastPathComponent): \(error.localizedDescription)",
+                        type: .error
+                    )
+                }
             }
         }
     }
@@ -222,13 +229,22 @@ extension BrowserPage {
     /// Writes a full-page screenshot to a file the user picks. `name` seeds the file name.
     func saveFullPageScreenshot(named name: String) {
         captureFullPageImage { [weak self] image in
-            guard let self, let image, let data = Self.pngData(from: image) else { return }
+            guard let self else { return }
+            guard let image, let data = Self.pngData(from: image) else {
+                ToastManager.shared.show("Could not capture \(name)", type: .error)
+                return
+            }
             let panel = NSSavePanel()
             panel.allowedContentTypes = [.png]
             panel.nameFieldStringValue = "\(Self.safeFileName(name)).png"
             panel.canCreateDirectories = true
             self.present(panel) { destination in
-                try? data.write(to: destination)
+                do { try data.write(to: destination) } catch {
+                    ToastManager.shared.show(
+                        "Could not save \(destination.lastPathComponent): \(error.localizedDescription)",
+                        type: .error
+                    )
+                }
             }
         }
     }

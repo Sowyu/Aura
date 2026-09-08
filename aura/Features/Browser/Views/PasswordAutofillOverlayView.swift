@@ -133,7 +133,7 @@ struct PasswordAutofillTriggerView: View {
 
     private let buttonSize: CGFloat = 24
     private let fieldInset: CGFloat = 9
-    private let cornerRadius: CGFloat = 6
+    private let cornerRadius = AuraRadius.button
 
     @State private var isHovering = false
 
@@ -160,7 +160,10 @@ struct PasswordAutofillTriggerView: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             }
+            // A light chip stays visible over web fields independently of the chrome theme.
             .buttonStyle(InteractiveButtonStyle(cornerRadius: cornerRadius, hoverOpacity: 0))
+            .accessibilityLabel(Text("Fill saved password"))
+            .help("Fill saved password")
             .onHover { isHovering = $0 }
             .offset(
                 x: triggerX(in: proxy.size),

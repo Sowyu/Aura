@@ -9,6 +9,7 @@ import SwiftUI
 /// dismiss the bar without answering it.
 struct SessionRestoreBar: View {
     /// Matches the bookmarks bar so the two rows read as one band of chrome.
+    private static let message = "Aura quit unexpectedly. The tabs from that session are still open."
     static let rowHeight: CGFloat = BookmarksBar.rowHeight
 
     @Environment(TabManager.self) private var tabManager
@@ -19,7 +20,8 @@ struct SessionRestoreBar: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(theme.warning)
-            Text("Aura quit unexpectedly. The tabs from that session are still open.")
+            Text(Self.message)
+                .help(Self.message)
                 .font(.system(size: 11))
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)

@@ -42,11 +42,15 @@ struct SpaceIconPicker: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Picker("", selection: $mode) {
-                ForEach(PickerMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            HStack(spacing: 4) {
+                ForEach(PickerMode.allCases, id: \.self) { option in
+                    OraButton(label: option.rawValue, variant: mode == option ? .secondary : .ghost, size: .sm) {
+                        mode = option
+                    }
+                    .accessibilityAddTraits(mode == option ? .isSelected : [])
+                }
+                Spacer()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
 
             OraInput(text: $search, placeholder: "Search…", size: .sm, leadingIcon: "magnifyingglass")
                 .frame(height: 36)

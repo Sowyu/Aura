@@ -333,6 +333,7 @@ extension TabManager {
         let cutoffDate = Date().addingTimeInterval(-timeout)
         let allContainers = containers ?? fetchContainers()
 
+        var deleted: [UUID] = []
         for container in allContainers {
             // `closeTab` deletes from `container.tabs`, so the loop walks a copy.
             for tab in Array(container.tabs) {
@@ -341,9 +342,13 @@ extension TabManager {
                    !isActiveInAnyWindow(tab),
                    !tab.isPlayingMedia,
                    tab.type == .normal {
-                    closeTab(tab: tab, shouldTrackForRestore: false)
+                    deleted += closeTab(tab: tab, shouldTrackForRestore: false, persist: false)
                 }
             }
+        }
+        if !deleted.isEmpty {
+            saveOrLog(modelContext)
+            announceDeletedTabs(deleted)
         }
     }
 
@@ -352,6 +357,7 @@ extension TabManager {
         let settings = SettingsStore.shared
         let allContainers = containers ?? fetchContainers()
 
+        var deleted: [UUID] = []
         for container in allContainers {
             let policy = settings.autoClearTabsAfter(for: container.id)
             guard let timeout = policy.seconds else { continue }
@@ -365,9 +371,13 @@ extension TabManager {
                    tab.type == .normal {
                     // Not a close the user made, so it does not go on the reopen stack,
                     // same as `removeOldTabs`.
-                    closeTab(tab: tab, shouldTrackForRestore: false)
+                    deleted += closeTab(tab: tab, shouldTrackForRestore: false, persist: false)
                 }
             }
+        }
+        if !deleted.isEmpty {
+            saveOrLog(modelContext)
+            announceDeletedTabs(deleted)
         }
     }
 

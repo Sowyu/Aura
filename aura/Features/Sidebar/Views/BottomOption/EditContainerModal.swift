@@ -64,8 +64,7 @@ struct EditContainerModal: View {
             iconSymbol: $iconSymbol,
             iconColorHex: $iconColorHex,
             isIconPickerOpen: $isIconPickerOpen,
-            onSubmit: saveContainer,
-            defaultEmoji: ContainerConstants.defaultEmoji
+            onSubmit: saveContainer
         )
     }
 

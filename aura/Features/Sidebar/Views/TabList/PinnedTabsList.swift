@@ -18,6 +18,7 @@ struct PinnedTabsList: View {
     var body: some View {
         LazyVStack(spacing: 8) {
             Text("Pinned")
+                .accessibilityAddTraits(.isHeader)
                 .font(.callout)
                 .foregroundColor(theme.mutedForeground)
                 .padding(.leading, 8)

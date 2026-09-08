@@ -4,6 +4,7 @@ import SwiftData
 import SwiftUI
 
 struct SidebarView: View {
+    @Environment(ContainerManager.self) private var containerManager
     @Environment(\.theme) private var theme
     @Environment(\.window) var window: NSWindow?
     @Environment(TabManager.self) private var tabManager
@@ -19,8 +20,6 @@ struct SidebarView: View {
     /// all sit at 0). Unsorted, SwiftData returns store order, which can change after a save.
     @Query(sort: [SortDescriptor(\TabContainer.order), SortDescriptor(\TabContainer.createdAt)])
     var containers: [TabContainer]
-
-    private let columns = Array(repeating: GridItem(spacing: 10), count: 3)
 
     @ObservedObject private var dragSession = TabDragSession.shared
     @Environment(ToastManager.self) private var toastManager
@@ -258,7 +257,7 @@ struct SidebarView: View {
             // The row owns the traffic lights and nav buttons whenever it is on screen,
             // pinned or revealed, so the sidebar starts flush under it. With the row away
             // the sidebar stands in for it, at the same 38pt, so nothing shifts on reveal.
-            if toolbarManager.isToolbarHidden, !toolbarManager.isFloatingToolbarVisible {
+            if !toolbarManager.isRowUp {
                 SidebarHeader()
             }
             // Zen's stack, top to bottom: favourites above the space name, so a drag
@@ -304,6 +303,9 @@ struct SidebarView: View {
                 .environment(appState)
                 .environmentObject(privacyMode)
                 .environment(toolbarManager)
+                .withTheme()
+                .environment(toastManager)
+                .environment(containerManager)
             }
 
             if shouldShowMediaWidget {

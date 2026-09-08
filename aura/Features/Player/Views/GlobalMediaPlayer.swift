@@ -91,7 +91,8 @@ private struct MediaPlayerCard: View {
                     }
                     .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                     .opacity(hovered ? 1 : 0)
-                    .allowsHitTesting(hovered)
+                    .accessibilityLabel(Text("Stop controlling this tab"))
+                    .help("Stop controlling this tab")
                 }
                 .padding(.horizontal, 8)
                 .padding(.top, 6)
@@ -115,17 +116,23 @@ private struct MediaPlayerCard: View {
                 }
                 .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .disabled(!media.canGoPrevious(of: session.tabID))
+                .accessibilityLabel(Text("Previous track"))
+                .help("Previous track")
 
                 Button(action: { media.togglePlayPause(session.tabID) }) {
                     controlGlyph(session.isPlaying ? "pause.fill" : "play.fill", isEnabled: true)
                 }
                 .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
+                .accessibilityLabel(Text(session.isPlaying ? "Pause" : "Play"))
+                .help(session.isPlaying ? "Pause" : "Play")
 
                 Button(action: { media.nextTrack(session.tabID) }) {
                     controlGlyph("forward.fill", isEnabled: media.canGoNext(of: session.tabID))
                 }
                 .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
                 .disabled(!media.canGoNext(of: session.tabID))
+                .accessibilityLabel(Text("Next track"))
+                .help("Next track")
 
                 Spacer()
 

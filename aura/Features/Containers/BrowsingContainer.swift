@@ -53,6 +53,12 @@ final class BrowsingContainer: Identifiable {
         "#AF51F5"  // purple
     ]
 
+    static func colorName(for hex: String) -> String {
+        let names = ["Blue", "Turquoise", "Green", "Yellow", "Orange", "Red", "Pink", "Purple"]
+        guard let index = palette.firstIndex(of: hex) else { return "Custom colour" }
+        return names[index]
+    }
+
     /// Firefox's container icon names mapped onto the closest SF Symbol.
     static let iconSymbols: [String: String] = [
         "fingerprint": "touchid",

@@ -59,7 +59,7 @@ final class FindManager {
     }
 
     func close(_ tab: Tab) {
-        guard let page = tab.browserPage else { return }
+        guard let page = tab.browserPage, !session(for: tab.id).query.isEmpty else { return }
         FindController(page: page).clear()
     }
 }

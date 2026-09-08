@@ -8,7 +8,6 @@ struct ContainerForm: View {
     @Binding var isIconPickerOpen: Bool
 
     let onSubmit: () -> Void
-    let defaultEmoji: String
 
     @Environment(\.theme) private var theme
     @State private var isIconPickerHovering = false
@@ -87,7 +86,7 @@ struct ContainerForm: View {
     private var nameTextField: some View {
         OraInput(
             text: $name,
-            placeholder: "eg. work, streaming, finance...",
+            placeholder: "e.g. work, streaming, finance...",
             onSubmit: onSubmit
         )
         .focused($isNameFocused)

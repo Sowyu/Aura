@@ -4,6 +4,7 @@ import SwiftUI
 @Observable
 @MainActor
 final class ToolbarManager {
+    var isRowUp: Bool { !isToolbarHidden || isFloatingToolbarVisible }
     @ObservationIgnored private let defaults = UserDefaults.standard
 
     /// Same defaults keys the old `@AppStorage` wrappers used, so the stored

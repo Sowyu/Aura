@@ -164,16 +164,24 @@ struct BookmarksBar: View {
             for: bookmark,
             store: store,
             open: { opener.open(bookmark, inNewTab: $0) },
-            edit: { presentEdit(bookmark) }
+            edit: { presentEdit(bookmark) },
+            dialogManager: dialogManager
         )
     }
 
     private func folderContextMenuItems(_ folder: BookmarkFolder) -> [AuraMenuItem] {
         [
             .item("Open All", icon: "square.on.square") {
-                for bookmark in store.bookmarks(in: folder) {
-                    opener.open(bookmark, inNewTab: true)
-                }
+                let bookmarks = store.bookmarks(in: folder)
+                let open = { for bookmark in bookmarks { opener.open(bookmark, inNewTab: true) } }
+                if bookmarks.count > 15 {
+                    dialogManager.confirm(
+                        title: "Open \(bookmarks.count) tabs?",
+                        message: "Each bookmark in this folder will open in a new tab.",
+                        confirmLabel: "Open all",
+                        onConfirm: open
+                    )
+                } else { open() }
             },
             .separator,
             .item("Rename Folder…", icon: "pencil") { presentRename(folder) },
@@ -264,7 +272,8 @@ enum BookmarkRowMenu {
         for bookmark: Bookmark,
         store: BookmarkStore,
         open: @escaping (Bool) -> Void,
-        edit: @escaping () -> Void
+        edit: @escaping () -> Void,
+        dialogManager: DialogManager
     ) -> [AuraMenuItem] {
         [
             .item("Open", icon: "arrow.turn.down.right") { open(false) },
@@ -280,7 +289,14 @@ enum BookmarkRowMenu {
             },
             .submenu("Move to", icon: "folder", items: moveItems(for: bookmark, store: store)),
             .separator,
-            .item("Delete", icon: "trash", isDestructive: true) { store.delete(bookmark) }
+            .item("Delete", icon: "trash", isDestructive: true) {
+                dialogManager.confirm(
+                    title: "Delete bookmark?",
+                    message: bookmark.title,
+                    confirmLabel: "Delete",
+                    variant: .destructive
+                ) { store.delete(bookmark) }
+            }
         ]
     }
 
