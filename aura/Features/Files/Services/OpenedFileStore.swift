@@ -171,7 +171,7 @@ final class OpenedFileStore {
 
     private func resolvedContext() -> ModelContext? {
         if let context { return context }
-        guard let container = try? ModelConfiguration.createOraContainer() else { return nil }
+        guard let container = try? ModelConfiguration.createAuraContainer() else { return nil }
         let created = ModelContext(container)
         context = created
         return created

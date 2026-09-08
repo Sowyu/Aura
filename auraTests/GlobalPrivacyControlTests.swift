@@ -65,11 +65,11 @@ struct GlobalPrivacyControlTests {
         let names = { (settings: SpacePrivacySettings) in
             BrowserPrivacyService.privacyScripts(for: settings).compactMap(\.name)
         }
-        #expect(names(signalOn).contains("ora-global-privacy-control"))
-        #expect(!names(signalOff).contains("ora-global-privacy-control"))
+        #expect(names(signalOn).contains("aura-global-privacy-control"))
+        #expect(!names(signalOff).contains("aura-global-privacy-control"))
         // Fingerprinting protection is a separate switch and must not ride along.
         #expect(names(SpacePrivacySettings(blockFingerprinting: false, globalPrivacyControl: true))
-            == ["ora-global-privacy-control"])
+            == ["aura-global-privacy-control"])
 
         let script = BrowserPrivacyService.globalPrivacyControlScriptSource
         #expect(script.contains("'globalPrivacyControl'"))

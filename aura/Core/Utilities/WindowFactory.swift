@@ -53,6 +53,6 @@ enum WindowFactory {
     /// before the page started loading.
     @discardableResult
     static func openWindow(with url: URL) -> NSWindow {
-        makeMainWindow(rootView: OraRoot(initialURL: url))
+        makeMainWindow(rootView: AuraRoot(initialURL: url))
     }
 }

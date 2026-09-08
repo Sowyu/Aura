@@ -44,7 +44,7 @@ struct SpaceIconPicker: View {
         VStack(spacing: 8) {
             HStack(spacing: 4) {
                 ForEach(PickerMode.allCases, id: \.self) { option in
-                    OraButton(label: option.rawValue, variant: mode == option ? .secondary : .ghost, size: .sm) {
+                    AuraButton(label: option.rawValue, variant: mode == option ? .secondary : .ghost, size: .sm) {
                         mode = option
                     }
                     .accessibilityAddTraits(mode == option ? .isSelected : [])
@@ -52,7 +52,7 @@ struct SpaceIconPicker: View {
                 Spacer()
             }
 
-            OraInput(text: $search, placeholder: "Search…", size: .sm, leadingIcon: "magnifyingglass")
+            AuraInput(text: $search, placeholder: "Search…", size: .sm, leadingIcon: "magnifyingglass")
                 .frame(height: 36)
                 .onChange(of: search) { _, newValue in emojiModel.searchText = newValue }
 

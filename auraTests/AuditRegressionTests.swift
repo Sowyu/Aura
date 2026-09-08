@@ -147,7 +147,7 @@ struct FileGrantLifetimeTests {
 @MainActor
 struct PasswordWorldTests {
     @Test func websitesCannotReplaceThePasswordBridge() async throws {
-        let script = try #require(OraBrowserScripts.userScripts().first { $0.name == "ora-password-manager" })
+        let script = try #require(AuraBrowserScripts.userScripts().first { $0.name == "aura-password-manager" })
         let diagnosticScript = BrowserUserScript(
             name: script.name,
             source: "try {\n\(script.source)\n} catch (error) { window.__passwordError = String(error.stack || error); }",
@@ -160,7 +160,7 @@ struct PasswordWorldTests {
         defer { server.stop() }
         let page = BrowserPage(
             profile: BrowserEngineProfile(identifier: UUID(), isPrivate: true),
-            configuration: .oraDefault(userScripts: [diagnosticScript], privacySettings: SpacePrivacySettings()),
+            configuration: .auraDefault(userScripts: [diagnosticScript], privacySettings: SpacePrivacySettings()),
             delegate: nil
         )
         let view = page.auraWebView
@@ -180,7 +180,7 @@ struct PasswordWorldTests {
         var ready = false
         for _ in 0 ..< 100 {
             let value = try? await view.evaluateJavaScript(
-                "typeof window.__oraPasswordManager", in: nil, contentWorld: BrowserPage.passwordWorld
+                "typeof window.__auraPasswordManager", in: nil, contentWorld: BrowserPage.passwordWorld
             )
             if value as? String == "object" { ready = true
                 break
@@ -190,19 +190,19 @@ struct PasswordWorldTests {
         let diagnostic = try await view.evaluateJavaScript(
             """
             JSON.stringify({url: location.href, state: document.readyState,
-                installed: window.__oraPasswordManagerInstalled,
+                installed: window.__auraPasswordManagerInstalled,
                 handler: typeof window.webkit?.messageHandlers?.passwordManager,
                 error: window.__passwordError})
             """, in: nil, contentWorld: BrowserPage.passwordWorld
         )
         try #require(ready, "Password script did not load: \(String(describing: diagnostic))")
         let exposed = try await view.evaluateJavaScript(
-            "typeof window.__oraPasswordManager + ':' + typeof window.webkit.messageHandlers.passwordManager"
+            "typeof window.__auraPasswordManager + ':' + typeof window.webkit.messageHandlers.passwordManager"
         )
         #expect(exposed as? String == "undefined:undefined")
-        _ = try await view.evaluateJavaScript("window.__oraPasswordManager = { fillCredentials: 'hijacked' }")
+        _ = try await view.evaluateJavaScript("window.__auraPasswordManager = { fillCredentials: 'hijacked' }")
         let isolated = try await view.evaluateJavaScript(
-            "typeof window.__oraPasswordManager.fillCredentials", in: nil, contentWorld: BrowserPage.passwordWorld
+            "typeof window.__auraPasswordManager.fillCredentials", in: nil, contentWorld: BrowserPage.passwordWorld
         )
         #expect(isolated as? String == "function")
     }

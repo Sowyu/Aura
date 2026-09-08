@@ -147,7 +147,7 @@ struct KeyboardShortcutTableTests {
 @Suite("Command palette")
 @MainActor
 struct AppCommandCatalogTests {
-    /// Every event the window routing tables handle, from `OraRoot.events` and
+    /// Every event the window routing tables handle, from `AuraRoot.events` and
     /// `BrowserView`'s own `onReceive` block. A command posting anything else would
     /// disappear into the notification centre without a word.
     private let routed: Set<String> = [

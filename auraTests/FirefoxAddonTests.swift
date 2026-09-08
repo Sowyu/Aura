@@ -187,7 +187,7 @@ struct FirefoxAddonTests {
 
     @Test func unpacksZipAndFindsManifestRoot() throws {
         let base = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ora-xpi-test-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("aura-xpi-test-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: base) }
 
         // Build a fixture "xpi": content nested one level deep, like some archives.
@@ -212,7 +212,7 @@ struct FirefoxAddonTests {
 
     @Test func stripsCRXHeaderAndUnpacksTheZipBehindIt() throws {
         let base = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ora-crx-test-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("aura-crx-test-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: base) }
 
         let content = base.appendingPathComponent("src", isDirectory: true)
@@ -264,7 +264,7 @@ struct FirefoxAddonTests {
 
         let archive = try await FirefoxAddonStore.shared.downloadXPI(from: downloadURL)
         let staging = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ora-amo-test-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("aura-amo-test-\(UUID().uuidString)", isDirectory: true)
         defer {
             try? FileManager.default.removeItem(at: archive)
             try? FileManager.default.removeItem(at: staging)

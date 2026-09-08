@@ -11,7 +11,7 @@ import WebKit
 struct ExtensionEngineTests {
     private func makeFixtureExtension() throws -> URL {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ora-test-extension-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("aura-test-extension-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let manifest: [String: Any] = [
             "manifest_version": 3,
@@ -25,7 +25,7 @@ struct ExtensionEngineTests {
         ]
         let manifestData = try JSONSerialization.data(withJSONObject: manifest, options: .prettyPrinted)
         try manifestData.write(to: dir.appendingPathComponent("manifest.json"))
-        try Data("document.title = 'ora-extension-was-here';".utf8)
+        try Data("document.title = 'aura-extension-was-here';".utf8)
             .write(to: dir.appendingPathComponent("content.js"))
         return dir
     }
@@ -175,7 +175,7 @@ struct ExtensionEngineTests {
     /// name rather than the scan dropping it silently.
     @Test func scanOfAFolderWithoutAManifestKeepsTheFolderName() async {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ora-empty-extension-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("aura-empty-extension-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 

@@ -37,7 +37,7 @@ struct DownloadsHistoryView: View {
                     downloadManager.clearNonActiveDownloads()
                 }) {
                     HStack(spacing: 4) {
-                        OraIcons(icon: .brush1, size: .sm, color: isClearHovered ? theme.foreground : .secondary)
+                        AuraIcons(icon: .brush1, size: .sm, color: isClearHovered ? theme.foreground : .secondary)
                         Text("Clear")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(isClearHovered ? theme.foreground : .secondary)
@@ -57,7 +57,7 @@ struct DownloadsHistoryView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        OraInput(
+        AuraInput(
             text: $searchText,
             placeholder: "Search files…",
             size: .md,

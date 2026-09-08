@@ -25,8 +25,8 @@ struct HomeTabTests {
 
         let tab = manager.addTab(container: space, isPrivate: false)
 
-        #expect(tab.url.isOraHome)
-        #expect(tab.url == URL.oraHome)
+        #expect(tab.url.isAuraHome)
+        #expect(tab.url == URL.auraHome)
         #expect(tab.title == "New Tab")
         #expect(tab.favicon == nil)
         // Internal pages never get a web view, so nothing is loaded into WebKit.
@@ -40,6 +40,6 @@ struct HomeTabTests {
 
         #expect(tab.container.id == space.id)
         #expect(manager.activeTab?.id == tab.id)
-        #expect(tab.url.isOraHome)
+        #expect(tab.url.isAuraHome)
     }
 }

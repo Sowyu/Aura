@@ -92,10 +92,10 @@ struct FingerprintingProtectionProfile: Equatable {
 
         return """
         (function () {
-            if (window.__oraFingerprintingProtectionInstalled) {
+            if (window.__auraFingerprintingProtectionInstalled) {
                 return;
             }
-            window.__oraFingerprintingProtectionInstalled = true;
+            window.__auraFingerprintingProtectionInstalled = true;
 
             const profile = \(profileJSON);
 
@@ -132,8 +132,8 @@ struct FingerprintingProtectionProfile: Equatable {
             function makeDevice(kind, index) {
                 const suffix = String(index + 1);
                 const device = {
-                    deviceId: 'ora-' + kind + '-' + suffix,
-                    groupId: 'ora-group-' + kind,
+                    deviceId: 'aura-' + kind + '-' + suffix,
+                    groupId: 'aura-group-' + kind,
                     kind: kind,
                     label: '',
                     toJSON: function () {
@@ -429,7 +429,7 @@ final class BrowserPrivacyService {
         var scripts: [BrowserUserScript] = []
         if privacySettings.blockFingerprinting {
             scripts.append(BrowserUserScript(
-                name: "ora-fingerprinting-protection",
+                name: "aura-fingerprinting-protection",
                 source: fingerprintingProtectionScriptSource(),
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: false
@@ -437,7 +437,7 @@ final class BrowserPrivacyService {
         }
         if privacySettings.globalPrivacyControl {
             scripts.append(BrowserUserScript(
-                name: "ora-global-privacy-control",
+                name: "aura-global-privacy-control",
                 source: globalPrivacyControlScriptSource,
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: false

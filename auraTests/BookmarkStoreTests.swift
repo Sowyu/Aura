@@ -62,9 +62,9 @@ struct BookmarkStoreTests {
 
     @Test func internalPagesAreNotBookmarkable() throws {
         let store = try makeStore()
-        #expect(store.add(title: "Settings", url: .oraSettings(section: nil)) == nil)
-        #expect(store.add(title: "New Tab", url: .oraHome) == nil)
-        #expect(store.addToReadingList(title: "New Tab", url: .oraHome) == nil)
+        #expect(store.add(title: "Settings", url: .auraSettings(section: nil)) == nil)
+        #expect(store.add(title: "New Tab", url: .auraHome) == nil)
+        #expect(store.addToReadingList(title: "New Tab", url: .auraHome) == nil)
         // Nothing was written, so no reading list folder was conjured up either.
         #expect(store.rootBookmarks.isEmpty)
         #expect(store.folders.isEmpty)

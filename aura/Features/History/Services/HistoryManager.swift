@@ -80,7 +80,7 @@ final class HistoryManager {
     ) {
         // aura:// pages are chrome, not visits. Guarded here rather than at each caller
         // so nothing can slip the new-tab page into the history list.
-        guard !url.isOraInternal else { return }
+        guard !url.isAuraInternal else { return }
 
         let urlString = url.absoluteString
         let containerId = container.id

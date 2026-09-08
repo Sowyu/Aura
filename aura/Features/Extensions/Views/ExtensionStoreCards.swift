@@ -105,11 +105,11 @@ struct ExtensionStoreCard: View {
             ProgressView()
                 .tint(theme.accent)
         } else if compatibility.allowsInstall {
-            OraButton(label: "Install", size: .sm, action: install)
+            AuraButton(label: "Install", size: .sm, action: install)
                 .tint(theme.accent)
                 .fixedSize()
         } else {
-            OraButton(label: "Install", size: .sm, isDisabled: true) {}
+            AuraButton(label: "Install", size: .sm, isDisabled: true) {}
                 .tint(theme.accent)
                 .fixedSize()
                 .disabled(true)
@@ -199,7 +199,7 @@ struct InstalledExtensionRow: View {
             updateControl
 
             if let optionsURL {
-                OraButton(label: "Open options", variant: .secondary, size: .sm) { openOptions(optionsURL) }
+                AuraButton(label: "Open options", variant: .secondary, size: .sm) { openOptions(optionsURL) }
                     .tint(theme.accent)
                     .fixedSize()
             }
@@ -225,7 +225,7 @@ struct InstalledExtensionRow: View {
             ProgressView()
                 .tint(theme.accent)
         } else if let version = manager.availableUpdate(for: item.id) {
-            OraButton(label: "Update to \(version)", variant: .secondary, size: .sm) {
+            AuraButton(label: "Update to \(version)", variant: .secondary, size: .sm) {
                 updateError = nil
                 Task {
                     do {
@@ -460,9 +460,9 @@ struct ExtensionConsentSheet: View {
 
     private var buttons: some View {
         HStack {
-            OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: cancel)
+            AuraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: cancel)
             Spacer()
-            OraButton(label: "Install", action: { install(allowsPrivateWindows) })
+            AuraButton(label: "Install", action: { install(allowsPrivateWindows) })
         }
     }
 }

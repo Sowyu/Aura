@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Attach app shortcuts that update as overrides change.
-private struct OraKeyboardShortcutModifier: ViewModifier {
+private struct AuraKeyboardShortcutModifier: ViewModifier {
     let shortcut: KeyboardShortcutDefinition
     @EnvironmentObject private var shortcutManager: CustomKeyboardShortcutManager
 
@@ -12,7 +12,7 @@ private struct OraKeyboardShortcutModifier: ViewModifier {
 }
 
 /// Attach a tooltip that includes the current shortcut display.
-private struct OraShortcutHelpModifier: ViewModifier {
+private struct AuraShortcutHelpModifier: ViewModifier {
     let helpText: String
     let shortcut: KeyboardShortcutDefinition
     @EnvironmentObject private var shortcutManager: CustomKeyboardShortcutManager
@@ -29,13 +29,13 @@ private struct OraShortcutHelpModifier: ViewModifier {
 
 extension View {
     /// Use in place of `.keyboardShortcut` to auto-update on custom shortcut changes.
-    func oraShortcut(_ shortcut: KeyboardShortcutDefinition) -> some View {
-        modifier(OraKeyboardShortcutModifier(shortcut: shortcut))
+    func auraShortcut(_ shortcut: KeyboardShortcutDefinition) -> some View {
+        modifier(AuraKeyboardShortcutModifier(shortcut: shortcut))
     }
 
     /// Helper to keep tooltips in sync with the current shortcut mapping.
     /// Results in a tooltip like: "Copy URL (⇧⌘C)"
-    func oraShortcutHelp(_ helpText: String, for shortcut: KeyboardShortcutDefinition) -> some View {
-        modifier(OraShortcutHelpModifier(helpText: helpText, shortcut: shortcut))
+    func auraShortcutHelp(_ helpText: String, for shortcut: KeyboardShortcutDefinition) -> some View {
+        modifier(AuraShortcutHelpModifier(helpText: helpText, shortcut: shortcut))
     }
 }

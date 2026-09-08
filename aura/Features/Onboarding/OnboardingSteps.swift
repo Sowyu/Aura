@@ -56,7 +56,7 @@ private struct OnboardingPage<Content: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 16)
                 VStack(alignment: .leading, spacing: 8) {
-                    OraButton(
+                    AuraButton(
                         label: primaryLabel,
                         size: .lg,
                         keyboardShortcut: "return",
@@ -65,9 +65,9 @@ private struct OnboardingPage<Content: View>: View {
                     )
                     .keyboardShortcut(.defaultAction)
                     HStack {
-                        OraButton(label: "Back", variant: .ghost, action: onBack)
+                        AuraButton(label: "Back", variant: .ghost, action: onBack)
                         if primaryLabel == "Continue" {
-                            OraButton(label: "Skip", variant: .ghost) { SettingsStore.shared.onboardingCompleted = true
+                            AuraButton(label: "Skip", variant: .ghost) { SettingsStore.shared.onboardingCompleted = true
                             }
                         }
                     }
@@ -152,7 +152,7 @@ private struct OnboardingWelcome: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Image("OraColorLogo")
+            Image("AuraColorLogo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 72, height: 72)
@@ -220,10 +220,10 @@ private struct OnboardingBring: View {
                 VStack(alignment: .leading, spacing: 10) {
                     OnboardingLabel(text: "Bookmarks")
                     HStack(spacing: 8) {
-                        OraButton(label: "From Chrome, Firefox, Edge or Brave\u{2026}", variant: .secondary) {
+                        AuraButton(label: "From Chrome, Firefox, Edge or Brave\u{2026}", variant: .secondary) {
                             importBookmarks(.netscapeHTML)
                         }
-                        OraButton(label: "From Safari\u{2026}", variant: .secondary) {
+                        AuraButton(label: "From Safari\u{2026}", variant: .secondary) {
                             importBookmarks(.safariPropertyList)
                         }
                     }

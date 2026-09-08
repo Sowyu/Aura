@@ -115,10 +115,10 @@ struct TopToolbar: View {
     private var navigationGroup: some View {
         HStack(spacing: Self.pairSpacing) {
             navigationButton(.back, forward: false)
-                .oraShortcutHelp("Go Back", for: KeyboardShortcuts.Navigation.back)
+                .auraShortcutHelp("Go Back", for: KeyboardShortcuts.Navigation.back)
 
             navigationButton(.forward, forward: true)
-                .oraShortcutHelp("Go Forward", for: KeyboardShortcuts.Navigation.forward)
+                .auraShortcutHelp("Go Forward", for: KeyboardShortcuts.Navigation.forward)
         }
     }
 
@@ -162,7 +162,7 @@ struct TopToolbar: View {
                     .accessibilityLabel(Text("Stop loading"))
             } else {
                 toolbarButton(.reload, isEnabled: tabManager.activeTab != nil) { tabManager.activeTab?.reload() }
-                    .oraShortcutHelp("Reload This Page", for: KeyboardShortcuts.Navigation.reload)
+                    .auraShortcutHelp("Reload This Page", for: KeyboardShortcuts.Navigation.reload)
             }
 
             HStack(spacing: Self.pairSpacing) {
@@ -182,7 +182,7 @@ struct TopToolbar: View {
                 isEnabled: true,
                 action: { NotificationCenter.default.post(name: .openSettingsTab, object: nil) }
             )
-            .oraShortcutHelp("Settings", for: KeyboardShortcuts.App.preferences)
+            .auraShortcutHelp("Settings", for: KeyboardShortcuts.App.preferences)
 
             URLBarMenuButton(
                 foregroundColor: buttonForegroundColor,
@@ -199,7 +199,7 @@ struct TopToolbar: View {
     private var windowGroup: some View {
         HStack(spacing: Self.pairSpacing) {
             toolbarButton(sidebarIcon, isEnabled: true, action: { sidebarManager.toggleSidebar() })
-                .oraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)
+                .auraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)
 
             if !privacyMode.isPrivate {
                 DownloadsWidget()

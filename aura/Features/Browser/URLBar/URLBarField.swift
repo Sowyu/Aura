@@ -250,7 +250,7 @@ struct URLBarField: View {
             .buttonStyle(.interactive(cornerRadius: 6, tint: foregroundColor))
             .disabled(tab == nil || isEditing)
             .opacity(tab == nil || isEditing ? 0 : 1)
-            .oraShortcutHelp("Copy URL", for: KeyboardShortcuts.Address.copyURL)
+            .auraShortcutHelp("Copy URL", for: KeyboardShortcuts.Address.copyURL)
             .accessibilityLabel(Text("Copy URL"))
         }
         .frame(height: Self.height)
@@ -268,7 +268,7 @@ struct URLBarField: View {
     /// under the button's own gesture, which claims the press first.
     @ViewBuilder
     private func draggableAddress(@ViewBuilder _ content: () -> some View) -> some View {
-        if let url = tab?.url, !url.isOraInternal, !isEditing {
+        if let url = tab?.url, !url.isAuraInternal, !isEditing {
             content().draggable(url)
         } else {
             content()
@@ -300,7 +300,7 @@ struct URLBarField: View {
     }
 
     private var displayText: String {
-        guard let tab, !tab.url.isOraHome else { return "" }
+        guard let tab, !tab.url.isAuraHome else { return "" }
         return URLDisplayUtils.displayString(url: tab.url, title: tab.title, showFull: toolbarManager.showFullURL)
     }
 
@@ -361,7 +361,7 @@ extension URLBarField {
         guard !isEditing else { return }
         // Pre-fill before flipping the flag so the field edits the URL, not the host.
         launcherInput = tabManager.activeTab?.url
-            .isOraHome == true ? "" : (tabManager.activeTab?.url.absoluteString ?? "")
+            .isAuraHome == true ? "" : (tabManager.activeTab?.url.absoluteString ?? "")
         prefilledInput = launcherInput
         withAnimation(AnimationSettings.easeOut(0.1)) {
             appState.isURLBarEditing = true

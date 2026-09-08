@@ -55,7 +55,7 @@ final class SidebarManager {
     @ObservationIgnored private let defaults = UserDefaults.standard
 
     /// The same defaults keys the old `@AppStorage` wrappers used, so the stored
-    /// preferences survive the move off `@AppStorage`. `OraCommands` reads these
+    /// preferences survive the move off `@AppStorage`. `AuraCommands` reads these
     /// keys directly for its menu check marks.
     private static let sidebarHiddenKey = "ui.sidebar.hidden"
     private static let sidebarPositionKey = "ui.sidebar.position"

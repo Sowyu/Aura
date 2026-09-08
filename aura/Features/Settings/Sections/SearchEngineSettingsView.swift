@@ -21,7 +21,7 @@ struct SearchEngineSettingsView: View {
                     Text("Search engine library")
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
-                    OraButton(label: showingAddForm ? "Cancel" : "Add custom engine", variant: .secondary, size: .sm) {
+                    AuraButton(label: showingAddForm ? "Cancel" : "Add custom engine", variant: .secondary, size: .sm) {
                         if showingAddForm {
                             cancelForm()
                         } else {
@@ -34,15 +34,15 @@ struct SearchEngineSettingsView: View {
             if showingAddForm {
                 SettingsCard(header: "Add new search engine") {
                     VStack(alignment: .leading, spacing: 8) {
-                        OraInput(text: $newEngineName, placeholder: "Search engine name", label: "Name")
+                        AuraInput(text: $newEngineName, placeholder: "Search engine name", label: "Name")
 
-                        OraInput(
+                        AuraInput(
                             text: $newEngineURL, placeholder: "https://example.com/search?q={query}", label: "URL",
                             error: !newEngineURL
                                 .isEmpty && !isValidURL ? "Use an HTTP or HTTPS address containing {query}" : nil
                         )
 
-                        OraInput(text: $newEngineAliases, placeholder: "ddg, duck", label: "Aliases")
+                        AuraInput(text: $newEngineAliases, placeholder: "ddg, duck", label: "Aliases")
 
                         HStack {
                             Text("Type:")
@@ -52,7 +52,7 @@ struct SearchEngineSettingsView: View {
 
                         HStack {
                             Spacer()
-                            OraButton(label: "Save", variant: .secondary, size: .sm) {
+                            AuraButton(label: "Save", variant: .secondary, size: .sm) {
                                 saveSearchEngine()
                             }
                             .disabled(newEngineName.isEmpty || !isValidURL)
@@ -227,7 +227,7 @@ struct BuiltInSearchEngineRow: View {
 
             // Set as default button
             if !isDefault, let onSetAsDefault {
-                OraButton(label: "Set as default", variant: .secondary, size: .sm, action: onSetAsDefault)
+                AuraButton(label: "Set as default", variant: .secondary, size: .sm, action: onSetAsDefault)
             }
         }
         .padding(.vertical, 4)
@@ -278,15 +278,15 @@ struct CustomSearchEngineRow: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        OraInput(text: $editName, placeholder: "Search engine name", label: "Name")
+                        AuraInput(text: $editName, placeholder: "Search engine name", label: "Name")
 
-                        OraInput(
+                        AuraInput(
                             text: $editURL, placeholder: "https://example.com/search?q={query}", label: "URL",
                             error: !editURL
                                 .isEmpty && !isValidEditURL ? "Use an HTTP or HTTPS address containing {query}" : nil
                         )
 
-                        OraInput(text: $editAliases, placeholder: "ddg, duck", label: "Aliases")
+                        AuraInput(text: $editAliases, placeholder: "ddg, duck", label: "Aliases")
 
                         HStack {
                             Text("Type:")
@@ -296,10 +296,10 @@ struct CustomSearchEngineRow: View {
 
                         HStack {
                             Spacer()
-                            OraButton(label: "Cancel", variant: .secondary, size: .sm) {
+                            AuraButton(label: "Cancel", variant: .secondary, size: .sm) {
                                 cancelEdit()
                             }
-                            OraButton(label: "Update", variant: .secondary, size: .sm) {
+                            AuraButton(label: "Update", variant: .secondary, size: .sm) {
                                 saveEdit()
                             }
                             .disabled(editName.isEmpty || !isValidEditURL)
@@ -362,16 +362,16 @@ struct CustomSearchEngineRow: View {
                         // Same reason the built-in AI rows have no button: the only
                         // default it could set is the plain search one.
                         if !isDefault, !engine.isAIChat {
-                            OraButton(label: "Set as default", variant: .secondary, size: .sm) {
+                            AuraButton(label: "Set as default", variant: .secondary, size: .sm) {
                                 onSetAsDefault()
                             }
                         }
 
-                        OraButton(label: "Edit", variant: .secondary, size: .sm) {
+                        AuraButton(label: "Edit", variant: .secondary, size: .sm) {
                             startEdit()
                         }
 
-                        OraButton(label: "Delete", variant: .destructive, size: .sm) {
+                        AuraButton(label: "Delete", variant: .destructive, size: .sm) {
                             dialogManager.confirm(
                                 title: "Delete \"\(engine.name)\"?",
                                 message: "Its search shortcuts will stop working.",

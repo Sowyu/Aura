@@ -145,7 +145,7 @@ final class ExtensionEngine: NSObject {
         // background page reads that as "no known browser", gets nil for the device,
         // and dies on `device.toString` before its popup can ask it anything.
         let webViewConfiguration: WKWebViewConfiguration = configuration.webViewConfiguration
-        webViewConfiguration.applicationNameForUserAgent = BrowserPageConfiguration.oraUserAgent
+        webViewConfiguration.applicationNameForUserAgent = BrowserPageConfiguration.auraUserAgent
         configuration.webViewConfiguration = webViewConfiguration
         return WKWebExtensionController(configuration: configuration)
     }()

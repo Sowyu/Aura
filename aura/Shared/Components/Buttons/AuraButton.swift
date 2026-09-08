@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum OraButtonVariant {
+enum AuraButtonVariant {
     case `default`
     case secondary
     case outline
@@ -10,7 +10,7 @@ enum OraButtonVariant {
 
 /// The shared size scale. Spelled the way the design system spells it, so the two
 /// letters stay.
-enum OraButtonSize {
+enum AuraButtonSize {
     // swiftlint:disable:next identifier_name
     case sm
     // swiftlint:disable:next identifier_name
@@ -19,10 +19,10 @@ enum OraButtonSize {
     case lg
 }
 
-struct OraButton: View {
+struct AuraButton: View {
     let label: String
-    var variant: OraButtonVariant = .default
-    var size: OraButtonSize = .md
+    var variant: AuraButtonVariant = .default
+    var size: AuraButtonSize = .md
     var isDisabled: Bool = false
     var keyboardShortcut: String?
     var leadingIcon: String?
@@ -185,11 +185,11 @@ struct OraButton: View {
 
 #Preview {
     VStack(alignment: .center, spacing: 24) {
-        OraButton(label: "Primary", keyboardShortcut: "return", action: {})
-        OraButton(label: "Secondary", variant: .secondary, keyboardShortcut: "return", action: {})
-        OraButton(label: "Outline", variant: .outline, keyboardShortcut: "return", action: {})
-        OraButton(label: "Ghost", variant: .ghost, keyboardShortcut: "return", action: {})
-        OraButton(label: "Destructive", variant: .destructive, keyboardShortcut: "return", action: {})
+        AuraButton(label: "Primary", keyboardShortcut: "return", action: {})
+        AuraButton(label: "Secondary", variant: .secondary, keyboardShortcut: "return", action: {})
+        AuraButton(label: "Outline", variant: .outline, keyboardShortcut: "return", action: {})
+        AuraButton(label: "Ghost", variant: .ghost, keyboardShortcut: "return", action: {})
+        AuraButton(label: "Destructive", variant: .destructive, keyboardShortcut: "return", action: {})
     }
     .padding(40)
     .frame(width: 300)

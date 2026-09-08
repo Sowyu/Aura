@@ -28,7 +28,7 @@ enum StoreOpenFailure {
     }
 }
 
-struct OraRoot: View {
+struct AuraRoot: View {
     @State private var appState = AppState()
     @StateObject private var keyModifierListener = KeyModifierListener()
     @StateObject private var updateService = UpdateService.shared
@@ -55,7 +55,7 @@ struct OraRoot: View {
     @State private var notificationObservers: [NSObjectProtocol] = []
 
     /// `State(wrappedValue:)` evaluates eagerly where `StateObject` took an autoclosure,
-    /// so every `OraRoot.init` builds a manager set even if SwiftUI keeps only the first.
+    /// so every `AuraRoot.init` builds a manager set even if SwiftUI keeps only the first.
     /// Measured: SwiftUI calls this exactly once per window, and `TabManager.init` writes
     /// to the store (it creates the first space), so a second call would matter.
     init(isPrivate: Bool = false, initialURL: URL? = nil, initialShowLauncher: Bool = false) {
@@ -122,7 +122,7 @@ struct OraRoot: View {
         while true {
             do {
                 return try StartupProfiler.measure("modelContainer") {
-                    try ModelConfiguration.createOraContainer(isPrivate: isPrivate)
+                    try ModelConfiguration.createAuraContainer(isPrivate: isPrivate)
                 }
             } catch {
                 let reason = error.localizedDescription
@@ -311,7 +311,7 @@ struct OraRoot: View {
 // MARK: - Notification routing
 
 /// Which windows a posted event belongs to. Every browser window mounts its own
-/// `OraRoot`, so an event posted by a menu item or the app delegate has to be claimed
+/// `AuraRoot`, so an event posted by a menu item or the app delegate has to be claimed
 /// by exactly one of them.
 enum WindowEventScope {
     /// The sender must be this window. Until `WindowReader` binds `window`, the key
@@ -357,7 +357,7 @@ extension WindowEventScope {
     }
 }
 
-/// One row of `OraRoot`'s routing table.
+/// One row of `AuraRoot`'s routing table.
 struct WindowEvent {
     let name: Notification.Name
     let scope: WindowEventScope
@@ -374,7 +374,7 @@ struct WindowEvent {
     }
 }
 
-extension OraRoot {
+extension AuraRoot {
     /// Registers one observer per row and hands back the tokens. `stop()` removes every
     /// one of them when the window closes; nothing else keeps a strong reference, so the
     /// captured managers go with it.
@@ -400,7 +400,7 @@ extension OraRoot {
             WindowEvent(.focusAddressBar, .windowOrKey) { _ in
                 if toolbarManager.isToolbarHidden {
                     appState.launcherSearchText = tabManager.activeTab?.url
-                        .isOraHome == true ? "" : (tabManager.activeTab?.url.absoluteString ?? "")
+                        .isAuraHome == true ? "" : (tabManager.activeTab?.url.absoluteString ?? "")
                     appState.showLauncher = true
                     appState.launcherFocusToken += 1
                 } else {
@@ -587,7 +587,7 @@ extension OraRoot {
         dialogManager.confirm(
             title: "Quit Aura?",
             message: "Are you sure you want to quit?",
-            iconImage: Image("OraColorLogo"),
+            iconImage: Image("AuraColorLogo"),
             confirmLabel: "Quit",
             variant: .destructive,
             onConfirm: { NSApp.reply(toApplicationShouldTerminate: true) },
@@ -621,7 +621,7 @@ extension OraRoot {
     /// claims the post does.
     @MainActor
     private func saveActiveTab(toReadingList: Bool) {
-        guard let tab = tabManager.activeTab, !tab.url.isOraInternal else { return }
+        guard let tab = tabManager.activeTab, !tab.url.isAuraInternal else { return }
         let saved = toReadingList
             ? bookmarkStore.addToReadingList(title: tab.title, url: tab.url, faviconURL: tab.favicon)
             : bookmarkStore.add(title: tab.title, url: tab.url, faviconURL: tab.favicon)

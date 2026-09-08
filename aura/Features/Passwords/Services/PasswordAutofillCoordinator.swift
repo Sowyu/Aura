@@ -85,7 +85,7 @@ enum PasswordBridgeScript {
     static func script(method: String, base64Payload: String) -> String {
         """
         (function () {
-            const bridge = window.__oraPasswordManager;
+            const bridge = window.__auraPasswordManager;
             if (!bridge || typeof bridge.\(method) !== 'function') { return; }
             const bytes = Uint8Array.from(atob('\(base64Payload)'), (c) => c.charCodeAt(0));
             bridge.\(method)(JSON.parse(new TextDecoder().decode(bytes)));

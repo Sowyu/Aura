@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct OraCommands: Commands {
+struct AuraCommands: Commands {
     // Rebinding a chord must invalidate the menu that reads currentChord.
     @StateObject private var shortcuts = CustomKeyboardShortcutManager.shared
     @StateObject private var appearanceManager = AppearanceManager.shared
@@ -326,7 +326,7 @@ struct OraCommands: Commands {
             }
             CommandGroup(replacing: .printItem) {
                 Button("Print…") { NotificationCenter.default.post(name: .printPage, object: browserWindow) }
-                    .oraShortcut(KeyboardShortcuts.Page.printPage)
+                    .auraShortcut(KeyboardShortcuts.Page.printPage)
             }
             CommandMenu("History") {
                 Button("Show All History") {
@@ -368,7 +368,7 @@ struct OraCommands: Commands {
 
     private func showLauncher() {
         guard AppDelegate.browserWindow(in: NSApp.windows) != nil else {
-            _ = WindowFactory.makeMainWindow(rootView: OraRoot(initialShowLauncher: true))
+            _ = WindowFactory.makeMainWindow(rootView: AuraRoot(initialShowLauncher: true))
             return
         }
         NotificationCenter.default.post(name: .showLauncher, object: browserWindow)
@@ -376,7 +376,7 @@ struct OraCommands: Commands {
 
     private func openSettings(_ section: SettingsTab) {
         guard AppDelegate.browserWindow(in: NSApp.windows) != nil else {
-            WindowFactory.openWindow(with: .oraSettings(section: section))
+            WindowFactory.openWindow(with: .auraSettings(section: section))
             return
         }
         NotificationCenter.default.post(

@@ -43,18 +43,18 @@ struct ExtensionsSettingsView: View {
                     }
                     Spacer(minLength: 12)
                     VStack(alignment: .trailing, spacing: 8) {
-                        OraButton(label: "Open extension store", variant: .secondary, size: .sm) { Self.openStore() }
+                        AuraButton(label: "Open extension store", variant: .secondary, size: .sm) { Self.openStore() }
                             .controlSize(.regular)
                             .fixedSize()
                             .disabled(!ExtensionManager.isSupported)
-                        OraButton(label: "Install from file…", variant: .secondary, size: .sm, action: promptForFile)
+                        AuraButton(label: "Install from file…", variant: .secondary, size: .sm, action: promptForFile)
                             .controlSize(.regular)
                             .fixedSize()
                             .disabled(!ExtensionManager.isSupported)
                         if extensionManager.isCheckingForUpdates {
                             ProgressView().controlSize(.small).accessibilityLabel(Text("Checking for updates"))
                         } else {
-                            OraButton(label: "Check for updates", variant: .secondary, size: .sm) {
+                            AuraButton(label: "Check for updates", variant: .secondary, size: .sm) {
                                 extensionManager.checkForUpdates(force: true)
                             }
                             .disabled(!ExtensionManager.isSupported || installedCount == 0)

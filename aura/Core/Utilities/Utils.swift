@@ -52,7 +52,7 @@ private func isIPv6Literal(_ text: String) -> Bool {
 }
 
 func isValidURL(_ text: String) -> Bool {
-    if oraInternalURL(from: text) != nil { return true }
+    if auraInternalURL(from: text) != nil { return true }
     // A path is an address, not a query. Without this the launcher offers a web search
     // for `~/Documents/report.pdf` and never the file.
     if localFileURL(from: text) != nil { return true }
@@ -77,15 +77,15 @@ func isValidURL(_ text: String) -> Bool {
 
 /// Internal `aura://` addresses are URLs, not search queries. Legacy `ora://` input
 /// is accepted and handed back in canonical form.
-func oraInternalURL(from text: String) -> URL? {
+func auraInternalURL(from text: String) -> URL? {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let url = URL(string: trimmed), url.isOraInternal, url.host != nil else { return nil }
-    return url.canonicalOraInternal
+    guard let url = URL(string: trimmed), url.isAuraInternal, url.host != nil else { return nil }
+    return url.canonicalAuraInternal
 }
 
 func constructURL(from text: String) -> URL? {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let internalURL = oraInternalURL(from: trimmed) {
+    if let internalURL = auraInternalURL(from: trimmed) {
         return internalURL
     }
     // Before the search fallback, and before the scheme check: a path is never a query,

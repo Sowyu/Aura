@@ -416,7 +416,7 @@ final class TabManager {
 
     func addTab(
         title: String = "Untitled",
-        url: URL = .oraHome,
+        url: URL = .auraHome,
         container: TabContainer,
         favicon: URL? = nil,
         historyManager: HistoryManager? = nil,
@@ -430,7 +430,7 @@ final class TabManager {
         }()
         let newTab = Tab(
             url: url,
-            title: url.isOraHome ? "New Tab" : (cleanHost ?? "New Tab"),
+            title: url.isAuraHome ? "New Tab" : (cleanHost ?? "New Tab"),
             favicon: favicon,
             container: container,
             type: .normal,
@@ -471,7 +471,7 @@ final class TabManager {
     ) -> Tab? {
         guard let container = activeContainer else { return nil }
         return addTab(
-            url: .oraHome,
+            url: .auraHome,
             container: container,
             historyManager: historyManager,
             downloadManager: downloadManager,
@@ -489,9 +489,9 @@ final class TabManager {
         isPrivate: Bool
     ) -> Tab? {
         guard let container = activeContainer else { return nil }
-        let url = URL.oraSettings(section: section)
+        let url = URL.auraSettings(section: section)
 
-        if let existing = container.tabs.first(where: { $0.url.isOraSettings }) {
+        if let existing = container.tabs.first(where: { $0.url.isAuraSettings }) {
             existing.url = url
             existing.urlString = url.absoluteString
             activateTab(existing)
@@ -521,13 +521,13 @@ final class TabManager {
     ) -> Tab? {
         guard let container = activeContainer else { return nil }
 
-        if let existing = container.tabs.first(where: { $0.url.isOraExtensions }) {
+        if let existing = container.tabs.first(where: { $0.url.isAuraExtensions }) {
             activateTab(existing)
             return existing
         }
 
         let tab = addTab(
-            url: .oraExtensions,
+            url: .auraExtensions,
             container: container,
             historyManager: historyManager,
             downloadManager: downloadManager,
@@ -552,16 +552,16 @@ final class TabManager {
         // aura:// pages have a host too, but they render natively: no favicon to fetch
         // and no web view to build. This used to be wrapped in `if let host = url.host`,
         // so every internal address opened nothing at all.
-        let isInternal = url.isOraInternal
+        let isInternal = url.isAuraInternal
         let host = isInternal ? nil : url.host
         let cleanHost = host.map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 }
         let fileName = url.isFileURL ? url.lastPathComponent : nil
 
         let newTab = Tab(
-            url: isInternal ? url.canonicalOraInternal : url,
+            url: isInternal ? url.canonicalAuraInternal : url,
             // A file URL has no host, so without the file name every opened document
             // would sit in the sidebar as "New Tab" until WebKit reported a title.
-            title: url.isOraHome ? "New Tab" : (cleanHost ?? fileName ?? "New Tab"),
+            title: url.isAuraHome ? "New Tab" : (cleanHost ?? fileName ?? "New Tab"),
             container: container,
             type: .normal,
             isPlayingMedia: false,
@@ -751,8 +751,8 @@ final class TabManager {
         // Two web-process round trips on every tab switch, and neither can do anything
         // when no media is playing on either side of the switch.
         guard currentTab?.isPlayingMedia == true || oldTab?.isPlayingMedia == true else { return }
-        currentTab?.evaluateJavaScript("window.__oraTriggerPiP(true)")
-        oldTab?.evaluateJavaScript("window.__oraTriggerPiP()")
+        currentTab?.evaluateJavaScript("window.__auraTriggerPiP(true)")
+        oldTab?.evaluateJavaScript("window.__auraTriggerPiP()")
     }
 
     /// `persist: false` is for callers that go on to mutate and save again before
@@ -894,7 +894,7 @@ final class TabManager {
         ExtensionManager.shared.tabDidOpen(copy)
         tab.container.reorderTabs(from: copy, to: tab)
 
-        if !tab.url.isOraInternal, let historyManager = tab.historyManager {
+        if !tab.url.isAuraInternal, let historyManager = tab.historyManager {
             copy.restoreTransientState(
                 historyManager: historyManager,
                 downloadManager: tab.downloadManager ?? fallbackDownloadManager,

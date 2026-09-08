@@ -3,7 +3,7 @@ import SwiftData
 
 extension ModelConfiguration {
     /// Shared model configuration for the main Aura database
-    static func oraDatabase(isPrivate: Bool = false) -> ModelConfiguration {
+    static func auraDatabase(isPrivate: Bool = false) -> ModelConfiguration {
         if isPrivate {
             return ModelConfiguration(isStoredInMemoryOnly: true)
         } else {
@@ -23,12 +23,12 @@ extension ModelConfiguration {
     ///
     /// A private window still gets a fresh in-memory container: sharing one would leak
     /// tabs between private windows, which is the opposite of what they are for.
-    static func createOraContainer(isPrivate: Bool = false) throws -> ModelContainer {
+    static func createAuraContainer(isPrivate: Bool = false) throws -> ModelContainer {
         if isPrivate {
             // No plan: an in-memory store is built from the current schema every time.
             return try ModelContainer(
                 for: Schema(versionedSchema: AuraSchemaV5.self),
-                configurations: oraDatabase(isPrivate: true)
+                configurations: auraDatabase(isPrivate: true)
             )
         }
         return try sharedContainerLock.withLock {
@@ -36,14 +36,14 @@ extension ModelConfiguration {
             let container = try ModelContainer(
                 for: Schema(versionedSchema: AuraSchemaV5.self),
                 migrationPlan: AuraMigrationPlan.self,
-                configurations: oraDatabase(isPrivate: false)
+                configurations: auraDatabase(isPrivate: false)
             )
             sharedContainer = container
             return container
         }
     }
 
-    /// `createOraContainer` is called off the main actor by the rule services, so the
+    /// `createAuraContainer` is called off the main actor by the rule services, so the
     /// cache needs its own lock.
     private nonisolated(unsafe) static var sharedContainer: ModelContainer?
     private static let sharedContainerLock = NSLock()

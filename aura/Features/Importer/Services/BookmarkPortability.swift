@@ -64,7 +64,7 @@ enum BookmarkPortability {
         var summary = ImportSummary(added: 0, skipped: 0, foldersCreated: 0)
 
         for item in items.prefix(importLimit) {
-            guard let url = URL(string: item.urlString), !url.isOraInternal else {
+            guard let url = URL(string: item.urlString), !url.isAuraInternal else {
                 summary.skipped += 1
                 continue
             }

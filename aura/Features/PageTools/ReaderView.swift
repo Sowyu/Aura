@@ -18,7 +18,7 @@ struct ReaderView: View {
     private static let bodySize: CGFloat = 16
     private static let padding: CGFloat = 32
 
-    private var target: URL? { tab.url.oraPageToolTarget }
+    private var target: URL? { tab.url.auraPageToolTarget }
 
     var body: some View {
         Group {

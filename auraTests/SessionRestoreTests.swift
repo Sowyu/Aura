@@ -193,7 +193,7 @@ struct TabSessionStoreTests {
     @Test func anInternalPageIsNotWorthASession() throws {
         let (manager, space) = try makeManager()
         let tab = try makeTab(manager, space, order: 1)
-        tab.updateURL(.oraHome)
+        tab.updateURL(.auraHome)
 
         #expect(!manager.sessionStore.capture(tab, scroll: CGPoint(x: 0, y: 99), scrollURL: tab.url))
         #expect(manager.sessionStore.session(for: tab.id) == nil)

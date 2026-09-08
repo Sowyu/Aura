@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Size
 
 /// The shared size scale, spelled the way the design system spells it.
-enum OraIconSize {
+enum AuraIconSize {
     // swiftlint:disable:next identifier_name
     case xs, sm, md, lg, xl
     case custom(CGFloat)
@@ -22,7 +22,7 @@ enum OraIconSize {
 
 // MARK: - Type-erased shape wrapper
 
-struct AnyOraShape: Shape {
+struct AnyAuraShape: Shape {
     private let _path: @Sendable (CGRect) -> Path
 
     init(_ shape: some Shape & Sendable) {
@@ -36,21 +36,21 @@ struct AnyOraShape: Shape {
 
 // MARK: - Icon registry
 
-enum OraIconType {
+enum AuraIconType {
     case star
     case circle
     case spaceCards
     case copy
     case brush1
-    case custom(AnyOraShape)
+    case custom(AnyAuraShape)
 
-    var shape: AnyOraShape {
+    var shape: AnyAuraShape {
         switch self {
-        case .star:             AnyOraShape(StarIcon())
-        case .circle:           AnyOraShape(Circle())
-        case .spaceCards:       AnyOraShape(SpaceCardsIcon())
-        case .copy:             AnyOraShape(CopyIcon())
-        case .brush1:           AnyOraShape(Brush1())
+        case .star:             AnyAuraShape(StarIcon())
+        case .circle:           AnyAuraShape(Circle())
+        case .spaceCards:       AnyAuraShape(SpaceCardsIcon())
+        case .copy:             AnyAuraShape(CopyIcon())
+        case .brush1:           AnyAuraShape(Brush1())
         case let .custom(shape): shape
         }
     }
@@ -58,9 +58,9 @@ enum OraIconType {
 
 // MARK: - View
 
-struct OraIcons: View {
-    let icon: OraIconType
-    var size: OraIconSize = .md
+struct AuraIcons: View {
+    let icon: AuraIconType
+    var size: AuraIconSize = .md
     var color: Color?
 
     @Environment(\.theme) private var theme
@@ -104,16 +104,16 @@ private struct StarIcon: Shape {
 #Preview {
     VStack(spacing: 20) {
         HStack(spacing: 16) {
-            OraIcons(icon: .star, size: .xs)
-            OraIcons(icon: .star, size: .sm)
-            OraIcons(icon: .star, size: .md)
-            OraIcons(icon: .star, size: .lg)
-            OraIcons(icon: .star, size: .xl)
+            AuraIcons(icon: .star, size: .xs)
+            AuraIcons(icon: .star, size: .sm)
+            AuraIcons(icon: .star, size: .md)
+            AuraIcons(icon: .star, size: .lg)
+            AuraIcons(icon: .star, size: .xl)
         }
         HStack(spacing: 16) {
-            OraIcons(icon: .circle, size: .xl)
-            OraIcons(icon: .star, size: .xl, color: .orange)
-            OraIcons(icon: .custom(AnyOraShape(RoundedRectangle(cornerRadius: 4))), size: .xl)
+            AuraIcons(icon: .circle, size: .xl)
+            AuraIcons(icon: .star, size: .xl, color: .orange)
+            AuraIcons(icon: .custom(AnyAuraShape(RoundedRectangle(cornerRadius: 4))), size: .xl)
         }
     }
     .padding(40)

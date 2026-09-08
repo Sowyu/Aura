@@ -14,12 +14,12 @@ struct BookmarkEditDialog: View {
 
     var body: some View {
         BookmarkDialogCard(width: Self.width, heading: "Edit Bookmark") {
-            OraInput(text: $title, placeholder: "Title", label: "Title", onSubmit: save, autofocus: true)
-            OraInput(text: $urlString, placeholder: "https://", label: "Address", onSubmit: save)
+            AuraInput(text: $title, placeholder: "Title", label: "Title", onSubmit: save, autofocus: true)
+            AuraInput(text: $urlString, placeholder: "https://", label: "Address", onSubmit: save)
         } footer: {
-            OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
+            AuraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
             Spacer()
-            OraButton(
+            AuraButton(
                 label: "Save",
                 isDisabled: urlString.trimmingCharacters(in: .whitespaces).isEmpty,
                 keyboardShortcut: "return",
@@ -55,11 +55,11 @@ struct BookmarkFolderDialog: View {
             width: Self.width,
             heading: folder == nil ? "New Folder" : "Rename Folder"
         ) {
-            OraInput(text: $name, placeholder: "Folder name", label: "Name", onSubmit: save, autofocus: true)
+            AuraInput(text: $name, placeholder: "Folder name", label: "Name", onSubmit: save, autofocus: true)
         } footer: {
-            OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
+            AuraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
             Spacer()
-            OraButton(
+            AuraButton(
                 label: "Save",
                 isDisabled: name.trimmingCharacters(in: .whitespaces).isEmpty,
                 keyboardShortcut: "return",

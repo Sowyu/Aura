@@ -98,7 +98,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func getWindow() -> NSWindow? {
         guard let window = Self.browserWindow(in: NSApp.orderedWindows)
             ?? Self.browserWindow(in: NSApp.windows) else {
-            return WindowFactory.makeMainWindow(rootView: OraRoot())
+            return WindowFactory.makeMainWindow(rootView: AuraRoot())
         }
         if window.isMiniaturized { window.deminiaturize(nil) }
         window.makeKeyAndOrderFront(nil)
@@ -155,11 +155,11 @@ final class AppState {
 }
 
 @main
-struct OraApp: App {
+struct AuraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     /// The rename moved the data folder, so this has to run before anything opens the
-    /// store. `OraRoot` makes its own container per window. It cannot be deferred for
+    /// store. `AuraRoot` makes its own container per window. It cannot be deferred for
     /// that reason; after the first launch it costs four `stat` calls and one
     /// `UserDefaults` read, which the startup log confirms as 0 ms.
     private let didMigrateLegacyData: Void = StartupProfiler.measure("legacyDataMigration") {
@@ -168,7 +168,7 @@ struct OraApp: App {
 
     var body: some Scene {
         WindowGroup(id: "normal") {
-            OraRoot()
+            AuraRoot()
                 .frame(minWidth: 500, minHeight: 360)
         }
         .defaultSize(width: 1440, height: 900)
@@ -177,13 +177,13 @@ struct OraApp: App {
         .handlesExternalEvents(matching: [])
 
         WindowGroup("Private", id: "private") {
-            OraRoot(isPrivate: true)
+            AuraRoot(isPrivate: true)
                 .frame(minWidth: 500, minHeight: 360)
         }
         .defaultSize(width: 1440, height: 900)
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .handlesExternalEvents(matching: [])
-        .commands { OraCommands() }
+        .commands { AuraCommands() }
     }
 }

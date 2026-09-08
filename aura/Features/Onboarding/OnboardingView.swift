@@ -39,7 +39,7 @@ private struct OnboardingPresenter: ViewModifier {
     private func retireForExistingProfiles() {
         guard !settings.onboardingCompleted, !privacyMode.isPrivate else { return }
         let spaces = tabManager.fetchContainers()
-        let tabsBeyondHome = spaces.flatMap(\.tabs).filter { !$0.url.isOraHome }.count
+        let tabsBeyondHome = spaces.flatMap(\.tabs).filter { !$0.url.isAuraHome }.count
         if OnboardingPolicy.isExistingProfile(spaceCount: spaces.count, tabsBeyondHome: tabsBeyondHome) {
             settings.onboardingCompleted = true
         }

@@ -61,7 +61,7 @@ struct ExtensionStoreView: View {
                         .foregroundStyle(theme.mutedForeground)
                 }
                 Spacer(minLength: 12)
-                OraButton(label: "Install from file…", variant: .secondary, size: .sm, action: promptForFile)
+                AuraButton(label: "Install from file…", variant: .secondary, size: .sm, action: promptForFile)
                     .controlSize(.regular)
                     .fixedSize()
             }
@@ -169,7 +169,7 @@ struct ExtensionStoreView: View {
             }
 
             if model.hasMore {
-                OraButton(label: model.isLoadingMore ? "Loading…" : "Load more", variant: .secondary, size: .sm) {
+                AuraButton(label: model.isLoadingMore ? "Loading…" : "Load more", variant: .secondary, size: .sm) {
                     model.loadMore()
                 }
                 .controlSize(.regular)

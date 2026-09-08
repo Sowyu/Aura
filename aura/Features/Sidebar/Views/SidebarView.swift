@@ -401,7 +401,7 @@ extension SidebarView {
             openInNewTab(url)
             return true
         case let .search(text):
-            guard let tab = openInNewTab(.oraHome) else { return false }
+            guard let tab = openInNewTab(.auraHome) else { return false }
             tab.loadURL(text)
             return true
         }

@@ -122,7 +122,7 @@ final class SiteSpaceRuleService: ObservableObject {
         if let context { return context }
         // Its own context on the shared store: every window already builds one, and this
         // service is the only reader and writer of the table, so the cache stays correct.
-        guard let container = try? ModelConfiguration.createOraContainer() else { return nil }
+        guard let container = try? ModelConfiguration.createAuraContainer() else { return nil }
         let created = ModelContext(container)
         context = created
         return created

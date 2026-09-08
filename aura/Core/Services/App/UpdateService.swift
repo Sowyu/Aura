@@ -183,7 +183,7 @@ extension UpdatePhase {
 
 /// One updater for the app, shared by every window. Sparkle wants a single `SPUUpdater`
 /// per host bundle, and `start()` does bundle validation and installer-service setup
-/// that first paint does not need, so it is deferred: `OraRoot` calls `start()` once the
+/// that first paint does not need, so it is deferred: `AuraRoot` calls `start()` once the
 /// first window is on screen, and the two check entry points start it on demand.
 ///
 /// The user driver is Aura's own (`UpdateDriver`), not `SPUStandardUserDriver`, so an
@@ -206,7 +206,7 @@ final class UpdateService: ObservableObject {
 
     private init() {}
 
-    /// True while Sparkle is quitting the app to swap the bundle in. `OraApp` reads it to
+    /// True while Sparkle is quitting the app to swap the bundle in. `AuraApp` reads it to
     /// skip the quit confirmation: the user agreed to the restart by pressing the update
     /// button, and a dialog there stops an install that is already under way.
     var isInstalling: Bool { phase == .installing }

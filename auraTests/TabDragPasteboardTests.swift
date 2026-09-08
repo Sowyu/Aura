@@ -72,7 +72,7 @@ struct TabDragPasteboardTests {
     func internalPageRowIsUnchanged() throws {
         let view = TabDragSourceNSView()
         view.rowID = UUID()
-        view.dragURL = URL.oraHome
+        view.dragURL = URL.auraHome
         #expect(view.pasteboardWriter() is NSPasteboardItem)
     }
 

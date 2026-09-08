@@ -64,7 +64,7 @@ struct HomePageView: View {
 
     private func column(width: CGFloat) -> some View {
         VStack(spacing: 18) {
-            Image(decorative: "ora-logo-plain")
+            Image(decorative: "aura-logo-plain")
                 .resizable()
                 .renderingMode(.template)
                 .frame(width: 64, height: 64)
@@ -126,11 +126,11 @@ struct HomePageView: View {
                 }
 
                 HStack(spacing: 8) {
-                    OraButton(label: "Set as Default", size: .sm) {
+                    AuraButton(label: "Set as Default", size: .sm) {
                         DefaultBrowserManager.requestSetAsDefault()
                         defaultBrowserManager.updateIsDefault()
                     }
-                    OraButton(label: "Import Bookmarks\u{2026}", variant: .secondary, size: .sm) {
+                    AuraButton(label: "Import Bookmarks\u{2026}", variant: .secondary, size: .sm) {
                         NotificationCenter.default.post(
                             name: .openSettingsTab,
                             object: nil,

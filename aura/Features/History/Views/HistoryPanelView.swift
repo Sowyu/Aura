@@ -68,7 +68,7 @@ struct HistoryPanelView: View {
             if !items.isEmpty, searchText.isEmpty {
                 Button(action: confirmClearRange) {
                     HStack(spacing: 4) {
-                        OraIcons(icon: .brush1, size: .sm, color: isClearHovered ? theme.foreground : .secondary)
+                        AuraIcons(icon: .brush1, size: .sm, color: isClearHovered ? theme.foreground : .secondary)
                         Text("Clear")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(isClearHovered ? theme.foreground : .secondary)
@@ -89,7 +89,7 @@ struct HistoryPanelView: View {
 
     private var searchBar: some View {
         HStack(spacing: 6) {
-            OraInput(
+            AuraInput(
                 text: $searchText,
                 placeholder: "Search history…",
                 size: .md,

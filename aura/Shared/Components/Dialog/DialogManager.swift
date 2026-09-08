@@ -50,10 +50,10 @@ final class DialogManager {
     func confirm(
         title: String,
         message: String? = nil,
-        icon: OraIconType? = nil,
+        icon: AuraIconType? = nil,
         iconImage: Image? = nil,
         confirmLabel: String = "Confirm",
-        variant: OraButtonVariant = .default,
+        variant: AuraButtonVariant = .default,
         onConfirm: @escaping () -> Void,
         onCancel: (() -> Void)? = nil,
         isQuitConfirmation: Bool = false

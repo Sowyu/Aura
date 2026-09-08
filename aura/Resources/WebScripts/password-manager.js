@@ -1,8 +1,8 @@
 (function () {
-    if (window.__oraPasswordManagerInstalled) {
+    if (window.__auraPasswordManagerInstalled) {
         return;
     }
-    window.__oraPasswordManagerInstalled = true;
+    window.__auraPasswordManagerInstalled = true;
 
     const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.passwordManager;
     if (!handler) {
@@ -31,13 +31,13 @@
         if (!element) {
             return null;
         }
-        if (!element.dataset.oraPasswordFieldId) {
+        if (!element.dataset.auraPasswordFieldId) {
             const random = window.crypto && window.crypto.randomUUID
                 ? window.crypto.randomUUID()
                 : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-            element.dataset.oraPasswordFieldId = `ora-password-${random}`;
+            element.dataset.auraPasswordFieldId = `aura-password-${random}`;
         }
-        return element.dataset.oraPasswordFieldId;
+        return element.dataset.auraPasswordFieldId;
     }
 
     function isVisible(element, rect) {
@@ -373,11 +373,11 @@
         }
 
         if (window.CSS && typeof window.CSS.escape === "function") {
-            return document.querySelector(`[data-ora-password-field-id="${window.CSS.escape(fieldID)}"]`);
+            return document.querySelector(`[data-aura-password-field-id="${window.CSS.escape(fieldID)}"]`);
         }
 
-        return Array.from(document.querySelectorAll("[data-ora-password-field-id]"))
-            .find((element) => element.dataset.oraPasswordFieldId === fieldID) || null;
+        return Array.from(document.querySelectorAll("[data-aura-password-field-id]"))
+            .find((element) => element.dataset.auraPasswordFieldId === fieldID) || null;
     }
 
     function submitFilledForm(request) {
@@ -405,7 +405,7 @@
         }, 0);
     }
 
-    window.__oraPasswordManager = {
+    window.__auraPasswordManager = {
         fillCredentials(payload) {
             const request = typeof payload === "string" ? JSON.parse(payload) : payload;
             if (request.documentID !== documentID) { return; }

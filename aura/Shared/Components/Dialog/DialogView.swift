@@ -6,11 +6,11 @@ import SwiftUI
 struct ConfirmDialogView: View {
     let title: String
     var message: String?
-    var icon: OraIconType?
+    var icon: AuraIconType?
     var iconColor: Color?
     var iconImage: Image?
     var confirmLabel: String = "Confirm"
-    var confirmVariant: OraButtonVariant = .default
+    var confirmVariant: AuraButtonVariant = .default
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
@@ -42,9 +42,9 @@ struct ConfirmDialogView: View {
             .padding(.vertical, Self.blockPadding)
 
             HStack {
-                OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: onCancel)
+                AuraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: onCancel)
                 Spacer()
-                OraButton(label: confirmLabel, variant: confirmVariant, keyboardShortcut: "return") {
+                AuraButton(label: confirmLabel, variant: confirmVariant, keyboardShortcut: "return") {
                     onConfirm()
                     onCancel()
                 }
@@ -79,7 +79,7 @@ struct ConfirmDialogView: View {
                 .background(theme.mutedBackground)
                 .cornerRadius(AuraRadius.row)
         } else if let icon {
-            OraIcons(icon: icon, size: .custom(42), color: iconColor ?? theme.mutedForeground)
+            AuraIcons(icon: icon, size: .custom(42), color: iconColor ?? theme.mutedForeground)
         }
     }
 }

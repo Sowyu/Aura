@@ -82,7 +82,7 @@ struct ContainerForm: View {
     }
 
     private var nameTextField: some View {
-        OraInput(
+        AuraInput(
             text: $name,
             placeholder: "e.g. work, streaming, finance…",
             onSubmit: onSubmit,

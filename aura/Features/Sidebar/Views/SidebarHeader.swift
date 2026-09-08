@@ -33,7 +33,7 @@ struct SidebarHeader: View {
                         size: TopToolbar.buttonSize,
                         action: { sidebarManager.toggleSidebar() }
                     )
-                    .oraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)
+                    .auraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)
                     Spacer()
                 }
 
@@ -48,7 +48,7 @@ struct SidebarHeader: View {
                         }
                     }
                 )
-                .oraShortcutHelp("Go Back", for: KeyboardShortcuts.Navigation.back)
+                .auraShortcutHelp("Go Back", for: KeyboardShortcuts.Navigation.back)
 
                 URLBarButton(
                     icon: .forward,
@@ -61,7 +61,7 @@ struct SidebarHeader: View {
                         }
                     }
                 )
-                .oraShortcutHelp("Go Forward", for: KeyboardShortcuts.Navigation.forward)
+                .auraShortcutHelp("Go Forward", for: KeyboardShortcuts.Navigation.forward)
 
                 URLBarButton(
                     icon: .reload,
@@ -74,7 +74,7 @@ struct SidebarHeader: View {
                         }
                     }
                 )
-                .oraShortcutHelp("Reload This Page", for: KeyboardShortcuts.Navigation.reload)
+                .auraShortcutHelp("Reload This Page", for: KeyboardShortcuts.Navigation.reload)
 
                 if sidebarManager.sidebarPosition == .secondary {
                     Spacer()
@@ -85,7 +85,7 @@ struct SidebarHeader: View {
                         size: TopToolbar.buttonSize,
                         action: { sidebarManager.toggleSidebar() }
                     )
-                    .oraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)
+                    .auraShortcutHelp("Toggle Sidebar", for: KeyboardShortcuts.App.toggleSidebar)
                 }
             }
         }

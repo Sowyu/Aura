@@ -11,7 +11,7 @@ func openPasswordsWindow() {
 private final class PasswordsWindowController: NSObject, NSWindowDelegate {
     static let shared = PasswordsWindowController()
 
-    private let sharedModelContainer = try? ModelConfiguration.createOraContainer(isPrivate: false)
+    private let sharedModelContainer = try? ModelConfiguration.createAuraContainer(isPrivate: false)
     private var windowController: NSWindowController?
 
     func show() {

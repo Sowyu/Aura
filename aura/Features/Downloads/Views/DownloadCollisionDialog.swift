@@ -42,15 +42,15 @@ struct DownloadCollisionDialog: View {
             .padding(.vertical, Self.blockPadding)
 
             HStack(spacing: 8) {
-                OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc") {
+                AuraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc") {
                     choose(.cancel)
                 }
                 Spacer()
-                OraButton(label: "Replace", variant: .destructive) {
+                AuraButton(label: "Replace", variant: .destructive) {
                     choose(.replace)
                 }
                 // The safe answer takes return: it is the one that cannot lose a file.
-                OraButton(label: "Keep both", variant: .default, keyboardShortcut: "return") {
+                AuraButton(label: "Keep both", variant: .default, keyboardShortcut: "return") {
                     choose(.keepBoth)
                 }
             }

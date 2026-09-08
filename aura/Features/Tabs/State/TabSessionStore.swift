@@ -69,7 +69,7 @@ final class TabSessionStore {
     /// taken, which for a page captured at load time is the top.
     @discardableResult
     func capture(_ tab: Tab, scroll: CGPoint? = nil, scrollURL: URL? = nil) -> Bool {
-        guard isAvailable, !tab.isPrivate, !tab.isDeleted, !tab.url.isOraInternal else { return false }
+        guard isAvailable, !tab.isPrivate, !tab.isDeleted, !tab.url.isAuraInternal else { return false }
 
         let state = tab.browserPage?.sessionState
         let snapshot = tab.browserPage?.historySnapshot

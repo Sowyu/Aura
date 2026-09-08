@@ -5,7 +5,7 @@ import Foundation
 /// Presents one browser window (an `NSWindow` plus the `TabManager` that owns
 /// its tabs) to WebKit's extension machinery.
 ///
-/// Every `OraRoot` builds its own `TabManager`, so the pairing is one adapter per
+/// Every `AuraRoot` builds its own `TabManager`, so the pairing is one adapter per
 /// window. Private windows are registered too, and report themselves as private:
 /// WebKit hides them from every extension that was not granted private access, and
 /// `tabs(for:)` refuses to list their tabs as a second line of defence.

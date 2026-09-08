@@ -99,12 +99,12 @@ struct SettingsSectionsTests {
 
     @Test func everySectionHasAWorkingDeepLink() {
         for tab in SettingsTab.allCases {
-            let url = URL.oraSettings(section: tab)
-            #expect(url.isOraSettings, "\(tab) does not produce a settings URL")
-            #expect(url.oraSettingsSection == tab, "\(url) does not resolve back to \(tab)")
+            let url = URL.auraSettings(section: tab)
+            #expect(url.isAuraSettings, "\(tab) does not produce a settings URL")
+            #expect(url.auraSettingsSection == tab, "\(url) does not resolve back to \(tab)")
         }
         // No section means the page keeps whatever the user last had open.
-        #expect(URL.oraSettings().oraSettingsSection == nil)
+        #expect(URL.auraSettings().auraSettingsSection == nil)
     }
 
     @MainActor @Test func scriptableImageFormatsNeverOpenThemselves() {

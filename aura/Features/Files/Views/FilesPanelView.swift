@@ -42,7 +42,7 @@ struct FilesPanelView: View {
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        OraIcons(icon: .brush1, size: .sm, color: isClearHovered ? theme.foreground : .secondary)
+                        AuraIcons(icon: .brush1, size: .sm, color: isClearHovered ? theme.foreground : .secondary)
                         Text("Clear").font(.system(size: 12, weight: .medium))
                     }
                     .foregroundColor(isClearHovered ? theme.foreground : .secondary)

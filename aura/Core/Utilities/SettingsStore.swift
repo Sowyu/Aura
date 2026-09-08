@@ -508,11 +508,11 @@ class SettingsStore {
     /// parse falls back to the built-in page rather than navigating nowhere.
     var homePageURL: URL {
         let trimmed = homePageURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return .oraHome }
+        guard !trimmed.isEmpty else { return .auraHome }
         if let url = URL(string: trimmed), url.scheme != nil {
             return url
         }
-        return URL(string: "https://\(trimmed)") ?? .oraHome
+        return URL(string: "https://\(trimmed)") ?? .auraHome
     }
 
     /// What a space with no stored privacy blob of its own inherits.

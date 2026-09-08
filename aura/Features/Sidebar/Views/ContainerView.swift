@@ -75,7 +75,7 @@ struct ContainerView: View {
                 .adaptiveScrollElasticity()
             }
         }
-        .modifier(OraWindowDragGesture())
+        .modifier(AuraWindowDragGesture())
         .onChange(of: dragSession.pendingDrop) { _, drop in
             guard let drop, drop.zone.containerID == container.id else { return }
             TabDropCommit.apply(drop, in: container, tabManager: tabManager)
@@ -162,7 +162,7 @@ struct ContainerView: View {
     }
 }
 
-private struct OraWindowDragGesture: ViewModifier {
+private struct AuraWindowDragGesture: ViewModifier {
     @ObservedObject private var pointer = TabRowPointer.shared
     @ObservedObject private var dragSession = TabDragSession.shared
 

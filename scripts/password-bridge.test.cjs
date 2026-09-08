@@ -80,7 +80,7 @@ function fillRequest(fixture) {
 test('a fill reaches only the document that requested it', () => {
     const first = documentFixture();
     const request = fillRequest(first);
-    first.window.__oraPasswordManager.fillCredentials(request);
+    first.window.__auraPasswordManager.fillCredentials(request);
     assert.equal(first.password.value, request.password);
     assert.equal(first.username.value, request.username);
 
@@ -88,7 +88,7 @@ test('a fill reaches only the document that requested it', () => {
     // Even copied DOM attributes cannot authorise a fill in the new document.
     next.username.dataset = { ...first.username.dataset };
     next.password.dataset = { ...first.password.dataset };
-    next.window.__oraPasswordManager.fillCredentials(request);
+    next.window.__auraPasswordManager.fillCredentials(request);
     assert.equal(next.password.value, '');
     assert.equal(next.username.value, '');
 });
@@ -97,13 +97,13 @@ test('a fill without a document ID is refused', () => {
     const fixture = documentFixture();
     const request = fillRequest(fixture);
     delete request.documentID;
-    fixture.window.__oraPasswordManager.fillCredentials(request);
+    fixture.window.__auraPasswordManager.fillCredentials(request);
     assert.equal(fixture.password.value, '');
 });
 
 test('page-generated Enter events cannot activate autofill', () => {
     const fixture = documentFixture();
-    fixture.window.__oraPasswordManager.setOverlayKeyboardActive(true);
+    fixture.window.__auraPasswordManager.setOverlayKeyboardActive(true);
     const event = {
         key: 'Enter', target: fixture.password, isTrusted: false,
         preventDefault() {}, stopPropagation() {},
@@ -129,8 +129,8 @@ test('submitted passwords retain whitespace and their document ID', () => {
 test('large forms only measure fields that can supply credentials', t => {
     const fixture = documentFixture(1000);
     t.diagnostic(`focus bounds=${fixture.metrics.bounds}, styles=${fixture.metrics.styles}`);
-    assert.equal(fixture.focus.focus.usernameFieldID, fixture.username.dataset.oraPasswordFieldId);
-    assert.deepEqual(fixture.focus.focus.passwordFieldIDs, [fixture.password.dataset.oraPasswordFieldId]);
+    assert.equal(fixture.focus.focus.usernameFieldID, fixture.username.dataset.auraPasswordFieldId);
+    assert.deepEqual(fixture.focus.focus.passwordFieldIDs, [fixture.password.dataset.auraPasswordFieldId]);
     assert.equal(fixture.metrics.bounds, 3);
     assert.equal(fixture.metrics.styles, 2);
     fixture.metrics.bounds = fixture.metrics.styles = 0;
@@ -187,7 +187,7 @@ test('hidden and disabled fields preserve username and password selection', () =
     fixture.inputs.splice(1, 0, hidden, nearest, disabled);
     fixture.events.focusin({ target: fixture.password });
     const focus = fixture.messages.at(-1).focus;
-    assert.equal(focus.usernameFieldID, nearest.dataset.oraPasswordFieldId);
-    assert.deepEqual(focus.passwordFieldIDs, [fixture.password.dataset.oraPasswordFieldId]);
+    assert.equal(focus.usernameFieldID, nearest.dataset.auraPasswordFieldId);
+    assert.deepEqual(focus.passwordFieldIDs, [fixture.password.dataset.auraPasswordFieldId]);
     assert.equal(focus.action, 'login');
 });

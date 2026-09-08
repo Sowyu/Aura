@@ -7,7 +7,7 @@ import SwiftData
 /// views want a manager in the environment, not a `@Query` that re-runs the whole
 /// chrome. Unlike history, the context this holds is always the on-disk one, even in a
 /// private window: a page saved on purpose is not browsing data, and losing it when the
-/// window closes is not privacy, it is a bug. `OraRoot` is where that choice is made.
+/// window closes is not privacy, it is a bug. `AuraRoot` is where that choice is made.
 ///
 /// Cached lists rather than fetch-per-render: the bar draws on every chrome pass, and a
 /// fetch there showed up in the toolbar's frame time. Writers refresh the cache and post
@@ -170,7 +170,7 @@ final class BookmarkStore {
     ) -> Bookmark? {
         // aura:// pages are chrome. Guarded here rather than at each caller so no
         // affordance can file the settings tab under Bookmarks.
-        guard !url.isOraInternal else { return nil }
+        guard !url.isAuraInternal else { return nil }
 
         if let existing = rows(for: url).first(where: { $0.folder === folder }) {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -201,7 +201,7 @@ final class BookmarkStore {
     /// Puts a page aside to read. Same entity, filed in the reading list and unread.
     @discardableResult
     func addToReadingList(title: String, url: URL, faviconURL: URL? = nil) -> Bookmark? {
-        guard !url.isOraInternal else { return nil }
+        guard !url.isAuraInternal else { return nil }
         return add(
             title: title,
             url: url,

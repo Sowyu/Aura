@@ -1,6 +1,6 @@
 import Foundation
 
-enum OraBrowserScripts {
+enum AuraBrowserScripts {
     static func userScripts() -> [BrowserUserScript] {
         allUserScripts
     }
@@ -10,13 +10,13 @@ enum OraBrowserScripts {
     private static let allUserScripts: [BrowserUserScript] = {
         var scripts = [
             BrowserUserScript(
-                name: "ora-bridge",
+                name: "aura-bridge",
                 source: bridgeScript,
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true
             ),
             BrowserUserScript(
-                name: "ora-navigation",
+                name: "aura-navigation",
                 source: navigationAndMediaScript,
                 injectionTime: .atDocumentEnd,
                 forMainFrameOnly: true
@@ -24,7 +24,7 @@ enum OraBrowserScripts {
             // Subframes included: a right-click inside an iframe still has to describe the
             // element under the pointer, and this script does not depend on the bridge.
             BrowserUserScript(
-                name: "ora-context-menu",
+                name: "aura-context-menu",
                 source: contextMenuScript,
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: false
@@ -34,7 +34,7 @@ enum OraBrowserScripts {
         if let passwordManagerScript = loadResourceScript(named: "password-manager") {
             scripts.append(
                 BrowserUserScript(
-                    name: "ora-password-manager",
+                    name: "aura-password-manager",
                     source: passwordManagerScript,
                     injectionTime: .atDocumentEnd,
                     forMainFrameOnly: true,
@@ -60,10 +60,10 @@ enum OraBrowserScripts {
     /// fresh answer by the time `willOpenMenu` runs.
     private static let contextMenuScript = """
     (function () {
-        if (window.__oraContextMenuInstalled) {
+        if (window.__auraContextMenuInstalled) {
             return;
         }
-        window.__oraContextMenuInstalled = true;
+        window.__auraContextMenuInstalled = true;
 
         function closest(element, selector) {
             return element && element.closest ? element.closest(selector) : null;
@@ -105,11 +105,11 @@ enum OraBrowserScripts {
 
     private static let bridgeScript = """
     (function () {
-        if (window.__oraBridge && typeof window.__oraBridge.postMessage === 'function') {
+        if (window.__auraBridge && typeof window.__auraBridge.postMessage === 'function') {
             return;
         }
 
-        window.__oraBridge = {
+        window.__auraBridge = {
             postMessage: function(name, payload) {
                 try {
                     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[name]) {
@@ -125,7 +125,7 @@ enum OraBrowserScripts {
 }
 
 /// The page-side script lives in its own extension so the enum body stays readable.
-private extension OraBrowserScripts {
+private extension AuraBrowserScripts {
     private static let navigationAndMediaScript = """
     (function () {
         let lastHref = location.href;
@@ -133,7 +133,7 @@ private extension OraBrowserScripts {
 
         function post(name, payload) {
             try {
-                window.__oraBridge && window.__oraBridge.postMessage(name, payload);
+                window.__auraBridge && window.__auraBridge.postMessage(name, payload);
             } catch (error) {}
         }
 
@@ -221,14 +221,14 @@ private extension OraBrowserScripts {
     })();
 
     (function () {
-        if (window.__oraMediaInstalled) {
+        if (window.__auraMediaInstalled) {
             return;
         }
-        window.__oraMediaInstalled = true;
+        window.__auraMediaInstalled = true;
 
         function post(payload) {
             try {
-                window.__oraBridge && window.__oraBridge.postMessage('mediaEvent', JSON.stringify(payload));
+                window.__auraBridge && window.__auraBridge.postMessage('mediaEvent', JSON.stringify(payload));
             } catch (error) {}
         }
 
@@ -271,19 +271,19 @@ private extension OraBrowserScripts {
 
         const stateFrom = (element) => ({
             type: 'state',
-            wasPlayed: element && element.__oraWasPlayed,
+            wasPlayed: element && element.__auraWasPlayed,
             state: element && !element.paused ? 'playing' : 'paused',
             volume: element ? (element.muted ? 0 : element.volume) : undefined,
             title: document.title
         });
 
         function attach(element) {
-            if (!element || element.__oraAttached) return;
-            element.__oraAttached = true;
+            if (!element || element.__auraAttached) return;
+            element.__auraAttached = true;
             const update = () => post(stateFrom(element));
             element.addEventListener('play', () => {
                 update();
-                element.__oraWasPlayed = true;
+                element.__auraWasPlayed = true;
             });
             element.addEventListener('pause', update);
             element.addEventListener('ended', () => post({ type: 'ended' }));
@@ -291,7 +291,7 @@ private extension OraBrowserScripts {
                 post({ type: 'volume', volume: element.muted ? 0 : element.volume })
             );
             if (!element.paused) {
-                element.__oraWasPlayed = true;
+                element.__auraWasPlayed = true;
                 update();
             }
         }
@@ -311,7 +311,7 @@ private extension OraBrowserScripts {
                 treeObserver.disconnect();
                 treeObserver = null;
                 lastCaps = null;
-                if (window.__oraMedia) window.__oraMedia.active = null;
+                if (window.__auraMedia) window.__auraMedia.active = null;
                 post({ type: 'removed' });
                 return;
             }
@@ -357,7 +357,7 @@ private extension OraBrowserScripts {
             scan();
         }
 
-        window.__oraMedia = {
+        window.__auraMedia = {
             active: null,
             _pick() {
                 const elements = Array.from(document.querySelectorAll('video, audio'));
@@ -416,7 +416,7 @@ private extension OraBrowserScripts {
             }
         };
 
-        window.__oraTriggerPiP = function(isActive = false) {
+        window.__auraTriggerPiP = function(isActive = false) {
             const video = document.querySelector('video');
 
             function hasAudio(target) {

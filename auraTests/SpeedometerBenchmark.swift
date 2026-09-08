@@ -65,37 +65,37 @@ struct SpeedometerBenchmark {
         let url = try #require(Self.benchmarkURL)
 
         let plain = makePlainTarget()
-        let ora = makeOraTarget()
+        let ora = makeAuraTarget()
         let plainWindow = Self.makeWindow(for: plain)
-        let oraWindow = Self.makeWindow(for: ora)
+        let auraWindow = Self.makeWindow(for: ora)
         defer {
             plainWindow.close()
-            oraWindow.close()
+            auraWindow.close()
         }
 
         // The machine this runs on is not idle, so the two configurations take turns:
         // a build starting halfway through must land on both of them, not just one.
         // Round 0 is a warmup that pays for each target's cold website data store.
         var plainScores: [Double] = []
-        var oraScores: [Double] = []
+        var auraScores: [Double] = []
         for round in 0 ..< 4 {
             plainWindow.orderFrontRegardless()
             let plainRun = try await runOnce(target: plain, url: url, label: "plain#\(round)")
-            oraWindow.orderFrontRegardless()
-            let oraRun = try await runOnce(target: ora, url: url, label: "ora#\(round)")
+            auraWindow.orderFrontRegardless()
+            let auraRun = try await runOnce(target: ora, url: url, label: "ora#\(round)")
 
             guard round > 0 else { continue }
             if let value = Double(plainRun) { plainScores.append(value) }
-            if let value = Double(oraRun) { oraScores.append(value) }
+            if let value = Double(auraRun) { auraScores.append(value) }
         }
 
         let plainScore = try #require(Self.median(of: plainScores))
-        let oraScore = try #require(Self.median(of: oraScores))
-        print("BENCH plain runs=\(plainScores) ora runs=\(oraScores)")
-        print("BENCH plain=\(plainScore) ora=\(oraScore)")
+        let auraScore = try #require(Self.median(of: auraScores))
+        print("BENCH plain runs=\(plainScores) ora runs=\(auraScores)")
+        print("BENCH plain=\(plainScore) ora=\(auraScore)")
 
         try #require(plainScore > 0)
-        let ratio = oraScore / plainScore
+        let ratio = auraScore / plainScore
         print("BENCH ratio=\(String(format: "%.4f", ratio))")
         #expect(ratio > 0.97, "Aura config is \(String(format: "%.1f", (1 - ratio) * 100))% slower than plain WebKit")
     }
@@ -113,15 +113,15 @@ struct SpeedometerBenchmark {
 
     /// Mirrors `Tab.restoreTransientState`: real profile, real user scripts, real privacy
     /// scripts, real content rule lists, real extension controller.
-    private func makeOraTarget() -> Target {
+    private func makeAuraTarget() -> Target {
         let containerID = UUID()
         let profile = BrowserEngine.shared.makeProfile(identifier: containerID, isPrivate: false)
         let privacySettings = SettingsStore.shared.privacySettings(for: containerID)
-        let userScripts = OraBrowserScripts.userScripts()
+        let userScripts = AuraBrowserScripts.userScripts()
             + BrowserPrivacyService.privacyScripts(for: privacySettings)
         let page = BrowserEngine.shared.makePage(
             profile: profile,
-            configuration: BrowserPageConfiguration.oraDefault(
+            configuration: BrowserPageConfiguration.auraDefault(
                 userScripts: userScripts,
                 privacySettings: privacySettings
             ),

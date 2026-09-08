@@ -71,7 +71,7 @@ struct LocalFileURLTests {
         #expect(constructURL(from: "https://example.com")?.absoluteString == "https://example.com")
         #expect(constructURL(from: "example.com")?.absoluteString == "https://example.com")
         #expect(constructURL(from: "localhost:3000")?.absoluteString == "http://localhost:3000")
-        #expect(try #require(constructURL(from: "aura://home")).isOraInternal)
+        #expect(try #require(constructURL(from: "aura://home")).isAuraInternal)
     }
 
     /// The launcher only builds a URL for text `isValidURL` accepts, so a path has to

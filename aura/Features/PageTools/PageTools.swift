@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 /// The four page-wide commands that hang off both the page context menu and the menu
-/// bar. They live together so the two entry points cannot drift apart, and so `OraRoot`'s
+/// bar. They live together so the two entry points cannot drift apart, and so `AuraRoot`'s
 /// event table only ever names one function per row.
 @MainActor
 enum PageTools {
@@ -16,18 +16,18 @@ enum PageTools {
     /// take a source, an article, an archive or a screenshot of.
     static func isAvailable(for tab: Tab?) -> Bool {
         guard let tab else { return false }
-        return !tab.url.isOraInternal && tab.browserPage != nil
+        return !tab.url.isAuraInternal && tab.browserPage != nil
     }
 
     static func viewSource(for tab: Tab?) {
-        openTool(for: tab, address: URL.oraViewSource(of:)) { target in
+        openTool(for: tab, address: URL.auraViewSource(of:)) { target in
             "Source of \(target.host ?? target.absoluteString)"
         }
     }
 
     static func reader(for tab: Tab?) {
         let heading = tab?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        openTool(for: tab, address: URL.oraReader(of:)) { target in
+        openTool(for: tab, address: URL.auraReader(of:)) { target in
             heading.isEmpty ? (target.host ?? "Reader") : heading
         }
     }

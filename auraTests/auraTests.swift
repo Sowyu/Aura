@@ -1,6 +1,6 @@
 //
-//  oraTests.swift
-//  oraTests
+//  auraTests.swift
+//  auraTests
 //
 //  Created by keni on 6/21/25.
 //
@@ -9,7 +9,7 @@ import Foundation
 @testable import Aura
 import Testing
 
-struct OraTests {
+struct AuraTests {
     @Test func normalizesHostsForPasswordMatching() {
         #expect(PasswordManagerService.normalizeHost("WWW.Example.COM.") == "www.example.com")
         #expect(PasswordManagerService.normalizeHost(" login.example.com ") == "login.example.com")

@@ -44,7 +44,7 @@ struct EditContainerModal: View {
 
     private var headerView: some View {
         VStack(alignment: .leading, spacing: 16) {
-            OraIcons(icon: .spaceCards, size: .custom(48), color: theme.mutedForeground)
+            AuraIcons(icon: .spaceCards, size: .custom(48), color: theme.mutedForeground)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Edit Space")
                     .font(.system(size: 22, weight: .semibold))
@@ -70,9 +70,9 @@ struct EditContainerModal: View {
 
     private var actionButtons: some View {
         HStack {
-            OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
+            AuraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
             Spacer()
-            OraButton(label: "Save", isDisabled: name.isEmpty, keyboardShortcut: "return", action: saveContainer)
+            AuraButton(label: "Save", isDisabled: name.isEmpty, keyboardShortcut: "return", action: saveContainer)
         }
     }
 

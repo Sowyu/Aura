@@ -80,13 +80,13 @@ struct BookmarksSettingsView: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
-            OraInput(
+            AuraInput(
                 text: $query,
                 placeholder: "Search bookmarks",
                 size: .sm,
                 leadingIcon: "magnifyingglass"
             )
-            OraButton(label: "New Folder", variant: .secondary, size: .sm, leadingIcon: "folder.badge.plus") {
+            AuraButton(label: "New Folder", variant: .secondary, size: .sm, leadingIcon: "folder.badge.plus") {
                 dialogManager.show { id in
                     BookmarkFolderDialog(folder: nil, store: store) { dialogManager.dismiss(id: id) }
                 }
@@ -96,12 +96,12 @@ struct BookmarksSettingsView: View {
 
     private func folderActions(_ folder: BookmarkFolder) -> some View {
         HStack(spacing: 6) {
-            OraButton(label: "Rename", variant: .ghost, size: .sm) {
+            AuraButton(label: "Rename", variant: .ghost, size: .sm) {
                 dialogManager.show { id in
                     BookmarkFolderDialog(folder: folder, store: store) { dialogManager.dismiss(id: id) }
                 }
             }
-            OraButton(label: "Delete", variant: .ghost, size: .sm) { confirmDelete(folder) }
+            AuraButton(label: "Delete", variant: .ghost, size: .sm) { confirmDelete(folder) }
         }
     }
 

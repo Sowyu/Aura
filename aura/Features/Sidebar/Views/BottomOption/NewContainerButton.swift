@@ -45,7 +45,7 @@ struct NewContainerDialog: View {
             // Inner content
             VStack(alignment: .leading, spacing: 16) {
                 // Icon
-                OraIcons(icon: .spaceCards, size: .custom(42), color: theme.mutedForeground)
+                AuraIcons(icon: .spaceCards, size: .custom(42), color: theme.mutedForeground)
 
                 // Title
                 Text("Create a new Space")
@@ -81,9 +81,9 @@ struct NewContainerDialog: View {
 
                 // Buttons
                 HStack {
-                    OraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
+                    AuraButton(label: "Cancel", variant: .secondary, keyboardShortcut: "esc", action: dismiss)
                     Spacer()
-                    OraButton(
+                    AuraButton(
                         label: "Save",
                         isDisabled: name.isEmpty,
                         keyboardShortcut: "return",

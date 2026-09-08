@@ -65,10 +65,10 @@ struct SitePermissionPromptView: View {
     private var buttons: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
-            OraButton(label: "Don't allow", variant: .secondary, size: .sm) {
+            AuraButton(label: "Don't allow", variant: .secondary, size: .sm) {
                 answer(isAllowed: false)
             }
-            OraButton(label: "Allow", variant: .default, size: .sm) {
+            AuraButton(label: "Allow", variant: .default, size: .sm) {
                 answer(isAllowed: true)
             }
         }

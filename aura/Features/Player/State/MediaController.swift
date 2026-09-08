@@ -135,7 +135,7 @@ final class MediaController {
 
     func togglePlayPause(_ tabID: UUID? = nil) {
         guard let id = tabID ?? primary?.tabID else { return }
-        eval(id, "window.__oraMedia && window.__oraMedia.toggle && window.__oraMedia.toggle()")
+        eval(id, "window.__auraMedia && window.__auraMedia.toggle && window.__auraMedia.toggle()")
         if let idx = sessions.firstIndex(where: { $0.tabID == id }) {
             sessions[idx].isPlaying.toggle()
         }
@@ -144,13 +144,13 @@ final class MediaController {
 
     func nextTrack(_ tabID: UUID? = nil) {
         guard let id = tabID ?? primary?.tabID else { return }
-        eval(id, "window.__oraMedia && window.__oraMedia.next && window.__oraMedia.next()")
+        eval(id, "window.__auraMedia && window.__auraMedia.next && window.__auraMedia.next()")
         scheduleTitleSync(for: id)
     }
 
     func previousTrack(_ tabID: UUID? = nil) {
         guard let id = tabID ?? primary?.tabID else { return }
-        eval(id, "window.__oraMedia && window.__oraMedia.previous && window.__oraMedia.previous()")
+        eval(id, "window.__auraMedia && window.__auraMedia.previous && window.__auraMedia.previous()")
         scheduleTitleSync(for: id)
     }
 
@@ -158,7 +158,7 @@ final class MediaController {
         guard let id = tabID ?? primary?.tabID else { return }
         let clampedVolume = clamp(value)
         if let idx = sessions.firstIndex(where: { $0.tabID == id }) { sessions[idx].volume = clampedVolume }
-        eval(id, "window.__oraMedia && window.__oraMedia.setVolume && window.__oraMedia.setVolume(\(clampedVolume))")
+        eval(id, "window.__auraMedia && window.__auraMedia.setVolume && window.__auraMedia.setVolume(\(clampedVolume))")
     }
 
     func volumeDelta(for tabID: UUID? = nil, _ delta: Double) {
@@ -166,12 +166,12 @@ final class MediaController {
         if let idx = sessions.firstIndex(where: { $0.tabID == id }) {
             sessions[idx].volume = clamp(sessions[idx].volume + delta)
         }
-        eval(id, "window.__oraMedia && window.__oraMedia.deltaVolume && window.__oraMedia.deltaVolume(\(delta))")
+        eval(id, "window.__auraMedia && window.__auraMedia.deltaVolume && window.__auraMedia.deltaVolume(\(delta))")
     }
 
     func closeSession(_ tabID: UUID? = nil) {
         guard let id = tabID ?? primary?.tabID else { return }
-        eval(id, "window.__oraMedia && window.__oraMedia.pause && window.__oraMedia.pause()")
+        eval(id, "window.__auraMedia && window.__auraMedia.pause && window.__auraMedia.pause()")
         if let idx = sessions.firstIndex(where: { $0.tabID == id }) {
             sessions.remove(at: idx)
         }

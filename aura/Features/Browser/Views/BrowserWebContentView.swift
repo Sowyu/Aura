@@ -93,29 +93,29 @@ struct BrowserWebContentView: View {
 
     @ViewBuilder
     private var webContent: some View {
-        if tab.url.isOraHome {
+        if tab.url.isAuraHome {
             HomePageView(tab: tab)
                 .id(tab.id)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-        } else if tab.url.isOraExtensions {
+        } else if tab.url.isAuraExtensions {
             ExtensionStoreView()
                 .id(tab.id)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-        } else if tab.url.isOraViewSource {
+        } else if tab.url.isAuraViewSource {
             ViewSourceView(tab: tab)
                 .id(tab.id)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-        } else if tab.url.isOraReader {
+        } else if tab.url.isAuraReader {
             ReaderView(tab: tab)
                 .id(tab.id)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-        } else if tab.url.isOraSettings {
-            SettingsContentView(initialTab: tab.url.oraSettingsSection) { section in
-                tab.url = .oraSettings(section: section)
+        } else if tab.url.isAuraSettings {
+            SettingsContentView(initialTab: tab.url.auraSettingsSection) { section in
+                tab.url = .auraSettings(section: section)
                 tab.urlString = tab.url.absoluteString
             }
             .id(tab.id)

@@ -179,7 +179,7 @@ final class UpdateDriver: NSObject, SPUUserDriver {
     }
 
     /// `retryTerminatingApplication` is deliberately dropped. Sparkle asks the app to quit
-    /// and `OraApp` skips its quit confirmation while `UpdateService.isInstalling`, so
+    /// and `AuraApp` skips its quit confirmation while `UpdateService.isInstalling`, so
     /// nothing left in Aura delays termination. If something ever does, Sparkle still
     /// installs the update the next time the app quits.
     /// ponytail: no retry path; add one if a hung quit is ever observed here.

@@ -325,7 +325,7 @@ struct TabLifecycleTests {
         let copy = manager.duplicateTab(home)
 
         #expect(copy.url == home.url)
-        #expect(copy.url.isOraHome)
+        #expect(copy.url.isAuraHome)
         #expect(copy.folder?.id == folder.id, "the copy stays in the folder")
         #expect(copy.id != home.id)
         #expect(copy.browserPage == nil, "an internal page never gets a web view")
@@ -477,8 +477,8 @@ struct TabLifecycleTests {
 
     /// Private windows get an in-memory store, so nothing they open reaches the disk.
     @Test func privateWindowsUseAnInMemoryStore() {
-        #expect(ModelConfiguration.oraDatabase(isPrivate: true).isStoredInMemoryOnly)
-        #expect(ModelConfiguration.oraDatabase(isPrivate: false).isStoredInMemoryOnly == false)
+        #expect(ModelConfiguration.auraDatabase(isPrivate: true).isStoredInMemoryOnly)
+        #expect(ModelConfiguration.auraDatabase(isPrivate: false).isStoredInMemoryOnly == false)
     }
 
     /// A store that refuses to open used to be deleted, taking every tab, space and
@@ -535,12 +535,12 @@ struct TabLifecycleTests {
         )
 
         let tab = try #require(manager.openTab(
-            url: .oraSettings(section: nil),
+            url: .auraSettings(section: nil),
             historyManager: historyManager,
             isPrivate: false
         ))
 
-        #expect(tab.url.isOraSettings)
+        #expect(tab.url.isAuraSettings)
         #expect(tab.browserPage == nil, "an internal page never gets a web view")
         #expect(space.tabs.contains { $0.id == tab.id })
         #expect(manager.activeTab?.id == tab.id)
@@ -568,7 +568,7 @@ struct TabLifecycleTests {
 
     // MARK: - Cross-window deletes
 
-    /// A second window over the same store, built the way `OraRoot` builds one: its own
+    /// A second window over the same store, built the way `AuraRoot` builds one: its own
     /// `ModelContext`, its own manager, the one shared container.
     private func makeSecondWindow(_ first: TabManager) -> TabManager {
         TabManager(

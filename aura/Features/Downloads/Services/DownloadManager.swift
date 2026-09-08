@@ -26,7 +26,7 @@ final class DownloadManager {
     /// WebKit's resume blob for a failed download, keyed by the download's id.
     @ObservationIgnored private var failedResumeData: [UUID: Data] = [:]
     @ObservationIgnored weak var toastManager: ToastManager?
-    /// The window's dialog stack, set by `OraRoot`. Used for the name-collision prompt;
+    /// The window's dialog stack, set by `AuraRoot`. Used for the name-collision prompt;
     /// nil in a window that has not finished starting, where the old silent-rename
     /// behaviour is the fallback.
     @ObservationIgnored weak var dialogManager: DialogManager?

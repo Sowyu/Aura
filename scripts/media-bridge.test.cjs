@@ -3,8 +3,8 @@ const { readFileSync } = require('node:fs');
 const { test } = require('node:test');
 const vm = require('node:vm');
 
-const swift = readFileSync(process.env.AURA_MEDIA_SCRIPT || `${__dirname}/../aura/Core/BrowserEngine/Scripts/OraBrowserScripts.swift`, 'utf8');
-const source = swift.match(/    \(function \(\) \{\n        if \(window\.__oraMediaInstalled\)[\s\S]*?\n    \}\)\(\);/)?.[0];
+const swift = readFileSync(process.env.AURA_MEDIA_SCRIPT || `${__dirname}/../aura/Core/BrowserEngine/Scripts/AuraBrowserScripts.swift`, 'utf8');
+const source = swift.match(/    \(function \(\) \{\n        if \(window\.__auraMediaInstalled\)[\s\S]*?\n    \}\)\(\);/)?.[0];
 assert.ok(source, 'The shipped media script must be present');
 
 function fixture() {
@@ -22,7 +22,7 @@ function fixture() {
         },
         addEventListener(name, callback) { events[name] = callback; },
     };
-    const window = { __oraBridge: { postMessage(_name, payload) { messages.push(JSON.parse(payload)); } } };
+    const window = { __auraBridge: { postMessage(_name, payload) { messages.push(JSON.parse(payload)); } } };
     vm.runInNewContext(source, {
         window, document,
         setTimeout(callback) { timers.push(callback); return timers.length; },
@@ -57,7 +57,7 @@ test('unchanged media controls do not send repeated native messages', t => {
 
 test('removing the last media element stops scans and releases the active element', t => {
     const page = fixture();
-    page.window.__oraMedia._pick();
+    page.window.__auraMedia._pick();
     page.media.length = 0;
     page.mutate();
     assert.equal(page.messages.at(-1).type, 'removed');
@@ -65,7 +65,7 @@ test('removing the last media element stops scans and releases the active elemen
     for (let index = 0; index < 100; index++) page.mutate();
     t.diagnostic(`100 DOM batches after media removal: scans=${page.scans - before}`);
     assert.equal(page.scans, before);
-    assert.equal(page.window.__oraMedia.active, null);
+    assert.equal(page.window.__auraMedia.active, null);
     page.media.push(page.element);
     page.events.loadedmetadata({ target: page.element });
     page.controls.next = false;

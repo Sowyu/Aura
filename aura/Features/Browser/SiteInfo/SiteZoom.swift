@@ -89,7 +89,7 @@ enum SiteZoomController {
     static func set(_ level: Double, for tab: Tab) {
         // `aura://home` parses with a host of "home", so without this the shortcut would
         // write a level for a site that does not exist.
-        guard !tab.url.isOraInternal, let host = zoomKey(for: tab.url) else { return }
+        guard !tab.url.isAuraInternal, let host = zoomKey(for: tab.url) else { return }
         SettingsStore.shared.setZoomLevel(level, forHost: host)
         tab.browserPage?.zoom = SiteZoom.clamped(level)
     }

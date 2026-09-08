@@ -39,15 +39,15 @@ struct StatusPageView: View {
             }
 
             HStack(spacing: 16) {
-                OraButton(label: "Try again", size: .lg, action: onRetry)
+                AuraButton(label: "Try again", size: .lg, action: onRetry)
                 if let goBack = onGoBack {
-                    OraButton(label: "Go back", variant: .secondary, size: .lg, action: goBack)
+                    AuraButton(label: "Go back", variant: .secondary, size: .lg, action: goBack)
                 }
             }
             .padding(.top, 8)
 
             if errorType == .security, let continueAnyway = onContinueAnyway {
-                OraButton(
+                AuraButton(
                     label: "Continue Anyway",
                     variant: .ghost,
                     size: .sm,

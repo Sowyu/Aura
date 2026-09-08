@@ -73,7 +73,7 @@ struct PasswordVaultView: View {
             } else if isUnlocked {
                 spacePickerRow
 
-                OraInput(text: $searchText, placeholder: "Search saved passwords…", leadingIcon: "magnifyingglass")
+                AuraInput(text: $searchText, placeholder: "Search saved passwords…", leadingIcon: "magnifyingglass")
 
                 if filteredEntries.isEmpty {
                     emptyState(message: searchText.isEmpty
@@ -124,7 +124,7 @@ struct PasswordVaultView: View {
             Spacer()
 
             if isUnlocked {
-                OraButton(label: "Lock", variant: .secondary, size: .sm, action: lockVault)
+                AuraButton(label: "Lock", variant: .secondary, size: .sm, action: lockVault)
             }
         }
     }
@@ -175,7 +175,7 @@ struct PasswordVaultView: View {
                     .frame(maxWidth: 360)
             }
 
-            OraButton(
+            AuraButton(
                 label: isAuthenticating ? "Unlocking…" : "Unlock Passwords",
                 variant: .outline,
                 isDisabled: isAuthenticating,
@@ -333,7 +333,7 @@ struct PasswordVaultView: View {
 
     private func copyButton(help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            OraIcons(icon: .copy, size: .custom(14), color: .secondary)
+            AuraIcons(icon: .copy, size: .custom(14), color: .secondary)
         }
         .buttonStyle(.interactive(cornerRadius: AuraRadius.button))
         .help(help)

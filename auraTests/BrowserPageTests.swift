@@ -241,7 +241,7 @@ struct BrowserPageTests {
             blockFingerprinting: false,
             globalPrivacyControl: globalPrivacyControl
         )
-        var configuration = BrowserPageConfiguration.oraDefault(
+        var configuration = BrowserPageConfiguration.auraDefault(
             userScripts: BrowserPrivacyService.privacyScripts(for: privacySettings),
             privacySettings: privacySettings
         )

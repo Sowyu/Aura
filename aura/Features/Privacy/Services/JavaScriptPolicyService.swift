@@ -51,7 +51,7 @@ final class JavaScriptPolicyService: ObservableObject {
 
     func isAllowed(for url: URL) -> Bool {
         // Internal pages and the launcher are Aura's own UI; they always keep their scripts.
-        if url.isOraInternal { return true }
+        if url.isAuraInternal { return true }
         if let override = rule(for: url) { return override }
         return !blocksByDefault
     }
@@ -135,7 +135,7 @@ final class JavaScriptPolicyService: ObservableObject {
         if let context { return context }
         // Its own context on the shared store: every window already builds one, and the
         // service is the only reader/writer of this table, so the cache stays authoritative.
-        guard let container = try? ModelConfiguration.createOraContainer() else { return nil }
+        guard let container = try? ModelConfiguration.createAuraContainer() else { return nil }
         let created = ModelContext(container)
         context = created
         return created

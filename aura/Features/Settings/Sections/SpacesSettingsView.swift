@@ -205,7 +205,7 @@ struct SpacesSettingsView: View {
     }
 
     private func clearButton(_ title: String, in container: TabContainer, action: @escaping () -> Void) -> some View {
-        OraButton(label: title, variant: .destructive, size: .sm) {
+        AuraButton(label: title, variant: .destructive, size: .sm) {
             dialogManager.confirm(
                 title: "\(title) for \"\(container.name)\"?",
                 message: "This cannot be undone. Other spaces keep their data.",

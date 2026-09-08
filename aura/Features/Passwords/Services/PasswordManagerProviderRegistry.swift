@@ -19,7 +19,7 @@ struct PasswordManagerProviderDescriptor: Identifiable, Hashable {
     let kind: PasswordManagerProviderKind
     let title: String
     let summary: String
-    let vaultStoredInOra: Bool
+    let vaultStoredInAura: Bool
     let autofillMode: PasswordManagerAutofillMode
     let isAvailable: Bool
 
@@ -28,7 +28,7 @@ struct PasswordManagerProviderDescriptor: Identifiable, Hashable {
     }
 
     var usesBuiltInVault: Bool {
-        vaultStoredInOra
+        vaultStoredInAura
     }
 
     var usesBuiltInOverlay: Bool {
@@ -44,7 +44,7 @@ final class PasswordManagerProviderRegistry {
             kind: .ora,
             title: "Aura Passwords",
             summary: "Store encrypted credentials in Aura and show Aura's autofill overlay.",
-            vaultStoredInOra: true,
+            vaultStoredInAura: true,
             autofillMode: .builtInOverlay,
             isAvailable: true
         )

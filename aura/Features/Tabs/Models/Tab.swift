@@ -263,9 +263,9 @@ class Tab: ObservableObject, Identifiable {
         loading: URL? = nil
     ) {
         // aura:// pages render natively in SwiftUI, so they never get a web view.
-        if url.isOraInternal {
+        if url.isAuraInternal {
             // Tabs saved before the rename come back as `ora://`; rewrite them on open.
-            let canonical = url.canonicalOraInternal
+            let canonical = url.canonicalAuraInternal
             if canonical != url {
                 url = canonical
                 urlString = canonical.absoluteString
@@ -287,10 +287,10 @@ class Tab: ObservableObject, Identifiable {
         let engine = BrowserEngine.shared
         let profile = engine.makeProfile(identifier: storeIdentifier, isPrivate: isPrivate)
         let privacySettings = SettingsStore.shared.privacySettings(for: container.id)
-        let userScripts = OraBrowserScripts.userScripts() + BrowserPrivacyService.privacyScripts(for: privacySettings)
+        let userScripts = AuraBrowserScripts.userScripts() + BrowserPrivacyService.privacyScripts(for: privacySettings)
         let page = engine.makePage(
             profile: profile,
-            configuration: BrowserPageConfiguration.oraDefault(
+            configuration: BrowserPageConfiguration.auraDefault(
                 userScripts: userScripts,
                 privacySettings: privacySettings
             ),
@@ -388,14 +388,14 @@ class Tab: ObservableObject, Identifiable {
     /// other way tears the web view down instead, which drops WebKit's back list: back from
     /// the first page opened out of aura://home cannot return to the home page.
     private func navigate(to target: URL) {
-        if target.isOraInternal {
+        if target.isAuraInternal {
             destroyWebView()
             updateURL(target)
-            if target.isOraHome {
+            if target.isAuraHome {
                 title = "New Tab"
                 favicon = nil
                 faviconLocalFile = nil
-            } else if target.isOraExtensions {
+            } else if target.isAuraExtensions {
                 title = "Extensions"
                 favicon = nil
                 faviconLocalFile = nil

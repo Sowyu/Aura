@@ -189,7 +189,7 @@ struct FirefoxAddonStore {
         let (tempURL, response) = try await URLSession.shared.download(from: url)
         try Self.validate(response)
         let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ora-addon-\(UUID().uuidString).xpi")
+            .appendingPathComponent("aura-addon-\(UUID().uuidString).xpi")
         try FileManager.default.moveItem(at: tempURL, to: destination)
         return destination
     }
@@ -316,7 +316,7 @@ enum XPIUnpacker {
         let data = try Data(contentsOf: archiveURL)
         let payload = try crxPayload(data)
         let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ora-crx-\(UUID().uuidString).zip")
+            .appendingPathComponent("aura-crx-\(UUID().uuidString).zip")
         try payload.write(to: destination)
         return destination
     }

@@ -533,7 +533,7 @@ final class ExtensionManager {
     }
 
     /// Registered once, application-wide: per-window observers would fire N times
-    /// for the same window because every `OraRoot` listens on `object: nil`.
+    /// for the same window because every `AuraRoot` listens on `object: nil`.
     @available(macOS 15.4, *)
     private func startWindowObservers() {
         guard !hasWindowObservers else { return }
@@ -638,7 +638,7 @@ final class ExtensionManager {
     /// Unpacks a zip-shaped archive into a temporary folder and installs what it holds.
     private func installArchive(at archive: URL, source: ExtensionInstallSource) async throws {
         let staging = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ora-addon-unpack-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("aura-addon-unpack-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: staging) }
         try await Task.detached(priority: .userInitiated) { try XPIUnpacker.unpack(archive, to: staging) }.value
         guard let root = XPIUnpacker.manifestRoot(in: staging) else {

@@ -186,7 +186,7 @@ final class TabDragSourceNSView: NSView {
     /// Internal rather than private so the tests can check both branches without a drag.
     func pasteboardWriter() -> NSPasteboardWriting {
         // An `aura://` row would drop a link nothing outside Aura can open.
-        guard let dragURL, !isFolder, !dragURL.isOraInternal else {
+        guard let dragURL, !isFolder, !dragURL.isAuraInternal else {
             let item = NSPasteboardItem()
             item.setString(rowID.uuidString, forType: .auraTabItem)
             return item

@@ -106,7 +106,7 @@ final class ExtensionTabAdapter: NSObject, WKWebExtensionTab {
     /// without a URL, then throws for the current tab from its popup. Nothing runs in
     /// these tabs (no web view), so the bypass exposes an address and nothing more.
     func shouldBypassPermissions(for context: WKWebExtensionContext) -> Bool {
-        tab?.url.isOraInternal == true
+        tab?.url.isAuraInternal == true
     }
 
     func isLoadingComplete(for context: WKWebExtensionContext) -> Bool {

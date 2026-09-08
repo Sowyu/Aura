@@ -187,7 +187,7 @@ extension Tab {
     /// Samples where the page is scrolled to and stores it against the current address.
     /// One `window.scrollY` read, cheap enough for a tab switch or a maintenance pass.
     func recordScrollOffset() {
-        guard browserPage != nil, !isPrivate, !url.isOraInternal else { return }
+        guard browserPage != nil, !isPrivate, !url.isAuraInternal else { return }
         let target = url
         evaluateJavaScript("JSON.stringify([window.scrollX || 0, window.scrollY || 0])") { [weak self] result, error in
             guard let self,

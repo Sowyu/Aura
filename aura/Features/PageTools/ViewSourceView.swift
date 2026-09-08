@@ -18,7 +18,7 @@ struct ViewSourceView: View {
     private static let fontSize: CGFloat = 11.5
     private static let rowSpacing: CGFloat = 1
 
-    private var target: URL? { tab.url.oraPageToolTarget }
+    private var target: URL? { tab.url.auraPageToolTarget }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -50,7 +50,7 @@ struct ViewSourceView: View {
                 Text(lines.count == 1 ? "1 line" : "\(lines.count) lines")
                     .font(.system(size: 11))
                     .foregroundStyle(theme.mutedForeground)
-                OraButton(label: copied ? "Copied" : "Copy source", variant: .secondary, size: .sm) {
+                AuraButton(label: copied ? "Copied" : "Copy source", variant: .secondary, size: .sm) {
                     ClipboardUtils.copyToClipboard(markup)
                     copied = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) { copied = false }

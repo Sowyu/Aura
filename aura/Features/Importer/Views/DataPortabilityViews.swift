@@ -123,7 +123,7 @@ struct BookmarkPortabilityCard: View {
                 + "Pages already saved here are left alone."
         ) {
             HStack(spacing: 8) {
-                OraButton(
+                AuraButton(
                     label: "Import HTML…",
                     variant: .secondary,
                     size: .sm,
@@ -131,7 +131,7 @@ struct BookmarkPortabilityCard: View {
                 ) {
                     Task { await BookmarkImportAction.run(.netscapeHTML, store: store, dialogManager: dialogManager) }
                 }
-                OraButton(
+                AuraButton(
                     label: "Import from Safari…",
                     variant: .secondary,
                     size: .sm,
@@ -144,7 +144,7 @@ struct BookmarkPortabilityCard: View {
                     }
                 }
                 Spacer()
-                OraButton(
+                AuraButton(
                     label: "Export…",
                     variant: .secondary,
                     size: .sm,
@@ -270,7 +270,7 @@ struct PasswordExportCard: View {
                     .font(.system(size: 12))
                     .foregroundStyle(theme.mutedForeground)
                 Spacer()
-                OraButton(
+                AuraButton(
                     label: "Export…",
                     variant: .destructive,
                     size: .sm,
@@ -359,14 +359,14 @@ struct SettingsBackupCard: View {
                 + "tabs are not in it."
         ) {
             HStack(spacing: 8) {
-                OraButton(
+                AuraButton(
                     label: "Export Settings…",
                     variant: .secondary,
                     size: .sm,
                     leadingIcon: "square.and.arrow.up",
                     action: exportSettings
                 )
-                OraButton(
+                AuraButton(
                     label: "Import Settings…",
                     variant: .secondary,
                     size: .sm,
